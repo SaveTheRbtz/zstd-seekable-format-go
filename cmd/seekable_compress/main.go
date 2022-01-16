@@ -11,7 +11,7 @@ import (
 	"github.com/jotfs/fastcdc-go"
 	"go.uber.org/zap"
 
-	"github.com/SaveTheRbtz/zstd-seekable-format-go/seekable"
+	seekable "github.com/SaveTheRbtz/zstd-seekable-format-go"
 )
 
 var inputFlag, outputFlag string
