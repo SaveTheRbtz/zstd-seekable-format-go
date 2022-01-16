@@ -64,6 +64,7 @@ func main() {
 	if err != nil {
 		logger.Fatal("failed to create compressed writer", zap.Error(err))
 	}
+	defer w.Close()
 
 	opts := fastcdc.Options{
 		MinSize:     4 * 1024,

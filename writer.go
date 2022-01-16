@@ -15,14 +15,14 @@ import (
 )
 
 type seekableWriterImpl struct {
-	w            io.WriteCloser
+	w            io.Writer
 	enc          *zstd.Encoder
 	frameEntries []seekTableEntry
 
 	once *sync.Once
 }
 
-func NewWriter(w io.WriteCloser, opts ...zstd.EOption) (io.WriteCloser, error) {
+func NewWriter(w io.Writer, opts ...zstd.EOption) (io.WriteCloser, error) {
 	enc, err := zstd.NewWriter(nil, opts...)
 	if err != nil {
 		return nil, err
@@ -63,7 +63,6 @@ func (s *seekableWriterImpl) Close() (err error) {
 
 	s.frameEntries = nil
 	err = multierr.Append(err, s.enc.Close())
-	err = multierr.Append(err, s.w.Close())
 	return
 }
 
