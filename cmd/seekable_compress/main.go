@@ -8,6 +8,7 @@ import (
 	"log"
 	"os"
 
+	// TODO: move to a better fork, this one is pretty buggy
 	"github.com/jotfs/fastcdc-go"
 	"go.uber.org/zap"
 
@@ -21,6 +22,7 @@ func init() {
 	flag.StringVar(&inputFlag, "f", "", "input filename")
 	flag.StringVar(&outputFlag, "o", "", "output filename")
 	flag.BoolVar(&verifyFlag, "t", false, "test reading after the write")
+	// TODO: compression level selection
 }
 
 func main() {
@@ -66,6 +68,7 @@ func main() {
 	}
 	defer w.Close()
 
+	// TODO: move to flags
 	opts := fastcdc.Options{
 		MinSize:     4 * 1024,
 		AverageSize: 16 * 1024,
