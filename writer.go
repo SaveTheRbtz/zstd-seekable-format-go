@@ -149,7 +149,7 @@ func createSkippableFrame(tag uint32, payload []byte) ([]byte, error) {
 		return nil, fmt.Errorf("requested skippable frame size (%d) > max uint32", len(payload))
 	}
 
-	dst := make([]byte, 8)
+	dst := make([]byte, 8, len(payload)+8)
 	binary.LittleEndian.PutUint32(dst[0:], skippableFrameMagic+tag)
 	binary.LittleEndian.PutUint32(dst[4:], uint32(len(payload)))
 	return append(dst, payload...), nil
