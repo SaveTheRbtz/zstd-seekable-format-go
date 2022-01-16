@@ -12,6 +12,7 @@ import (
 	"encoding/binary"
 
 	"github.com/google/btree"
+	"go.uber.org/multierr"
 )
 
 const (
@@ -67,22 +68,12 @@ func (s *seekableWriterImpl) Write(src []byte) (int, error) {
 
 func (s *seekableWriterImpl) Close() (err error) {
 	s.once.Do(func() {
-		err = s.writeSeekTable()
+		err = multierr.Append(err, s.writeSeekTable())
 	})
 
-	var cErr error
 	s.frameEntries = nil
-
-	cErr = s.enc.Close()
-	if cErr != nil && err == nil {
-		err = cErr
-	}
-
-	cErr = s.w.Close()
-	if cErr != nil && err == nil {
-		err = cErr
-	}
-
+	err = multierr.Append(err, s.enc.Close())
+	err = multierr.Append(err, s.w.Close())
 	return
 }
 
@@ -395,10 +386,13 @@ func (s *seekableReaderImpl) Seek(offset int64, whence int) (int64, error) {
 	return 0, nil
 }
 
-func (s *seekableReaderImpl) Close() error {
+func (s *seekableReaderImpl) Close() (err error) {
 	s.index.Clear(false)
 	s.dec.Close()
-	return s.rsc.Close()
+
+	s.cachedFrame = nil
+	err = multierr.Append(err, s.rsc.Close())
+	return
 }
 
 type frameOffset struct {
