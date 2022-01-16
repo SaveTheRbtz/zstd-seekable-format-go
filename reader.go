@@ -10,7 +10,6 @@ import (
 	"encoding/binary"
 
 	"github.com/google/btree"
-	"go.uber.org/multierr"
 )
 
 type cachedFrame struct {
@@ -26,7 +25,7 @@ func newCachedFrame(offset uint64, data []byte) *cachedFrame {
 }
 
 type seekableReaderImpl struct {
-	rsc   io.ReadSeekCloser
+	rs    io.ReadSeeker
 	dec   *zstd.Decoder
 	index *btree.BTree
 
@@ -38,14 +37,14 @@ type seekableReaderImpl struct {
 	cachedFrame *cachedFrame
 }
 
-func NewReader(rsc io.ReadSeekCloser, opts ...zstd.DOption) (io.ReadSeekCloser, error) {
+func NewReader(rs io.ReadSeeker, opts ...zstd.DOption) (io.ReadSeekCloser, error) {
 	dec, err := zstd.NewReader(nil, opts...)
 	if err != nil {
 		return nil, err
 	}
 
 	sr := seekableReaderImpl{
-		rsc: rsc,
+		rs:  rs,
 		dec: dec,
 	}
 
@@ -83,8 +82,8 @@ func (s *seekableReaderImpl) Read(dst []byte) (int, error) {
 	} else {
 		// slowpath
 		src := make([]byte, index.compSize)
-		s.rsc.Seek(int64(index.compOffset), io.SeekStart)
-		_, err = io.ReadFull(s.rsc, src)
+		s.rs.Seek(int64(index.compOffset), io.SeekStart)
+		_, err = io.ReadFull(s.rs, src)
 		if err != nil {
 			return 0, fmt.Errorf("failed to read compressed data at: %d, %w", index.compOffset, err)
 		}
@@ -137,7 +136,6 @@ func (s *seekableReaderImpl) Close() (err error) {
 	s.dec.Close()
 
 	s.cachedFrame = nil
-	err = multierr.Append(err, s.rsc.Close())
 	return
 }
 
@@ -155,13 +153,13 @@ func (o frameOffset) Less(than btree.Item) bool {
 }
 
 func (s *seekableReaderImpl) readFooter() (t *btree.BTree, err error) {
-	_, err = s.rsc.Seek(-seekTableFooterOffset, io.SeekEnd)
+	_, err = s.rs.Seek(-seekTableFooterOffset, io.SeekEnd)
 	if err != nil {
 		return
 	}
 
 	buf := make([]byte, seekTableFooterOffset)
-	_, err = io.ReadFull(s.rsc, buf)
+	_, err = io.ReadFull(s.rs, buf)
 	if err != nil {
 		return
 	}
@@ -185,13 +183,13 @@ func (s *seekableReaderImpl) readFooter() (t *btree.BTree, err error) {
 	// Skippable_Magic_Number
 	skippableFrameOffset += 4
 
-	_, err = s.rsc.Seek(-skippableFrameOffset, io.SeekEnd)
+	_, err = s.rs.Seek(-skippableFrameOffset, io.SeekEnd)
 	if err != nil {
 		return
 	}
 
 	buf = make([]byte, skippableFrameOffset-seekTableFooterOffset)
-	_, err = io.ReadFull(s.rsc, buf)
+	_, err = io.ReadFull(s.rs, buf)
 	if err != nil {
 		return
 	}

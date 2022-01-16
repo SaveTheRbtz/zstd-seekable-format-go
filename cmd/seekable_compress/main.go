@@ -103,10 +103,13 @@ func main() {
 		if err != nil {
 			logger.Fatal("failed to open file for verification", zap.Error(err))
 		}
+		defer verify.Close()
+
 		reader, err := seekable.NewReader(verify)
 		if err != nil {
 			logger.Fatal("failed to create new seekable reader", zap.Error(err))
 		}
+		defer reader.Close()
 
 		chunk := make([]byte, 4096)
 		actual := sha256.New()
