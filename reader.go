@@ -76,7 +76,7 @@ func (s *seekableReaderImpl) Read(dst []byte) (int, error) {
 
 	var err error
 	var decompressed []byte
-	if s.cachedFrame != nil && s.cachedFrame.offset == index.compOffset {
+	if s.cachedFrame != nil && s.cachedFrame.offset == index.decompOffset {
 		// fastpath
 		decompressed = s.cachedFrame.data
 	} else {
@@ -100,7 +100,7 @@ func (s *seekableReaderImpl) Read(dst []byte) (int, error) {
 					index.compOffset, index.checksum, checksum)
 			}
 		}
-		s.cachedFrame = newCachedFrame(index.compOffset, decompressed)
+		s.cachedFrame = newCachedFrame(index.decompOffset, decompressed)
 	}
 
 	offsetWithinFrame := uint64(s.offset) - index.decompOffset
@@ -120,15 +120,23 @@ func (s *seekableReaderImpl) Read(dst []byte) (int, error) {
 }
 
 func (s *seekableReaderImpl) Seek(offset int64, whence int) (int64, error) {
+	newOffset := s.offset
 	switch whence {
 	case io.SeekCurrent:
-		s.offset += offset
+		newOffset += offset
 	case io.SeekStart:
-		s.offset = offset
+		newOffset = offset
 	case io.SeekEnd:
-		s.offset = s.endOffset + offset
+		newOffset = s.endOffset + offset
 	}
-	return 0, nil
+
+	if newOffset < 0 {
+		return 0, fmt.Errorf("offset before the start of the file: %d (%d + %d)",
+			newOffset, s.offset, offset)
+	}
+
+	s.offset = newOffset
+	return s.offset, nil
 }
 
 func (s *seekableReaderImpl) Close() (err error) {
