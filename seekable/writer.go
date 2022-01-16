@@ -276,6 +276,18 @@ func createSkippableFrame(tag uint32, payload []byte) ([]byte, error) {
 	return append(dst, payload...), nil
 }
 
+type cachedFrame struct {
+	offset uint64
+	data   []byte
+}
+
+func newCachedFrame(offset uint64, data []byte) *cachedFrame {
+	return &cachedFrame{
+		offset: offset,
+		data:   data,
+	}
+}
+
 type seekableReaderImpl struct {
 	rsc   io.ReadSeekCloser
 	dec   *zstd.Decoder
@@ -285,6 +297,8 @@ type seekableReaderImpl struct {
 
 	offset    int64
 	endOffset int64
+
+	cachedFrame *cachedFrame
 }
 
 func NewReader(rsc io.ReadSeekCloser, opts ...zstd.DOption) (io.ReadSeekCloser, error) {
@@ -324,24 +338,33 @@ func (s *seekableReaderImpl) Read(dst []byte) (int, error) {
 		return false
 	})
 
-	src := make([]byte, index.compSize)
-	s.rsc.Seek(int64(index.compOffset), io.SeekStart)
-	_, err := io.ReadFull(s.rsc, src)
-	if err != nil {
-		return 0, fmt.Errorf("failed to read compressed data at: %d, %w", index.compOffset, err)
-	}
-
-	// TODO: cache current decompressed frame
-	decompressed, err := s.dec.DecodeAll(src, nil)
-	if err != nil {
-		return 0, fmt.Errorf("failed to decompress data data at: %d, %w", index.compOffset, err)
-	}
-	if s.checksums {
-		checksum := uint32((xxhash.Sum64(decompressed) << 32) >> 32)
-		if index.checksum != checksum {
-			return 0, fmt.Errorf("checksum verification failed at: %d: expected: %d, actual: %d",
-				index.compOffset, index.checksum, checksum)
+	var err error
+	var decompressed []byte
+	if s.cachedFrame != nil && s.cachedFrame.offset == index.compOffset {
+		// fastpath
+		decompressed = s.cachedFrame.data
+	} else {
+		// slowpath
+		src := make([]byte, index.compSize)
+		s.rsc.Seek(int64(index.compOffset), io.SeekStart)
+		_, err = io.ReadFull(s.rsc, src)
+		if err != nil {
+			return 0, fmt.Errorf("failed to read compressed data at: %d, %w", index.compOffset, err)
 		}
+
+		decompressed, err = s.dec.DecodeAll(src, nil)
+		if err != nil {
+			return 0, fmt.Errorf("failed to decompress data data at: %d, %w", index.compOffset, err)
+		}
+
+		if s.checksums {
+			checksum := uint32((xxhash.Sum64(decompressed) << 32) >> 32)
+			if index.checksum != checksum {
+				return 0, fmt.Errorf("checksum verification failed at: %d: expected: %d, actual: %d",
+					index.compOffset, index.checksum, checksum)
+			}
+		}
+		s.cachedFrame = newCachedFrame(index.compOffset, decompressed)
 	}
 
 	offsetWithinFrame := uint64(s.offset) - index.decompOffset
