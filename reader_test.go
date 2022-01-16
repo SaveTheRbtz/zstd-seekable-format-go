@@ -129,7 +129,7 @@ func TestReaderEdges(t *testing.T) {
 		defer r.Close()
 
 		for _, whence := range []int{io.SeekStart, io.SeekEnd} {
-			for n := int64(0); n <= int64(len(source)); n += 1 {
+			for n := int64(-1); n <= int64(len(source)); n += 1 {
 				for m := int64(0); n <= int64(len(source)); n += 1 {
 					var j int64
 					switch whence {
@@ -138,8 +138,12 @@ func TestReaderEdges(t *testing.T) {
 					case io.SeekEnd:
 						j, err = r.Seek(int64(-len(source))+n, whence)
 					}
-					assert.Equal(t, n, j)
+					if n < 0 {
+						assert.Error(t, err)
+						continue
+					}
 					assert.NoError(t, err)
+					assert.Equal(t, n, j)
 
 					tmp := make([]byte, m)
 					k, err := r.Read(tmp)
