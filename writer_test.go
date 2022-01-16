@@ -57,12 +57,20 @@ func TestWriter(t *testing.T) {
 	w, err := NewWriter(bw)
 	assert.NoError(t, err)
 
-	bytes1 := []byte("test1")
+	bytes1 := []byte("test")
 	bytesWritten1, err := w.Write(bytes1)
 	assert.NoError(t, err)
 	bytes2 := []byte("test2")
-	_, err = w.Write(bytes2)
+	bytesWritten2, err := w.Write(bytes2)
 	assert.NoError(t, err)
+
+	// test internals
+	sw := w.(*seekableWriterImpl)
+	assert.Equal(t, 2, len(sw.frameEntries))
+	assert.Equal(t, uint32(len(bytes1)), sw.frameEntries[0].DecompressedSize)
+	assert.Equal(t, uint32(bytesWritten1), sw.frameEntries[0].CompressedSize)
+	assert.Equal(t, uint32(len(bytes2)), sw.frameEntries[1].DecompressedSize)
+	assert.Equal(t, uint32(bytesWritten2), sw.frameEntries[1].CompressedSize)
 
 	err = w.Close()
 	assert.NoError(t, err)
@@ -91,4 +99,34 @@ func TestWriter(t *testing.T) {
 	concat := append(bytes1, bytes2...)
 	assert.Equal(t, len(concat), n)
 	assert.Equal(t, concat, readBuf[:n])
+}
+
+func BenchmarkWrite(b *testing.B) {
+	var t = []struct {
+		input []byte
+	}{
+		{input: make([]byte, 128)},
+		{input: make([]byte, 4*1024)},
+		{input: make([]byte, 16*1024)},
+		{input: make([]byte, 64*1024)},
+		{input: make([]byte, 1*1024*1024)},
+	}
+	for _, data := range t {
+		writeBuf := data.input[:]
+		var buf bytes.Buffer
+		bw := io.Writer(&buf)
+		w, err := NewWriter(bw)
+		assert.NoError(b, err)
+
+		b.Run(fmt.Sprintf("%d", len(writeBuf)), func(b *testing.B) {
+			for i := 0; i < b.N; i++ {
+				_, err := w.Write(writeBuf)
+				assert.NoError(b, err)
+			}
+			// TODO: limit memory consumption
+			err = w.Close()
+			assert.NoError(b, err)
+			buf.Reset()
+		})
+	}
 }
