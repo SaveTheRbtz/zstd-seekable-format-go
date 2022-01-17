@@ -102,11 +102,7 @@ func (s *seekableWriterImpl) writeSeekTable() error {
 	}
 
 	_, err = s.w.Write(seekTableBytes)
-	if err != nil {
-		return err
-	}
-
-	return nil
+	return err
 }
 
 // https://github.com/facebook/zstd/blob/dev/doc/zstd_compression_format.md#skippable-frames
