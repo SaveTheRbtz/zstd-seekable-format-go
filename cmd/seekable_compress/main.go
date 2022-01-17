@@ -2,7 +2,6 @@ package main
 
 import (
 	"bytes"
-	"crypto/sha256"
 	"flag"
 	"io"
 	"log"
@@ -11,6 +10,7 @@ import (
 	// TODO: move to a better fork, this one is pretty buggy
 	"github.com/jotfs/fastcdc-go"
 	"go.uber.org/zap"
+	"github.com/zeebo/blake3"
 
 	seekable "github.com/SaveTheRbtz/zstd-seekable-format-go"
 )
@@ -79,7 +79,7 @@ func main() {
 		logger.Fatal("failed to create chunker", zap.Error(err))
 	}
 
-	expected := sha256.New()
+	expected := blake3.New()
 	for {
 		chunk, err := chunker.Next()
 		if err != nil {
@@ -112,7 +112,7 @@ func main() {
 		defer reader.Close()
 
 		chunk := make([]byte, 4096)
-		actual := sha256.New()
+		actual := blake3.New()
 		for {
 			n, err := reader.Read(chunk)
 			if err != nil {
