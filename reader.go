@@ -14,15 +14,25 @@ import (
 )
 
 type cachedFrame struct {
+	m sync.Mutex
+
 	offset uint64
 	data   []byte
 }
 
-func newCachedFrame(offset uint64, data []byte) *cachedFrame {
-	return &cachedFrame{
-		offset: offset,
-		data:   data,
-	}
+func (f *cachedFrame) replace(offset uint64, data []byte) {
+	f.m.Lock()
+	defer f.m.Unlock()
+
+	f.offset = offset
+	f.data = data
+}
+
+func (f *cachedFrame) get() (uint64, []byte) {
+	f.m.Lock()
+	defer f.m.Unlock()
+
+	return f.offset, f.data
 }
 
 type seekableReaderImpl struct {
@@ -36,8 +46,7 @@ type seekableReaderImpl struct {
 	endOffset int64
 
 	// TODO: add simple LRU cache ontop
-	cacheLock   *sync.Mutex
-	cachedFrame *cachedFrame
+	cachedFrame cachedFrame
 }
 
 type SeekableZSTDReader interface {
@@ -54,8 +63,6 @@ func NewReader(rs io.ReadSeeker, opts ...zstd.DOption) (SeekableZSTDReader, erro
 	sr := seekableReaderImpl{
 		rs:  rs,
 		dec: dec,
-
-		cacheLock: &sync.Mutex{},
 	}
 
 	tree, err := sr.readFooter()
@@ -101,13 +108,10 @@ func (s *seekableReaderImpl) read(dst []byte, off int64) (int64, int, error) {
 	var err error
 	var decompressed []byte
 
-	s.cacheLock.Lock()
-	cached := s.cachedFrame
-	s.cacheLock.Unlock()
-
-	if cached != nil && cached.offset == index.decompOffset {
+	cachedOffset, cachedData := s.cachedFrame.get()
+	if cachedOffset == index.decompOffset && cachedData != nil {
 		// fastpath
-		decompressed = cached.data
+		decompressed = cachedData
 		if len(decompressed) != int(index.decompSize) {
 			panic(fmt.Sprintf("cache corruption: len: %d, expected: %d",
 				len(decompressed), int(index.decompSize)))
@@ -132,11 +136,7 @@ func (s *seekableReaderImpl) read(dst []byte, off int64) (int64, int, error) {
 					index.compOffset, index.checksum, checksum)
 			}
 		}
-		newFrame := newCachedFrame(index.decompOffset, decompressed)
-
-		s.cacheLock.Lock()
-		s.cachedFrame = newFrame
-		s.cacheLock.Unlock()
+		s.cachedFrame.replace(index.decompOffset, decompressed)
 	}
 
 	offsetWithinFrame := uint64(off) - index.decompOffset
@@ -195,9 +195,7 @@ func (s *seekableReaderImpl) Close() (err error) {
 	s.index.Clear(false)
 	s.dec.Close()
 
-	s.cacheLock.Lock()
-	s.cachedFrame = nil
-	s.cacheLock.Unlock()
+	s.cachedFrame.replace(0, nil)
 	return
 }
 
