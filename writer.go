@@ -22,7 +22,11 @@ type seekableWriterImpl struct {
 	once *sync.Once
 }
 
-func NewWriter(w io.Writer, opts ...zstd.EOption) (io.WriteCloser, error) {
+type SeekableZSTDWriter interface {
+	io.WriteCloser
+}
+
+func NewWriter(w io.Writer, opts ...zstd.EOption) (SeekableZSTDWriter, error) {
 	enc, err := zstd.NewWriter(nil, opts...)
 	if err != nil {
 		return nil, err

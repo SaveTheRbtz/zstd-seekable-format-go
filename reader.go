@@ -37,7 +37,11 @@ type seekableReaderImpl struct {
 	cachedFrame *cachedFrame
 }
 
-func NewReader(rs io.ReadSeeker, opts ...zstd.DOption) (io.ReadSeekCloser, error) {
+type SeekableZSTDReader interface {
+	io.ReadSeekCloser
+}
+
+func NewReader(rs io.ReadSeeker, opts ...zstd.DOption) (SeekableZSTDReader, error) {
 	dec, err := zstd.NewReader(nil, opts...)
 	if err != nil {
 		return nil, err
