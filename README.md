@@ -19,7 +19,6 @@ _, err = w.Write(helloWorld)
 if err != nil {
 	log.Fatal(err)
 }
-
 // Closer
 err = w.Close()
 if err != nil {
@@ -45,7 +44,7 @@ if !bytes.Equal(ello, []byte("ello")) {
 }
 ```
 
-Or through the good old `Reader`:
+Or through the `ReadSeeker`:
 ```go
 world := make([]byte, 5)
 // Seeker
