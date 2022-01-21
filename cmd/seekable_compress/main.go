@@ -9,20 +9,22 @@ import (
 
 	// TODO: move to a better fork, this one is pretty buggy
 	"github.com/jotfs/fastcdc-go"
-	"go.uber.org/zap"
+	"github.com/klauspost/compress/zstd"
 	"github.com/zeebo/blake3"
+	"go.uber.org/zap"
 
 	seekable "github.com/SaveTheRbtz/zstd-seekable-format-go"
 )
 
 var inputFlag, outputFlag string
+var qualityFlag int
 var verifyFlag bool
 
 func init() {
 	flag.StringVar(&inputFlag, "f", "", "input filename")
 	flag.StringVar(&outputFlag, "o", "", "output filename")
 	flag.BoolVar(&verifyFlag, "t", false, "test reading after the write")
-	// TODO: compression level selection
+	flag.IntVar(&qualityFlag, "q", 1, "compression quality (lower == faster)")
 }
 
 func main() {
@@ -62,7 +64,10 @@ func main() {
 		defer output.Close()
 	}
 
-	w, err := seekable.NewWriter(output)
+	var zstdOpts []zstd.EOption
+	zstdOpts = append(zstdOpts, zstd.WithEncoderLevel(zstd.EncoderLevelFromZstd(qualityFlag)))
+
+	w, err := seekable.NewWriter(output, zstdOpts...)
 	if err != nil {
 		logger.Fatal("failed to create compressed writer", zap.Error(err))
 	}
