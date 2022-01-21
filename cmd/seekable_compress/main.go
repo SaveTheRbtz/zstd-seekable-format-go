@@ -20,7 +20,7 @@ import (
 
 var inputFlag, chunkingFlag, outputFlag string
 var qualityFlag int
-var verifyFlag bool
+var verifyFlag, verboseFlag bool
 
 func init() {
 	flag.StringVar(&inputFlag, "f", "", "input filename")
@@ -28,12 +28,19 @@ func init() {
 	flag.StringVar(&chunkingFlag, "c", "16:64:1024", "min:avg:max chunking block size (in kb)")
 	flag.BoolVar(&verifyFlag, "t", false, "test reading after the write")
 	flag.IntVar(&qualityFlag, "q", 1, "compression quality (lower == faster)")
+	flag.BoolVar(&verboseFlag, "v", false, "be verbose")
 }
 
 func main() {
 	flag.Parse()
 
-	logger, err := zap.NewDevelopment()
+	var err error
+	var logger *zap.Logger
+	if verboseFlag {
+		logger, err = zap.NewDevelopment()
+	} else {
+		logger, err = zap.NewProduction()
+	}
 	if err != nil {
 		log.Fatal("failed to initialize logger", err)
 	}
@@ -70,7 +77,7 @@ func main() {
 	var zstdOpts []zstd.EOption
 	zstdOpts = append(zstdOpts, zstd.WithEncoderLevel(zstd.EncoderLevelFromZstd(qualityFlag)))
 
-	w, err := seekable.NewWriter(output, zstdOpts...)
+	w, err := seekable.NewWriter(output, seekable.WithWLogger(logger), seekable.WithZSTDWOptions(zstdOpts...))
 	if err != nil {
 		logger.Fatal("failed to create compressed writer", zap.Error(err))
 	}

@@ -54,7 +54,7 @@ func TestCreateSkippableFrame(t *testing.T) {
 func TestWriter(t *testing.T) {
 	var b bytes.Buffer
 	bw := io.Writer(&b)
-	w, err := NewWriter(bw)
+	w, err := NewWriter(bw, WithZSTDWOptions(zstd.WithEncoderLevel(zstd.SpeedFastest)))
 	assert.NoError(t, err)
 
 	bytes1 := []byte("test")

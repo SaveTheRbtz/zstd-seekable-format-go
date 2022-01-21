@@ -4,6 +4,8 @@ import (
 	"fmt"
 
 	"encoding/binary"
+
+	"go.uber.org/zap/zapcore"
 )
 
 const (
@@ -103,6 +105,13 @@ func (e *seekTableEntry) MarshalBinary() ([]byte, error) {
 	dst := make([]byte, 12)
 	e.marshalBinaryInline(dst)
 	return dst, nil
+}
+
+func (e *seekTableEntry) MarshalLogObject(enc zapcore.ObjectEncoder) error {
+	enc.AddUint32("CompressedSize", e.CompressedSize)
+	enc.AddUint32("DecompressedSize", e.DecompressedSize)
+	enc.AddUint32("Checksum", e.Checksum)
+	return nil
 }
 
 func (e *seekTableEntry) UnmarshalBinary(p []byte) error {

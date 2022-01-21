@@ -12,12 +12,15 @@ import (
 	"encoding/binary"
 
 	"go.uber.org/multierr"
+	"go.uber.org/zap"
 )
 
 type seekableWriterImpl struct {
 	w            io.Writer
 	enc          *zstd.Encoder
 	frameEntries []seekTableEntry
+
+	o writerOptions
 
 	once *sync.Once
 }
@@ -26,15 +29,24 @@ type SeekableZSTDWriter interface {
 	io.WriteCloser
 }
 
-func NewWriter(w io.Writer, opts ...zstd.EOption) (SeekableZSTDWriter, error) {
-	enc, err := zstd.NewWriter(nil, opts...)
-	if err != nil {
-		return nil, err
-	}
+func NewWriter(w io.Writer, opts ...WOption) (SeekableZSTDWriter, error) {
 	sw := seekableWriterImpl{
 		w:    w,
-		enc:  enc,
 		once: &sync.Once{},
+	}
+
+	sw.o.setDefault()
+	for _, o := range opts {
+		err := o(&sw.o)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	var err error
+	sw.enc, err = zstd.NewWriter(nil, sw.o.zstdEOpts...)
+	if err != nil {
+		return nil, err
 	}
 	return &sw, nil
 }
@@ -52,11 +64,14 @@ func (s *seekableWriterImpl) Write(src []byte) (int, error) {
 			len(src), math.MaxUint32)
 	}
 
-	s.frameEntries = append(s.frameEntries, seekTableEntry{
+	entry := seekTableEntry{
 		CompressedSize:   uint32(len(dst)),
 		DecompressedSize: uint32(len(src)),
 		Checksum:         uint32((xxhash.Sum64(src) << 32) >> 32),
-	})
+	}
+	s.frameEntries = append(s.frameEntries, entry)
+
+	s.o.logger.Debug("appending frame", zap.Object("frame", &entry))
 	return s.w.Write(dst)
 }
 
