@@ -18,9 +18,11 @@ import (
 	seekable "github.com/SaveTheRbtz/zstd-seekable-format-go"
 )
 
-var inputFlag, chunkingFlag, outputFlag string
-var qualityFlag int
-var verifyFlag, verboseFlag bool
+var (
+	inputFlag, chunkingFlag, outputFlag string
+	qualityFlag                         int
+	verifyFlag, verboseFlag             bool
+)
 
 func init() {
 	flag.StringVar(&inputFlag, "f", "", "input filename")

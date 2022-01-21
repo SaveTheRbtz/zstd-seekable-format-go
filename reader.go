@@ -1,6 +1,7 @@
 package seekable
 
 import (
+	"encoding/binary"
 	"fmt"
 	"io"
 	"sync"
@@ -9,8 +10,6 @@ import (
 	"github.com/klauspost/compress/zstd"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
-
-	"encoding/binary"
 
 	"github.com/google/btree"
 )

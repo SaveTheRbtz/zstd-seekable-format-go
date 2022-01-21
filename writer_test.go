@@ -102,7 +102,7 @@ func TestWriter(t *testing.T) {
 }
 
 func BenchmarkWrite(b *testing.B) {
-	var t = []struct {
+	t := []struct {
 		input []byte
 	}{
 		{input: make([]byte, 128)},

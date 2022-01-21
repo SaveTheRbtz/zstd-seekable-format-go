@@ -6,8 +6,9 @@ import (
 	"log"
 	"os"
 
-	seekable "github.com/SaveTheRbtz/zstd-seekable-format-go"
 	"github.com/klauspost/compress/zstd"
+
+	seekable "github.com/SaveTheRbtz/zstd-seekable-format-go"
 )
 
 func main() {

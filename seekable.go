@@ -1,9 +1,8 @@
 package seekable
 
 import (
-	"fmt"
-
 	"encoding/binary"
+	"fmt"
 
 	"go.uber.org/zap/zapcore"
 )

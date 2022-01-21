@@ -1,6 +1,7 @@
 package seekable
 
 import (
+	"encoding/binary"
 	"fmt"
 	"io"
 	"math"
@@ -8,8 +9,6 @@ import (
 
 	"github.com/cespare/xxhash"
 	"github.com/klauspost/compress/zstd"
-
-	"encoding/binary"
 
 	"go.uber.org/multierr"
 	"go.uber.org/zap"
