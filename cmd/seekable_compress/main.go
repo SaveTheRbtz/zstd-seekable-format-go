@@ -6,6 +6,8 @@ import (
 	"io"
 	"log"
 	"os"
+	"strconv"
+	"strings"
 
 	// TODO: move to a better fork, this one is pretty buggy
 	"github.com/jotfs/fastcdc-go"
@@ -16,13 +18,14 @@ import (
 	seekable "github.com/SaveTheRbtz/zstd-seekable-format-go"
 )
 
-var inputFlag, outputFlag string
+var inputFlag, chunkingFlag, outputFlag string
 var qualityFlag int
 var verifyFlag bool
 
 func init() {
 	flag.StringVar(&inputFlag, "f", "", "input filename")
 	flag.StringVar(&outputFlag, "o", "", "output filename")
+	flag.StringVar(&chunkingFlag, "c", "16:64:1024", "min:avg:max chunking block size (in kb)")
 	flag.BoolVar(&verifyFlag, "t", false, "test reading after the write")
 	flag.IntVar(&qualityFlag, "q", 1, "compression quality (lower == faster)")
 }
@@ -73,11 +76,21 @@ func main() {
 	}
 	defer w.Close()
 
-	// TODO: move to flags
+	ckunkParams := strings.SplitN(chunkingFlag, ":", 3)
+	if len(ckunkParams) != 3 {
+		logger.Fatal("failed parse chunker params. len() != 3", zap.Int("actual", len(ckunkParams)))
+	}
+	mustConv := func(s string) int {
+		n, err := strconv.Atoi(s)
+		if err != nil {
+			logger.Fatal("failet to parse int", zap.String("int", s), zap.Error(err))
+		}
+		return n
+	}
 	opts := fastcdc.Options{
-		MinSize:     4 * 1024,
-		AverageSize: 16 * 1024,
-		MaxSize:     64 * 1024,
+		MinSize:     mustConv(ckunkParams[0]) * 1024,
+		AverageSize: mustConv(ckunkParams[1]) * 1024,
+		MaxSize:     mustConv(ckunkParams[2]) * 1024,
 	}
 	chunker, err := fastcdc.NewChunker(input, opts)
 	if err != nil {
