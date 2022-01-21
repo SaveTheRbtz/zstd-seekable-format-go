@@ -7,6 +7,8 @@ import (
 
 	"github.com/cespare/xxhash"
 	"github.com/klauspost/compress/zstd"
+	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
 
 	"encoding/binary"
 
@@ -45,6 +47,8 @@ type seekableReaderImpl struct {
 	offset    int64
 	endOffset int64
 
+	o readerOptions
+
 	// TODO: add simple LRU cache ontop
 	cachedFrame cachedFrame
 }
@@ -54,15 +58,23 @@ type SeekableZSTDReader interface {
 	io.ReaderAt
 }
 
-func NewReader(rs io.ReadSeeker, opts ...zstd.DOption) (SeekableZSTDReader, error) {
-	dec, err := zstd.NewReader(nil, opts...)
-	if err != nil {
-		return nil, err
+func NewReader(rs io.ReadSeeker, opts ...ROption) (SeekableZSTDReader, error) {
+	sr := seekableReaderImpl{
+		rs: rs,
 	}
 
-	sr := seekableReaderImpl{
-		rs:  rs,
-		dec: dec,
+	sr.o.setDefault()
+	for _, o := range opts {
+		err := o(&sr.o)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	var err error
+	sr.dec, err = zstd.NewReader(nil, sr.o.zstdDOpts...)
+	if err != nil {
+		return nil, err
 	}
 
 	tree, err := sr.readFooter()
@@ -146,9 +158,8 @@ func (s *seekableReaderImpl) read(dst []byte, off int64) (int64, int, error) {
 		size = uint64(len(dst))
 	}
 
-	// TODO: add logger
-	//fmt.Fprintf(os.Stderr, "decompressed [%d:%d] size: %d, decom: %d, dst: %d, index: %+v\n",
-	//	offsetWithinFrame, offsetWithinFrame+size, size, len(decompressed), len(dst), index)
+	s.o.logger.Debug("decompressed", zap.Uint64("offsetWithinFrame", offsetWithinFrame), zap.Uint64("end", offsetWithinFrame+size),
+		zap.Uint64("size", size), zap.Int("lenDecompressed", len(decompressed)), zap.Int("lenDst", len(dst)), zap.Object("index", &index))
 	copy(dst, decompressed[offsetWithinFrame:offsetWithinFrame+size])
 
 	return off + int64(size), int(size), nil
@@ -206,6 +217,15 @@ type frameOffset struct {
 	decompSize   uint32
 
 	checksum uint32
+}
+
+func (o *frameOffset) MarshalLogObject(enc zapcore.ObjectEncoder) error {
+	enc.AddUint64("compOffset", o.compOffset)
+	enc.AddUint64("decompOffset", o.decompOffset)
+	enc.AddUint32("compSize", o.compSize)
+	enc.AddUint32("decompSize", o.decompSize)
+	enc.AddUint32("checksum", o.checksum)
+	return nil
 }
 
 func (o frameOffset) Less(than btree.Item) bool {

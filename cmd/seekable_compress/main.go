@@ -130,7 +130,7 @@ func main() {
 		}
 		defer verify.Close()
 
-		reader, err := seekable.NewReader(verify)
+		reader, err := seekable.NewReader(verify, seekable.WithRLogger(logger))
 		if err != nil {
 			logger.Fatal("failed to create new seekable reader", zap.Error(err))
 		}
@@ -155,6 +155,8 @@ func main() {
 		if !bytes.Equal(actual.Sum(nil), expected.Sum(nil)) {
 			logger.Fatal("checksum verification failed",
 				zap.Binary("actual", actual.Sum(nil)), zap.Binary("expected", expected.Sum(nil)))
+		} else {
+			logger.Info("checksum verification succeeded", zap.Binary("actual", actual.Sum(nil)))
 		}
 	}
 }
