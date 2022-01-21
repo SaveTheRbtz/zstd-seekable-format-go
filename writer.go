@@ -86,14 +86,9 @@ func (s *seekableWriterImpl) Close() (err error) {
 }
 
 func (s *seekableWriterImpl) writeSeekTable() error {
-	// TODO: preallocate
-	seekTable := make([]byte, 0)
-	for _, e := range s.frameEntries {
-		entryBytes, err := e.MarshalBinary()
-		if err != nil {
-			return err
-		}
-		seekTable = append(seekTable, entryBytes...)
+	seekTable := make([]byte, len(s.frameEntries)*12+9)
+	for i, e := range s.frameEntries {
+		e.marshalBinaryInline(seekTable[i*12 : (i+1)*12])
 	}
 
 	if len(s.frameEntries) > math.MaxUint32 {
@@ -109,12 +104,7 @@ func (s *seekableWriterImpl) writeSeekTable() error {
 		SeekableMagicNumber: seekableMagicNumber,
 	}
 
-	footerBytes, err := footer.MarshalBinary()
-	if err != nil {
-		return err
-	}
-	seekTable = append(seekTable, footerBytes...)
-
+	footer.marshalBinaryInline(seekTable[len(s.frameEntries)*12 : len(s.frameEntries)*12+9])
 	seekTableBytes, err := createSkippableFrame(seekableTag, seekTable)
 	if err != nil {
 		return err
