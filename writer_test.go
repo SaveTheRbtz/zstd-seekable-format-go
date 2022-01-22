@@ -5,6 +5,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"io"
+	"strconv"
 	"testing"
 
 	"github.com/klauspost/compress/zstd"
@@ -19,10 +20,12 @@ type bytesErr struct {
 }
 
 func TestCreateSkippableFrame(t *testing.T) {
+	t.Parallel()
+
 	dec, err := zstd.NewReader(nil)
 	assert.NoError(t, err)
 
-	for _, tab := range []bytesErr{
+	for i, tab := range []bytesErr{
 		{
 			tag:           0x00,
 			input:         []byte{},
@@ -40,18 +43,24 @@ func TestCreateSkippableFrame(t *testing.T) {
 			expectedErr:   fmt.Errorf("requested tag (255) > 0xf"),
 		},
 	} {
-		actualBytes, err := createSkippableFrame(tab.tag, tab.input)
-		assert.Equal(t, tab.expectedErr, err, "createSkippableFrame err does not match expected")
-		if tab.expectedErr == nil && err == nil {
-			assert.Equal(t, tab.expectedBytes, actualBytes, "createSkippableFrame output does not match expected")
-			decodedeBytes, err := dec.DecodeAll(actualBytes, nil)
-			assert.NoError(t, err)
-			assert.Equal(t, []byte(nil), decodedeBytes)
-		}
+		tab := tab
+		t.Run(strconv.Itoa(i), func(t *testing.T) {
+			t.Parallel()
+			actualBytes, err := createSkippableFrame(tab.tag, tab.input)
+			assert.Equal(t, tab.expectedErr, err, "createSkippableFrame err does not match expected")
+			if tab.expectedErr == nil && err == nil {
+				assert.Equal(t, tab.expectedBytes, actualBytes, "createSkippableFrame output does not match expected")
+				decodedeBytes, err := dec.DecodeAll(actualBytes, nil)
+				assert.NoError(t, err)
+				assert.Equal(t, []byte(nil), decodedeBytes)
+			}
+		})
 	}
 }
 
 func TestWriter(t *testing.T) {
+	t.Parallel()
+
 	var b bytes.Buffer
 	bw := io.Writer(&b)
 	w, err := NewWriter(bw, WithZSTDWOptions(zstd.WithEncoderLevel(zstd.SpeedFastest)))

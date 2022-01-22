@@ -2,6 +2,7 @@ package seekable
 
 import (
 	"io"
+	"strconv"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -83,6 +84,8 @@ func (s *seekableBufferReader) Seek(offset int64, whence int) (int64, error) {
 }
 
 func TestReader(t *testing.T) {
+	t.Parallel()
+
 	for _, b := range [][]byte{checksum, noChecksum} {
 		br := &seekableBufferReader{buf: b}
 		r, err := NewReader(br)
@@ -126,43 +129,49 @@ func TestReader(t *testing.T) {
 }
 
 func TestReaderEdges(t *testing.T) {
+	t.Parallel()
+
 	source := []byte("testtest2")
-	for _, b := range [][]byte{checksum, noChecksum} {
-		sr := &seekableBufferReader{buf: b}
-		r, err := NewReader(sr)
-		assert.NoError(t, err)
-		defer r.Close()
+	for i, b := range [][]byte{checksum, noChecksum} {
+		t.Run(strconv.Itoa(i), func(t *testing.T) {
+			t.Parallel()
 
-		for _, whence := range []int{io.SeekStart, io.SeekEnd} {
-			for n := int64(-1); n <= int64(len(source)); n += 1 {
-				for m := int64(0); n <= int64(len(source)); n += 1 {
-					var j int64
-					switch whence {
-					case io.SeekStart:
-						j, err = r.Seek(n, whence)
-					case io.SeekEnd:
-						j, err = r.Seek(int64(-len(source))+n, whence)
-					}
-					if n < 0 {
-						assert.Error(t, err)
-						continue
-					}
-					assert.NoError(t, err)
-					assert.Equal(t, n, j)
+			sr := &seekableBufferReader{buf: b}
+			r, err := NewReader(sr)
+			assert.NoError(t, err)
+			defer r.Close()
 
-					tmp := make([]byte, m)
-					k, err := r.Read(tmp)
-					if n >= int64(len(source)) {
-						assert.Equal(t, err, io.EOF, "should return EOF at %d, buf: %d, whence: %d",
-							n, len(source), whence)
-					} else {
-						assert.NoError(t, err, "should not return err at %d, buf: %d, whence: %d",
-							n, len(source), whence)
-					}
+			for _, whence := range []int{io.SeekStart, io.SeekEnd} {
+				for n := int64(-1); n <= int64(len(source)); n += 1 {
+					for m := int64(0); n <= int64(len(source)); n += 1 {
+						var j int64
+						switch whence {
+						case io.SeekStart:
+							j, err = r.Seek(n, whence)
+						case io.SeekEnd:
+							j, err = r.Seek(int64(-len(source))+n, whence)
+						}
+						if n < 0 {
+							assert.Error(t, err)
+							continue
+						}
+						assert.NoError(t, err)
+						assert.Equal(t, n, j)
 
-					assert.Equal(t, source[n:n+int64(k)], tmp[:k])
+						tmp := make([]byte, m)
+						k, err := r.Read(tmp)
+						if n >= int64(len(source)) {
+							assert.Equal(t, err, io.EOF, "should return EOF at %d, buf: %d, whence: %d",
+								n, len(source), whence)
+						} else {
+							assert.NoError(t, err, "should not return err at %d, buf: %d, whence: %d",
+								n, len(source), whence)
+						}
+
+						assert.Equal(t, source[n:n+int64(k)], tmp[:k])
+					}
 				}
 			}
-		}
+		})
 	}
 }
