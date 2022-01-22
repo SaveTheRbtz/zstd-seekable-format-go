@@ -133,6 +133,7 @@ func TestReaderEdges(t *testing.T) {
 
 	source := []byte("testtest2")
 	for i, b := range [][]byte{checksum, noChecksum} {
+		b := b
 		t.Run(strconv.Itoa(i), func(t *testing.T) {
 			t.Parallel()
 
@@ -142,8 +143,8 @@ func TestReaderEdges(t *testing.T) {
 			defer r.Close()
 
 			for _, whence := range []int{io.SeekStart, io.SeekEnd} {
-				for n := int64(-1); n <= int64(len(source)); n += 1 {
-					for m := int64(0); n <= int64(len(source)); n += 1 {
+				for n := int64(-1); n <= int64(len(source)); n++ {
+					for m := int64(0); n <= int64(len(source)); n++ {
 						var j int64
 						switch whence {
 						case io.SeekStart:
