@@ -13,6 +13,11 @@ import (
 	"go.uber.org/zap"
 )
 
+var (
+	_ io.Writer = (*seekableWriterImpl)(nil)
+	_ io.Closer = (*seekableWriterImpl)(nil)
+)
+
 type seekableWriterImpl struct {
 	w            io.Writer
 	enc          *zstd.Encoder

@@ -14,6 +14,11 @@ import (
 	"github.com/google/btree"
 )
 
+var (
+	_ io.ReadSeekCloser = (*seekableReaderImpl)(nil)
+	_ io.ReaderAt       = (*seekableReaderImpl)(nil)
+)
+
 type cachedFrame struct {
 	m sync.Mutex
 
