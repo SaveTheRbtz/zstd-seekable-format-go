@@ -114,12 +114,20 @@ func (s *seekableReaderImpl) read(dst []byte, off int64) (int64, int, error) {
 	if off >= s.endOffset {
 		return 0, 0, io.EOF
 	}
+	if off < 0 {
+		return 0, 0, fmt.Errorf("offset before the start of the file: %d", off)
+	}
 
 	var index frameOffset
 	s.index.DescendLessOrEqual(frameOffset{decompOffset: uint64(off)}, func(i btree.Item) bool {
 		index = i.(frameOffset)
 		return false
 	})
+
+	if off < int64(index.decompOffset) || off > int64(index.decompOffset)+int64(index.decompSize) {
+		return 0, 0, fmt.Errorf("offset outside of index bounds: %d: min: %d, max: %d",
+			off, int64(index.decompOffset), int64(index.decompOffset)+int64(index.decompSize))
+	}
 
 	var err error
 	var decompressed []byte
