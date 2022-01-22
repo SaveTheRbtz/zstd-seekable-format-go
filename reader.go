@@ -188,7 +188,7 @@ func (s *seekableReaderImpl) readSegment(p []byte, off int64) (err error) {
 		}
 		return err
 	default:
-		_, err = v.Seek(int64(off), io.SeekStart)
+		_, err = v.Seek(off, io.SeekStart)
 		if err != nil {
 			return err
 		}
