@@ -164,7 +164,7 @@ func (s *seekableReaderImpl) read(dst []byte, off int64) (int64, int, error) {
 	return off + int64(size), int(size), nil
 }
 
-func (s *seekableReaderImpl) readSegment(p []byte, off int64) error {
+func (s *seekableReaderImpl) readSegment(p []byte, off int64) (err error) {
 	switch v := s.rs.(type) {
 	case io.ReaderAt:
 		n, err := v.ReadAt(p, off)
@@ -175,8 +175,11 @@ func (s *seekableReaderImpl) readSegment(p []byte, off int64) error {
 		}
 		return err
 	default:
-		v.Seek(int64(off), io.SeekStart)
-		_, err := io.ReadFull(s.rs, p)
+		_, err = v.Seek(int64(off), io.SeekStart)
+		if err != nil {
+			return err
+		}
+		_, err = io.ReadFull(s.rs, p)
 		return err
 	}
 }
@@ -284,11 +287,11 @@ func (s *seekableReaderImpl) readFooter() (t *btree.BTree, err error) {
 			frameSize, skippableFrameOffset-8)
 	}
 
-	t = s.indexSeekTableEntries(buf[8:], uint64(seekTableEntrySize))
+	t, err = s.indexSeekTableEntries(buf[8:], uint64(seekTableEntrySize))
 	return
 }
 
-func (s *seekableReaderImpl) indexSeekTableEntries(p []byte, entrySize uint64) *btree.BTree {
+func (s *seekableReaderImpl) indexSeekTableEntries(p []byte, entrySize uint64) (*btree.BTree, error) {
 	// TODO: rewrite btree using generics
 	t := btree.New(16)
 	entry := SeekTableEntry{}
@@ -297,7 +300,10 @@ func (s *seekableReaderImpl) indexSeekTableEntries(p []byte, entrySize uint64) *
 		if indexOffset >= uint64(len(p)) {
 			break
 		}
-		entry.UnmarshalBinary(p[indexOffset : indexOffset+entrySize])
+		err := entry.UnmarshalBinary(p[indexOffset : indexOffset+entrySize])
+		if err != nil {
+			return nil, err
+		}
 		t.ReplaceOrInsert(frameOffset{
 			compOffset:   compOffset,
 			decompOffset: decompOffset,
@@ -309,5 +315,5 @@ func (s *seekableReaderImpl) indexSeekTableEntries(p []byte, entrySize uint64) *
 		decompOffset += uint64(entry.DecompressedSize)
 		indexOffset += entrySize
 	}
-	return t
+	return t, nil
 }

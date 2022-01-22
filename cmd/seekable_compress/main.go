@@ -46,7 +46,9 @@ func main() {
 	if err != nil {
 		log.Fatal("failed to initialize logger", err)
 	}
-	defer logger.Sync()
+	defer func() {
+		_ = logger.Sync()
+	}()
 
 	if inputFlag == "" || outputFlag == "" {
 		logger.Fatal("both input and output files need to be defined")
@@ -121,7 +123,10 @@ func main() {
 				logger.Fatal("failed to update checksum", zap.Error(err))
 			}
 		}
-		w.Write(chunk.Data)
+		m, err := w.Write(chunk.Data)
+		if err != nil || m != chunk.Length {
+			logger.Fatal("failed to write data", zap.Error(err))
+		}
 	}
 	w.Close()
 

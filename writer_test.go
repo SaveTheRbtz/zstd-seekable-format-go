@@ -68,9 +68,9 @@ func TestWriter(t *testing.T) {
 	sw := w.(*seekableWriterImpl)
 	assert.Equal(t, 2, len(sw.frameEntries))
 	assert.Equal(t, uint32(len(bytes1)), sw.frameEntries[0].DecompressedSize)
-	assert.Equal(t, uint32(bytesWritten1), sw.frameEntries[0].CompressedSize)
+	assert.Equal(t, bytesWritten1, len(bytes1))
 	assert.Equal(t, uint32(len(bytes2)), sw.frameEntries[1].DecompressedSize)
-	assert.Equal(t, uint32(bytesWritten2), sw.frameEntries[1].CompressedSize)
+	assert.Equal(t, uint32(bytesWritten2), sw.frameEntries[1].DecompressedSize)
 
 	err = w.Close()
 	assert.NoError(t, err)
@@ -82,7 +82,6 @@ func TestWriter(t *testing.T) {
 	assert.Equal(t, uint32(2), binary.LittleEndian.Uint32(buf[len(buf)-9:len(buf)-5]))
 	// index.1
 	indexOffset := len(buf) - 4 - 1 - 4 - 2*12
-	assert.Equal(t, uint32(bytesWritten1), binary.LittleEndian.Uint32(buf[indexOffset:indexOffset+4]))
 	assert.Equal(t, uint32(len(bytes1)), binary.LittleEndian.Uint32(buf[indexOffset+4:indexOffset+8]))
 	// skipframe header
 	frameOffset := indexOffset - 4 - 4

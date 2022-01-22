@@ -67,10 +67,19 @@ func (s *seekableWriterImpl) Write(src []byte) (int, error) {
 		DecompressedSize: uint32(len(src)),
 		Checksum:         uint32((xxhash.Sum64(src) << 32) >> 32),
 	}
-	s.frameEntries = append(s.frameEntries, entry)
+
+	n, err := s.w.Write(dst)
+	if err != nil {
+		return 0, err
+	}
+	if n != len(dst) {
+		return 0, fmt.Errorf("partial write: %d out of %d", n, len(dst))
+	}
 
 	s.o.logger.Debug("appending frame", zap.Object("frame", &entry))
-	return s.w.Write(dst)
+	s.frameEntries = append(s.frameEntries, entry)
+
+	return len(src), nil
 }
 
 func (s *seekableWriterImpl) Close() (err error) {
