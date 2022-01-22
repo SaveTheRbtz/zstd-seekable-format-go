@@ -2,6 +2,7 @@ package seekable
 
 import (
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"io"
 	"sync"
@@ -181,7 +182,7 @@ func (s *seekableReaderImpl) readSegment(p []byte, off int64) (err error) {
 	switch v := s.rs.(type) {
 	case io.ReaderAt:
 		n, err := v.ReadAt(p, off)
-		if err == io.EOF {
+		if errors.Is(err, io.EOF) {
 			if n == len(p) {
 				return nil
 			}

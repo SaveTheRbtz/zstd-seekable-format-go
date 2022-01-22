@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"errors"
 	"flag"
 	"io"
 	"log"
@@ -110,7 +111,7 @@ func main() {
 	for {
 		chunk, err := chunker.Next()
 		if err != nil {
-			if err == io.EOF {
+			if errors.Is(err, io.EOF) {
 				break
 			}
 			logger.Fatal("failed to read", zap.Error(err))
@@ -146,7 +147,7 @@ func main() {
 		for {
 			n, err := reader.Read(chunk)
 			if err != nil {
-				if err == io.EOF {
+				if errors.Is(err, io.EOF) {
 					break
 				}
 				logger.Fatal("failed to read", zap.Error(err))
