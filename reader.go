@@ -243,7 +243,7 @@ func (s *seekableReaderImpl) readFooter() (t *btree.BTree, err error) {
 		return
 	}
 
-	footer := seekTableFooter{}
+	footer := SeekTableFooter{}
 	err = footer.UnmarshalBinary(buf)
 	if err != nil {
 		return
@@ -291,7 +291,7 @@ func (s *seekableReaderImpl) readFooter() (t *btree.BTree, err error) {
 func (s *seekableReaderImpl) indexSeekTableEntries(p []byte, entrySize uint64) *btree.BTree {
 	// TODO: rewrite btree using generics
 	t := btree.New(16)
-	entry := seekTableEntry{}
+	entry := SeekTableEntry{}
 	var indexOffset, compOffset, decompOffset uint64
 	for {
 		if indexOffset >= uint64(len(p)) {

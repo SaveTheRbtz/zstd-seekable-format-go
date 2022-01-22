@@ -1,7 +1,6 @@
 package seekable
 
 import (
-	"encoding/binary"
 	"fmt"
 	"io"
 	"math"
@@ -17,7 +16,7 @@ import (
 type seekableWriterImpl struct {
 	w            io.Writer
 	enc          *zstd.Encoder
-	frameEntries []seekTableEntry
+	frameEntries []SeekTableEntry
 
 	o writerOptions
 
@@ -63,7 +62,7 @@ func (s *seekableWriterImpl) Write(src []byte) (int, error) {
 			len(src), math.MaxUint32)
 	}
 
-	entry := seekTableEntry{
+	entry := SeekTableEntry{
 		CompressedSize:   uint32(len(dst)),
 		DecompressedSize: uint32(len(src)),
 		Checksum:         uint32((xxhash.Sum64(src) << 32) >> 32),
@@ -95,7 +94,7 @@ func (s *seekableWriterImpl) writeSeekTable() error {
 			len(s.frameEntries), math.MaxUint32)
 	}
 
-	footer := seekTableFooter{
+	footer := SeekTableFooter{
 		NumberOfFrames: uint32(len(s.frameEntries)),
 		SeekTableDescriptor: SeekTableDescriptor{
 			ChecksumFlag: true,
@@ -111,49 +110,4 @@ func (s *seekableWriterImpl) writeSeekTable() error {
 
 	_, err = s.w.Write(seekTableBytes)
 	return err
-}
-
-// https://github.com/facebook/zstd/blob/dev/doc/zstd_compression_format.md#skippable-frames
-
-// | `Magic_Number` | `Frame_Size` | `User_Data` |
-// |:--------------:|:------------:|:-----------:|
-// |   4 bytes      |  4 bytes     |   n bytes   |
-
-// Skippable frames allow the insertion of user-defined metadata
-// into a flow of concatenated frames.
-
-// __`Magic_Number`__
-
-// 4 Bytes, __little-endian__ format.
-// Value : 0x184D2A5?, which means any value from 0x184D2A50 to 0x184D2A5F.
-// All 16 values are valid to identify a skippable frame.
-// This specification doesn't detail any specific tagging for skippable frames.
-
-// __`Frame_Size`__
-
-// This is the size, in bytes, of the following `User_Data`
-// (without including the magic number nor the size field itself).
-// This field is represented using 4 Bytes, __little-endian__ format, unsigned 32-bits.
-// This means `User_Data` can’t be bigger than (2^32-1) bytes.
-
-// __`User_Data`__
-
-// The `User_Data` can be anything. Data will just be skipped by the decoder.
-func createSkippableFrame(tag uint32, payload []byte) ([]byte, error) {
-	if len(payload) == 0 {
-		return nil, nil
-	}
-
-	if tag > 0xf {
-		return nil, fmt.Errorf("requested tag (%d) > 0xf", tag)
-	}
-
-	if len(payload) > math.MaxUint32 {
-		return nil, fmt.Errorf("requested skippable frame size (%d) > max uint32", len(payload))
-	}
-
-	dst := make([]byte, 8, len(payload)+8)
-	binary.LittleEndian.PutUint32(dst[0:], skippableFrameMagic+tag)
-	binary.LittleEndian.PutUint32(dst[4:], uint32(len(payload)))
-	return append(dst, payload...), nil
 }
