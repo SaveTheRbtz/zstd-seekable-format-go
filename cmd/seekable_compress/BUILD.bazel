@@ -1,0 +1,21 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_binary", "go_library")
+
+go_library(
+    name = "seekable_compress_lib",
+    srcs = ["main.go"],
+    importpath = "github.com/SaveTheRbtz/zstd-seekable-format-go/cmd/seekable_compress",
+    visibility = ["//visibility:private"],
+    deps = [
+        "//:zstd-seekable-format-go",
+        "@com_github_jotfs_fastcdc_go//:fastcdc-go",
+        "@com_github_klauspost_compress//zstd",
+        "@com_github_zeebo_blake3//:blake3",
+        "@org_uber_go_zap//:zap",
+    ],
+)
+
+go_binary(
+    name = "seekable_compress",
+    embed = [":seekable_compress_lib"],
+    visibility = ["//visibility:public"],
+)

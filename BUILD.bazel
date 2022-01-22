@@ -1,0 +1,50 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library", "go_test")
+load("@bazel_gazelle//:def.bzl", "gazelle")
+
+# gazelle:prefix github.com/SaveTheRbtz/zstd-seekable-format-go
+gazelle(name = "gazelle")
+
+gazelle(
+    name = "gazelle-update-repos",
+    args = [
+        "-from_file=go.mod",
+        "-to_macro=deps.bzl%go_dependencies",
+        "-prune",
+        "-build_directives=gazelle:exclude **/**_test.go,gazelle:exclude testing,gazelle:exclude **/testdata",
+    ],
+    command = "update-repos",
+)
+
+go_library(
+    name = "zstd-seekable-format-go",
+    srcs = [
+        "reader.go",
+        "reader_options.go",
+        "seekable.go",
+        "writer.go",
+        "writer_options.go",
+    ],
+    importpath = "github.com/SaveTheRbtz/zstd-seekable-format-go",
+    visibility = ["//visibility:public"],
+    deps = [
+        "@com_github_cespare_xxhash//:xxhash",
+        "@com_github_google_btree//:btree",
+        "@com_github_klauspost_compress//zstd",
+        "@org_uber_go_multierr//:multierr",
+        "@org_uber_go_zap//:zap",
+        "@org_uber_go_zap//zapcore",
+    ],
+)
+
+go_test(
+    name = "zstd-seekable-format-go_test",
+    srcs = [
+        "reader_test.go",
+        "writer_test.go",
+    ],
+    embed = [":zstd-seekable-format-go"],
+    deps = [
+        "@com_github_klauspost_compress//zstd",
+        "@com_github_stretchr_testify//assert",
+    ],
+)
