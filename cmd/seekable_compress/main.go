@@ -18,22 +18,20 @@ import (
 	seekable "github.com/SaveTheRbtz/zstd-seekable-format-go"
 )
 
-var (
-	inputFlag, chunkingFlag, outputFlag string
-	qualityFlag                         int
-	verifyFlag, verboseFlag             bool
-)
+func main() {
+	var (
+		inputFlag, chunkingFlag, outputFlag string
+		qualityFlag                         int
+		verifyFlag, verboseFlag             bool
+	)
 
-func init() {
 	flag.StringVar(&inputFlag, "f", "", "input filename")
 	flag.StringVar(&outputFlag, "o", "", "output filename")
 	flag.StringVar(&chunkingFlag, "c", "16:64:1024", "min:avg:max chunking block size (in kb)")
 	flag.BoolVar(&verifyFlag, "t", false, "test reading after the write")
 	flag.IntVar(&qualityFlag, "q", 1, "compression quality (lower == faster)")
 	flag.BoolVar(&verboseFlag, "v", false, "be verbose")
-}
 
-func main() {
 	flag.Parse()
 
 	var err error
