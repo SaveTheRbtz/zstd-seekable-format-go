@@ -308,15 +308,14 @@ func (s *seekableReaderImpl) indexSeekTableEntries(p []byte, entrySize uint64) (
 	// TODO: rewrite btree using generics
 	t := btree.New(16)
 	entry := SeekTableEntry{}
-	var indexOffset, compOffset, decompOffset uint64
-	for {
-		if indexOffset >= uint64(len(p)) {
-			break
-		}
+	var compOffset, decompOffset uint64
+
+	for indexOffset := uint64(0); indexOffset < uint64(len(p)); indexOffset += entrySize {
 		err := entry.UnmarshalBinary(p[indexOffset : indexOffset+entrySize])
 		if err != nil {
 			return nil, err
 		}
+
 		t.ReplaceOrInsert(frameOffset{
 			compOffset:   compOffset,
 			decompOffset: decompOffset,
@@ -326,7 +325,7 @@ func (s *seekableReaderImpl) indexSeekTableEntries(p []byte, entrySize uint64) (
 		})
 		compOffset += uint64(entry.CompressedSize)
 		decompOffset += uint64(entry.DecompressedSize)
-		indexOffset += entrySize
 	}
+
 	return t, nil
 }
