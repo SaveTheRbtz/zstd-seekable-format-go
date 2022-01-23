@@ -230,6 +230,11 @@ func TestReadeAt(t *testing.T) {
 
 	assert.Equal(t, 6, k2)
 	assert.Equal(t, []byte("ttest2"), tmp2[:k2])
+
+	sectionReader := io.NewSectionReader(r, 3, 4)
+	tmp3, err := io.ReadAll(sectionReader)
+	assert.Equal(t, 4, len(tmp3))
+	assert.Equal(t, []byte("ttes"), tmp3)
 }
 
 func TestReaderEdgesParallel(t *testing.T) {
