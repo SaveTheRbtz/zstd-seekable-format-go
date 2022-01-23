@@ -203,3 +203,45 @@ func TestReaderEdges(t *testing.T) {
 		})
 	}
 }
+
+func TestReaderEdgesParallel(t *testing.T) {
+	t.Parallel()
+
+	source := []byte("testtest2")
+	for i, b := range [][]byte{checksum, noChecksum} {
+		b := b
+
+		sr := &seekableBufferReader{buf: b}
+		r, err := NewReader(sr)
+		assert.NoError(t, err)
+		defer r.Close()
+
+		for n := int64(-1); n <= int64(len(source)); n++ {
+			for m := int64(0); m <= int64(len(source)); m++ {
+				t.Run(fmt.Sprintf("%d/%d/%d", i, n, m), func(t *testing.T) {
+					t.Parallel()
+
+					tmp := make([]byte, m)
+					k, err := r.ReadAt(tmp, n)
+					if n < 0 {
+						assert.Error(t, err)
+						return
+					}
+
+					if n >= int64(len(source)) {
+						assert.Equal(t, err, io.EOF,
+							"%d: should return EOF at %d, len(source): %d, len(tmp): %d, k: %d",
+							i, n, len(source), m, k)
+						return
+					} else {
+						assert.NoError(t, err,
+							"%d: should NOT return EOF at %d, len(source): %d, len(tmp): %d, k: %d",
+							i, n, len(source), m, k)
+					}
+
+					assert.Equal(t, source[n:n+int64(k)], tmp[:k])
+				})
+			}
+		}
+	}
+}
