@@ -91,7 +91,7 @@ func TestReader(t *testing.T) {
 		r, err := NewReader(br)
 		assert.NoError(t, err)
 
-		sr := r.(*seekableReaderImpl)
+		sr := r.(*readerImpl)
 		assert.Equal(t, int64(9), sr.endOffset)
 		assert.Equal(t, 2, sr.index.Len())
 		assert.Equal(t, int64(0), sr.offset)

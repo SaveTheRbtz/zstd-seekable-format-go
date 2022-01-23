@@ -16,8 +16,8 @@ import (
 )
 
 var (
-	_ io.ReadSeekCloser = (*seekableReaderImpl)(nil)
-	_ io.ReaderAt       = (*seekableReaderImpl)(nil)
+	_ io.ReadSeekCloser = (*readerImpl)(nil)
+	_ io.ReaderAt       = (*readerImpl)(nil)
 )
 
 type cachedFrame struct {
@@ -42,7 +42,7 @@ func (f *cachedFrame) get() (uint64, []byte) {
 	return f.offset, f.data
 }
 
-type seekableReaderImpl struct {
+type readerImpl struct {
 	rs    io.ReadSeeker
 	dec   *zstd.Decoder
 	index *btree.BTree
@@ -58,13 +58,13 @@ type seekableReaderImpl struct {
 	cachedFrame cachedFrame
 }
 
-type SeekableZSTDReader interface {
+type ZSTDReader interface {
 	io.ReadSeekCloser
 	io.ReaderAt
 }
 
-func NewReader(rs io.ReadSeeker, opts ...ROption) (SeekableZSTDReader, error) {
-	sr := seekableReaderImpl{
+func NewReader(rs io.ReadSeeker, opts ...ROption) (ZSTDReader, error) {
+	sr := readerImpl{
 		rs: rs,
 	}
 
@@ -97,12 +97,12 @@ func NewReader(rs io.ReadSeeker, opts ...ROption) (SeekableZSTDReader, error) {
 	return &sr, nil
 }
 
-func (s *seekableReaderImpl) ReadAt(p []byte, off int64) (n int, err error) {
+func (s *readerImpl) ReadAt(p []byte, off int64) (n int, err error) {
 	_, n, err = s.read(p, off)
 	return
 }
 
-func (s *seekableReaderImpl) Read(p []byte) (n int, err error) {
+func (s *readerImpl) Read(p []byte) (n int, err error) {
 	offset, n, err := s.read(p, s.offset)
 	if err != nil {
 		return
@@ -111,7 +111,7 @@ func (s *seekableReaderImpl) Read(p []byte) (n int, err error) {
 	return
 }
 
-func (s *seekableReaderImpl) read(dst []byte, off int64) (int64, int, error) {
+func (s *readerImpl) read(dst []byte, off int64) (int64, int, error) {
 	if off >= s.endOffset {
 		return 0, 0, io.EOF
 	}
@@ -178,7 +178,7 @@ func (s *seekableReaderImpl) read(dst []byte, off int64) (int64, int, error) {
 	return off + int64(size), int(size), nil
 }
 
-func (s *seekableReaderImpl) readSegment(p []byte, off int64) (err error) {
+func (s *readerImpl) readSegment(p []byte, off int64) (err error) {
 	switch v := s.rs.(type) {
 	case io.ReaderAt:
 		n, err := v.ReadAt(p, off)
@@ -198,7 +198,7 @@ func (s *seekableReaderImpl) readSegment(p []byte, off int64) (err error) {
 	}
 }
 
-func (s *seekableReaderImpl) Seek(offset int64, whence int) (int64, error) {
+func (s *readerImpl) Seek(offset int64, whence int) (int64, error) {
 	newOffset := s.offset
 	switch whence {
 	case io.SeekCurrent:
@@ -218,7 +218,7 @@ func (s *seekableReaderImpl) Seek(offset int64, whence int) (int64, error) {
 	return s.offset, nil
 }
 
-func (s *seekableReaderImpl) Close() (err error) {
+func (s *readerImpl) Close() (err error) {
 	s.index.Clear(false)
 	s.dec.Close()
 
@@ -248,7 +248,7 @@ func (o frameOffset) Less(than btree.Item) bool {
 	return o.decompOffset < than.(frameOffset).decompOffset
 }
 
-func (s *seekableReaderImpl) readFooter() (t *btree.BTree, err error) {
+func (s *readerImpl) readFooter() (t *btree.BTree, err error) {
 	_, err = s.rs.Seek(-seekTableFooterOffset, io.SeekEnd)
 	if err != nil {
 		return
@@ -305,7 +305,7 @@ func (s *seekableReaderImpl) readFooter() (t *btree.BTree, err error) {
 	return
 }
 
-func (s *seekableReaderImpl) indexSeekTableEntries(p []byte, entrySize uint64) (*btree.BTree, error) {
+func (s *readerImpl) indexSeekTableEntries(p []byte, entrySize uint64) (*btree.BTree, error) {
 	// TODO: rewrite btree using generics
 	t := btree.New(16)
 	entry := SeekTableEntry{}
