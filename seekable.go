@@ -196,7 +196,7 @@ The `User_Data` can be anything. Data will just be skipped by the decoder.
 
 https://github.com/facebook/zstd/blob/dev/doc/zstd_compression_format.md#skippable-frames
 */
-func createSkippableFrame(tag uint32, payload []byte) ([]byte, error) {
+func CreateSkippableFrame(tag uint32, payload []byte) ([]byte, error) {
 	if len(payload) == 0 {
 		return nil, nil
 	}

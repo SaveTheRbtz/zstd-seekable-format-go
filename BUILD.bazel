@@ -41,6 +41,7 @@ go_test(
     size = "small",
     srcs = [
         "reader_test.go",
+        "seekable_test.go",
         "writer_test.go",
     ],
     embed = [":zstd-seekable-format-go"],

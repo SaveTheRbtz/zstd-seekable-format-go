@@ -117,7 +117,7 @@ func (s *writerImpl) writeSeekTable() error {
 	}
 
 	footer.marshalBinaryInline(seekTable[len(s.frameEntries)*12 : len(s.frameEntries)*12+9])
-	seekTableBytes, err := createSkippableFrame(seekableTag, seekTable)
+	seekTableBytes, err := CreateSkippableFrame(seekableTag, seekTable)
 	if err != nil {
 		return err
 	}
