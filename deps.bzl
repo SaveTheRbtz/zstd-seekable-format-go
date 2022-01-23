@@ -36,13 +36,7 @@ def go_dependencies():
         sum = "h1:gK4Kx5IaGY9CD5sPJ36FHiBJ6ZXl0kilRiiCj+jdYp4=",
         version = "v1.0.1",
     )
-    go_repository(
-        name = "com_github_jotfs_fastcdc_go",
-        build_directives = ["gazelle:exclude **/**_test.go", "gazelle:exclude testing", "gazelle:exclude **/testdata"],
-        importpath = "github.com/jotfs/fastcdc-go",
-        sum = "h1:WHYIGk3k9NumGWfp4YMsemEcx/s4JKpGAa6tpCpHJOo=",
-        version = "v0.2.0",
-    )
+
     go_repository(
         name = "com_github_klauspost_compress",
         build_directives = ["gazelle:exclude **/**_test.go", "gazelle:exclude testing", "gazelle:exclude **/testdata"],
@@ -92,6 +86,14 @@ def go_dependencies():
         sum = "h1:4DBwDE0NGyQoBHbLQYPwSUPoCMWR5BEzIk/f1lZbAQM=",
         version = "v1.0.0",
     )
+    go_repository(
+        name = "com_github_reusee_fastcdc_go",
+        build_directives = ["gazelle:exclude **/**_test.go", "gazelle:exclude testing", "gazelle:exclude **/testdata"],
+        importpath = "github.com/reusee/fastcdc-go",
+        sum = "h1:M/Az7Sde5K8Kh+2In1qJPukq308BOthQPF6bAZVSZ+E=",
+        version = "v0.2.1-0.20201121153712-1756352c2ae7",
+    )
+
     go_repository(
         name = "com_github_spaolacci_murmur3",
         build_directives = ["gazelle:exclude **/**_test.go", "gazelle:exclude testing", "gazelle:exclude **/testdata"],

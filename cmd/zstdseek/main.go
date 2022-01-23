@@ -10,9 +10,8 @@ import (
 	"strconv"
 	"strings"
 
-	// TODO: move to a better fork, this one is pretty buggy.
-	"github.com/jotfs/fastcdc-go"
 	"github.com/klauspost/compress/zstd"
+	"github.com/reusee/fastcdc-go"
 	"github.com/zeebo/blake3"
 	"go.uber.org/zap"
 
