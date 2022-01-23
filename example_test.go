@@ -1,7 +1,7 @@
-package main
+package seekable_test
 
 import (
-	"bytes"
+	"fmt"
 	"io"
 	"log"
 	"os"
@@ -11,7 +11,7 @@ import (
 	seekable "github.com/SaveTheRbtz/zstd-seekable-format-go"
 )
 
-func main() {
+func Example() {
 	f, err := os.CreateTemp("", "example")
 	if err != nil {
 		log.Fatal(err)
@@ -44,18 +44,14 @@ func main() {
 	ello := make([]byte, 4)
 	// ReaderAt
 	r.ReadAt(ello, 1)
-	if !bytes.Equal(ello, []byte("ello")) {
-		log.Fatalf("%+v != ello", ello)
-	}
+	fmt.Printf("Offset: 1 from the start: %s\n", string(ello))
 
 	world := make([]byte, 5)
 	// Seeker
 	r.Seek(-6, io.SeekEnd)
 	// Reader
 	r.Read(world)
-	if !bytes.Equal(world, []byte("World")) {
-		log.Fatalf("%+v != World", world)
-	}
+	fmt.Printf("Offset: -6 from the end: %s\n", string(world))
 
 	// Standard ZSTD Reader
 	f.Seek(0, io.SeekStart)
@@ -68,7 +64,11 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	if !bytes.Equal(all, []byte("Hello World!")) {
-		log.Fatalf("%+v != Hello World!", all)
-	}
+
+	fmt.Printf("Whole string: %s\n", string(all))
+
+	// Output:
+	// Offset: 1 from the start: ello
+	// Offset: -6 from the end: World
+	// Whole string: Hello World!
 }
