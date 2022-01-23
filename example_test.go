@@ -43,18 +43,29 @@ func Example() {
 
 	ello := make([]byte, 4)
 	// ReaderAt
-	r.ReadAt(ello, 1)
+	_, err = r.ReadAt(ello, 1)
+	if err != nil {
+		log.Fatal(err)
+	}
 	fmt.Printf("Offset: 1 from the start: %s\n", string(ello))
 
 	world := make([]byte, 5)
 	// Seeker
-	r.Seek(-6, io.SeekEnd)
+	_, err = r.Seek(-6, io.SeekEnd)
+	if err != nil {
+		log.Fatal(err)
+	}
 	// Reader
-	r.Read(world)
+	_, err = r.Read(world)
+	if err != nil {
+		log.Fatal(err)
+	}
 	fmt.Printf("Offset: -6 from the end: %s\n", string(world))
 
+	// Reset
+	_, _ = f.Seek(0, io.SeekStart)
+
 	// Standard ZSTD Reader
-	f.Seek(0, io.SeekStart)
 	dec, err := zstd.NewReader(f)
 	if err != nil {
 		log.Fatal(err)
