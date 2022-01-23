@@ -9,6 +9,10 @@
 
 Writing is done through the `Writer` interface:
 ```go
+import (
+	seekable "github.com/SaveTheRbtz/zstd-seekable-format-go"
+)
+
 w, err := seekable.NewWriter(f, seekable.WithZSTDEOptions(zstd.WithEncoderLevel(zstd.SpeedFastest)))
 if err != nil {
 	log.Fatal(err)
