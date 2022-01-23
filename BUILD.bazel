@@ -18,6 +18,7 @@ gazelle(
 go_library(
     name = "zstd-seekable-format-go",
     srcs = [
+        "doc.go",
         "reader.go",
         "reader_options.go",
         "seekable.go",
