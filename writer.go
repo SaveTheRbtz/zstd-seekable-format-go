@@ -32,6 +32,8 @@ type ZSTDWriter interface {
 	io.WriteCloser
 }
 
+// NewWriter wraps the passed writer into with an indexer and ZSTD encoder.
+// Written data then can be randomly accessed through the NewReader's interface.
 func NewWriter(w io.Writer, opts ...WOption) (ZSTDWriter, error) {
 	sw := WriterImpl{
 		w:    w,
@@ -54,6 +56,10 @@ func NewWriter(w io.Writer, opts ...WOption) (ZSTDWriter, error) {
 	return &sw, nil
 }
 
+// Write writes a chunk of data as a separate frame into the datastream.
+//
+// Note that Write does not do any coalescing nor splitting of data,
+// so each write will map to a separate ZSTD Frame.
 func (s *WriterImpl) Write(src []byte) (int, error) {
 	if len(src) > math.MaxUint32 {
 		return 0, fmt.Errorf("chunk size too big for seekable format: %d > %d",
@@ -87,6 +93,10 @@ func (s *WriterImpl) Write(src []byte) (int, error) {
 	return len(src), nil
 }
 
+// Close implement io.Closer interface.  It writes the seek table footer
+// and releases occupied memory.
+//
+// Caller is still responsible to Close the underlying writer.
 func (s *WriterImpl) Close() (err error) {
 	s.once.Do(func() {
 		err = multierr.Append(err, s.writeSeekTable())
