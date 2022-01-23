@@ -262,23 +262,25 @@ func (o frameOffset) Less(than btree.Item) bool {
 	return o.decompOffset < than.(frameOffset).decompOffset
 }
 
-func (s *ReaderImpl) readFooter() (t *btree.BTree, err error) {
-	_, err = s.rs.Seek(-seekTableFooterOffset, io.SeekEnd)
+func (s *ReaderImpl) readFooter() (*btree.BTree, error) {
+	n, err := s.rs.Seek(-seekTableFooterOffset, io.SeekEnd)
 	if err != nil {
-		return
+		return nil, fmt.Errorf("failed to seek to: %d: %w", -seekTableFooterOffset, err)
 	}
 
+	s.o.logger.Debug("loading footer", zap.Int64("offset", n))
 	buf := make([]byte, seekTableFooterOffset)
 	_, err = io.ReadFull(s.rs, buf)
 	if err != nil {
-		return
+		return nil, fmt.Errorf("failed to read footer at: %d: %w", n, err)
 	}
 
 	footer := SeekTableFooter{}
 	err = footer.UnmarshalBinary(buf)
 	if err != nil {
-		return
+		return nil, fmt.Errorf("failed to parse footer %+v at: %d: %w", buf, n, err)
 	}
+	s.o.logger.Debug("loaded", zap.Object("footer", &footer))
 
 	s.checksums = footer.SeekTableDescriptor.ChecksumFlag
 
@@ -293,15 +295,15 @@ func (s *ReaderImpl) readFooter() (t *btree.BTree, err error) {
 	// Skippable_Magic_Number
 	skippableFrameOffset += 4
 
-	_, err = s.rs.Seek(-skippableFrameOffset, io.SeekEnd)
+	n, err = s.rs.Seek(-skippableFrameOffset, io.SeekEnd)
 	if err != nil {
-		return
+		return nil, fmt.Errorf("failed to seek to: %d: %w", -skippableFrameOffset, err)
 	}
 
 	buf = make([]byte, skippableFrameOffset-seekTableFooterOffset)
 	_, err = io.ReadFull(s.rs, buf)
 	if err != nil {
-		return
+		return nil, fmt.Errorf("failed to read skippable frame header at: %d: %w", n, err)
 	}
 
 	magic := binary.LittleEndian.Uint32(buf[0:])
@@ -315,8 +317,8 @@ func (s *ReaderImpl) readFooter() (t *btree.BTree, err error) {
 			frameSize, skippableFrameOffset-8)
 	}
 
-	t, err = s.indexSeekTableEntries(buf[8:], uint64(seekTableEntrySize))
-	return
+	t, err := s.indexSeekTableEntries(buf[8:], uint64(seekTableEntrySize))
+	return t, err
 }
 
 func (s *ReaderImpl) indexSeekTableEntries(p []byte, entrySize uint64) (*btree.BTree, error) {
@@ -328,7 +330,8 @@ func (s *ReaderImpl) indexSeekTableEntries(p []byte, entrySize uint64) (*btree.B
 	for indexOffset := uint64(0); indexOffset < uint64(len(p)); indexOffset += entrySize {
 		err := entry.UnmarshalBinary(p[indexOffset : indexOffset+entrySize])
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("failed to parse entry %+v at: %d: %w",
+				p[indexOffset:indexOffset+entrySize], indexOffset, err)
 		}
 
 		t.ReplaceOrInsert(frameOffset{

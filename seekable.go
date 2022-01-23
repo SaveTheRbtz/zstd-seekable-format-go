@@ -65,6 +65,11 @@ type SeekTableDescriptor struct {
 	ChecksumFlag bool
 }
 
+func (d *SeekTableDescriptor) MarshalLogObject(enc zapcore.ObjectEncoder) error {
+	enc.AddBool("ChecksumFlag", d.ChecksumFlag)
+	return nil
+}
+
 /*
 SeekTableFooter is the footer of a seekable ZSTD stream.
 
@@ -97,6 +102,13 @@ func (f *SeekTableFooter) MarshalBinary() ([]byte, error) {
 	dst := make([]byte, seekTableFooterOffset)
 	f.marshalBinaryInline(dst)
 	return dst, nil
+}
+
+func (f *SeekTableFooter) MarshalLogObject(enc zapcore.ObjectEncoder) error {
+	enc.AddUint32("NumberOfFrames", f.NumberOfFrames)
+	enc.AddObject("SeekTableDescriptor", &f.SeekTableDescriptor)
+	enc.AddUint32("SeekableMagicNumber", f.SeekableMagicNumber)
+	return nil
 }
 
 func (f *SeekTableFooter) UnmarshalBinary(p []byte) error {
