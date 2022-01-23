@@ -41,6 +41,7 @@ go_test(
     name = "zstd-seekable-format-go_test",
     size = "small",
     srcs = [
+        "doc_test.go",
         "example_test.go",
         "reader_test.go",
         "seekable_test.go",
