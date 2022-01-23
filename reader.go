@@ -54,7 +54,7 @@ type ReaderImpl struct {
 
 	o readerOptions
 
-	// TODO: add simple LRU cache.
+	// TODO: Add simple LRU cache.
 	cachedFrame cachedFrame
 }
 
@@ -320,7 +320,7 @@ func (s *ReaderImpl) readFooter() (t *btree.BTree, err error) {
 }
 
 func (s *ReaderImpl) indexSeekTableEntries(p []byte, entrySize uint64) (*btree.BTree, error) {
-	// TODO: rewrite btree using generics
+	// TODO: Rewrite btree using generics.
 	t := btree.New(16)
 	entry := SeekTableEntry{}
 	var compOffset, decompOffset uint64

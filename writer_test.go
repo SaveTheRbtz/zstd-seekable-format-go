@@ -86,7 +86,7 @@ func BenchmarkWrite(b *testing.B) {
 				_, err := w.Write(writeBuf)
 				assert.NoError(b, err)
 			}
-			// TODO: limit memory consumption
+			// TODO: Limit memory consumption.
 			err = w.Close()
 			assert.NoError(b, err)
 			buf.Reset()
