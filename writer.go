@@ -14,11 +14,11 @@ import (
 )
 
 var (
-	_ io.Writer = (*seekableWriterImpl)(nil)
-	_ io.Closer = (*seekableWriterImpl)(nil)
+	_ io.Writer = (*writerImpl)(nil)
+	_ io.Closer = (*writerImpl)(nil)
 )
 
-type seekableWriterImpl struct {
+type writerImpl struct {
 	w            io.Writer
 	enc          *zstd.Encoder
 	frameEntries []SeekTableEntry
@@ -28,12 +28,12 @@ type seekableWriterImpl struct {
 	once *sync.Once
 }
 
-type SeekableZSTDWriter interface {
+type ZSTDWriter interface {
 	io.WriteCloser
 }
 
-func NewWriter(w io.Writer, opts ...WOption) (SeekableZSTDWriter, error) {
-	sw := seekableWriterImpl{
+func NewWriter(w io.Writer, opts ...WOption) (ZSTDWriter, error) {
+	sw := writerImpl{
 		w:    w,
 		once: &sync.Once{},
 	}
@@ -54,7 +54,7 @@ func NewWriter(w io.Writer, opts ...WOption) (SeekableZSTDWriter, error) {
 	return &sw, nil
 }
 
-func (s *seekableWriterImpl) Write(src []byte) (int, error) {
+func (s *writerImpl) Write(src []byte) (int, error) {
 	if len(src) > math.MaxUint32 {
 		return 0, fmt.Errorf("chunk size too big for seekable format: %d > %d",
 			len(src), math.MaxUint32)
@@ -87,7 +87,7 @@ func (s *seekableWriterImpl) Write(src []byte) (int, error) {
 	return len(src), nil
 }
 
-func (s *seekableWriterImpl) Close() (err error) {
+func (s *writerImpl) Close() (err error) {
 	s.once.Do(func() {
 		err = multierr.Append(err, s.writeSeekTable())
 	})
@@ -97,7 +97,7 @@ func (s *seekableWriterImpl) Close() (err error) {
 	return
 }
 
-func (s *seekableWriterImpl) writeSeekTable() error {
+func (s *writerImpl) writeSeekTable() error {
 	seekTable := make([]byte, len(s.frameEntries)*12+9)
 	for i, e := range s.frameEntries {
 		e.marshalBinaryInline(seekTable[i*12 : (i+1)*12])
