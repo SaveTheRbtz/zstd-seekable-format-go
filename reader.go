@@ -102,12 +102,10 @@ func NewReader(rs io.ReadSeeker, opts ...ROption) (ZSTDReader, error) {
 // ReadAt implements io.ReaderAt interface to randomly access data.
 // This method is goroutine-safe and can be called concurrently ONLY if
 // the underlying reader supports io.ReaderAt interface.
-//
-// BUG(SaveTheRbtz): ReadAt should fill the whole buffer or exit with error.
-// When ReadAt returns n < len(p), it returns a non-nil error explaining why more bytes were not returned.
-// In this respect, ReadAt is stricter than Read.
 func (s *ReaderImpl) ReadAt(p []byte, off int64) (n int, err error) {
-	_, n, err = s.read(p, off)
+	for m := 0; n < len(p) && err == nil; n += m {
+		_, m, err = s.read(p[n:], off+int64(n))
+	}
 	return
 }
 

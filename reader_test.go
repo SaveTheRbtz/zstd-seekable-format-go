@@ -9,6 +9,8 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+const sourceString = "testtest2"
+
 var checksum = []byte{
 	// frame 1
 	0x28, 0xb5, 0x2f, 0xfd, 0x04, 0x00, 0x21, 0x00, 0x00,
@@ -155,7 +157,7 @@ func TestReader(t *testing.T) {
 func TestReaderEdges(t *testing.T) {
 	t.Parallel()
 
-	source := []byte("testtest2")
+	source := []byte(sourceString)
 	for i, b := range [][]byte{checksum, noChecksum} {
 		b := b
 		t.Run(strconv.Itoa(i), func(t *testing.T) {
@@ -204,10 +206,36 @@ func TestReaderEdges(t *testing.T) {
 	}
 }
 
+// TestReadeAt verified the following ReaderAt asssumption:
+// 	When ReadAt returns n < len(p), it returns a non-nil error explaining why more bytes were not returned.
+// 	In this respect, ReadAt is stricter than Read.
+func TestReadeAt(t *testing.T) {
+	t.Parallel()
+
+	sr := &seekableBufferReader{buf: checksum}
+	r, err := NewReader(sr)
+	assert.NoError(t, err)
+	defer r.Close()
+
+	tmp1 := make([]byte, 3)
+	k1, err := r.ReadAt(tmp1, 3)
+	assert.NoError(t, err)
+
+	assert.Equal(t, 3, k1)
+	assert.Equal(t, []byte("tte"), tmp1)
+
+	tmp2 := make([]byte, 100)
+	k2, err := r.ReadAt(tmp2, 3)
+	assert.Error(t, err, io.EOF)
+
+	assert.Equal(t, 6, k2)
+	assert.Equal(t, []byte("ttest2"), tmp2[:k2])
+}
+
 func TestReaderEdgesParallel(t *testing.T) {
 	t.Parallel()
 
-	source := []byte("testtest2")
+	source := []byte(sourceString)
 	for i, b := range [][]byte{checksum, noChecksum} {
 		b := b
 
