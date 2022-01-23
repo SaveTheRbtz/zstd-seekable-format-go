@@ -63,6 +63,8 @@ type ZSTDReader interface {
 	io.ReaderAt
 }
 
+// NewReader returns zstd stream reader that can be randomly-accessible using uncompressed data offset.
+// Ideally, passed reader should implement io.ReaderAt interface.
 func NewReader(rs io.ReadSeeker, opts ...ROption) (ZSTDReader, error) {
 	sr := ReaderImpl{
 		rs: rs,
@@ -97,11 +99,17 @@ func NewReader(rs io.ReadSeeker, opts ...ROption) (ZSTDReader, error) {
 	return &sr, nil
 }
 
+// ReadAt implements io.ReaderAt interface to randomly access data.
+// This method is goroutine-safe and can be called concurrently ONLY if
+// the underlying reader supports ReaderAt interface.
 func (s *ReaderImpl) ReadAt(p []byte, off int64) (n int, err error) {
 	_, n, err = s.read(p, off)
 	return
 }
 
+// Read implements io.Reader interface to randomly access data.
+// This method is NOT goroutine-safe and CAN NOT be called
+// concurrently since it modifies the underlying offset.
 func (s *ReaderImpl) Read(p []byte) (n int, err error) {
 	offset, n, err := s.read(p, s.offset)
 	if err != nil {
@@ -198,6 +206,9 @@ func (s *ReaderImpl) readSegment(p []byte, off int64) (err error) {
 	}
 }
 
+// Seek implements io.Seeker interface to randomly access data.
+// This method is NOT goroutine-safe and CAN NOT be called
+// concurrently since it modifies the underlying offset.
 func (s *ReaderImpl) Seek(offset int64, whence int) (int64, error) {
 	newOffset := s.offset
 	switch whence {
@@ -218,6 +229,9 @@ func (s *ReaderImpl) Seek(offset int64, whence int) (int64, error) {
 	return s.offset, nil
 }
 
+// Close implement io.Closer interface.  Calling Close releases occupied memory.
+//
+// Caller is still responsible to Close the underlying reader.
 func (s *ReaderImpl) Close() (err error) {
 	s.index.Clear(false)
 	s.dec.Close()
