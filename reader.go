@@ -305,9 +305,9 @@ func (s *ReaderImpl) readFooter() (t *btree.BTree, err error) {
 	}
 
 	magic := binary.LittleEndian.Uint32(buf[0:])
-	if magic != skippableFrameMagic+seekableTag {
+	if magic != SkippableFrameMagic+seekableTag {
 		return nil, fmt.Errorf("skippable frame magic mismatch %d vs %d",
-			magic, skippableFrameMagic+seekableTag)
+			magic, SkippableFrameMagic+seekableTag)
 	}
 	frameSize := int64(binary.LittleEndian.Uint32(buf[4:]))
 	if frameSize != skippableFrameOffset-8 {

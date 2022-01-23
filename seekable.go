@@ -1,35 +1,5 @@
 package seekable
 
-/*
-## Format
-
-The format consists of a number of frames (Zstandard compressed frames and skippable frames), followed by a final skippable frame at the end containing the seek table.
-
-### Seek Table Format
-The structure of the seek table frame is as follows:
-
-	|`Skippable_Magic_Number`|`Frame_Size`|`[Seek_Table_Entries]`|`Seek_Table_Footer`|
-	|------------------------|------------|----------------------|-------------------|
-	| 4 bytes                | 4 bytes    | 8-12 bytes each      | 9 bytes           |
-
-__`Skippable_Magic_Number`__
-
-Value : 0x184D2A5E.
-This is for compatibility with [Zstandard skippable frames].
-Since it is legal for other Zstandard skippable frames to use the same
-magic number, it is not recommended for a decoder to recognize frames
-solely on this.
-
-__`Frame_Size`__
-
-The total size of the skippable frame, not including the `Skippable_Magic_Number` or `Frame_Size`.
-This is for compatibility with [Zstandard skippable frames].
-
-[Zstandard skippable frames]: https://github.com/facebook/zstd/blob/release/doc/zstd_compression_format.md#skippable-frames
-
-https://github.com/facebook/zstd/blob/dev/contrib/seekable_format/zstd_seekable_compression_format.md
-*/
-
 import (
 	"encoding/binary"
 	"fmt"
@@ -39,7 +9,35 @@ import (
 )
 
 const (
-	skippableFrameMagic = 0x184D2A50
+	/*
+		The format consists of a number of frames (Zstandard compressed frames and skippable frames), followed by a final skippable frame at the end containing the seek table.
+
+		Seek Table Format
+
+		The structure of the seek table frame is as follows:
+
+			|`Skippable_Magic_Number`|`Frame_Size`|`[Seek_Table_Entries]`|`Seek_Table_Footer`|
+			|------------------------|------------|----------------------|-------------------|
+			| 4 bytes                | 4 bytes    | 8-12 bytes each      | 9 bytes           |
+
+		Skippable_Magic_Number
+
+		Value: 0x184D2A5E.
+		This is for compatibility with Zstandard skippable frames: https://github.com/facebook/zstd/blob/release/doc/zstd_compression_format.md#skippable-frames.
+
+		Since it is legal for other Zstandard skippable frames to use the same
+		magic number, it is not recommended for a decoder to recognize frames
+		solely on this.
+
+		Frame_Size
+
+		The total size of the skippable frame, not including the `Skippable_Magic_Number` or `Frame_Size`.
+		This is for compatibility with Zstandard skippable frames: https://github.com/facebook/zstd/blob/release/doc/zstd_compression_format.md#skippable-frames.
+
+		https://github.com/facebook/zstd/blob/dev/contrib/seekable_format/zstd_seekable_compression_format.md
+	*/
+	SkippableFrameMagic = 0x184D2A50
+
 	seekableMagicNumber = 0x8F92EAB1
 
 	seekTableFooterOffset = 9
@@ -176,21 +174,21 @@ CreateSkippableFrame returns a payload formatted as a ZSDT skippable frame.
 Skippable frames allow the insertion of user-defined metadata
 into a flow of concatenated frames.
 
-__`Magic_Number`__
+Magic_Number
 
 4 Bytes, __little-endian__ format.
 Value : 0x184D2A5?, which means any value from 0x184D2A50 to 0x184D2A5F.
 All 16 values are valid to identify a skippable frame.
 This specification doesn't detail any specific tagging for skippable frames.
 
-__`Frame_Size`__
+Frame_Size
 
 This is the size, in bytes, of the following `User_Data`
 (without including the magic number nor the size field itself).
 This field is represented using 4 Bytes, __little-endian__ format, unsigned 32-bits.
 This means `User_Data` can’t be bigger than (2^32-1) bytes.
 
-__`User_Data`__
+User_Data
 
 The `User_Data` can be anything. Data will just be skipped by the decoder.
 
@@ -210,7 +208,7 @@ func CreateSkippableFrame(tag uint32, payload []byte) ([]byte, error) {
 	}
 
 	dst := make([]byte, 8, len(payload)+8)
-	binary.LittleEndian.PutUint32(dst[0:], skippableFrameMagic+tag)
+	binary.LittleEndian.PutUint32(dst[0:], SkippableFrameMagic+tag)
 	binary.LittleEndian.PutUint32(dst[4:], uint32(len(payload)))
 	return append(dst, payload...), nil
 }
