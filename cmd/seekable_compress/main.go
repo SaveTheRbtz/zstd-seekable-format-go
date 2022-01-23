@@ -93,7 +93,7 @@ func main() {
 	mustConv := func(s string) int {
 		n, err := strconv.Atoi(s)
 		if err != nil {
-			logger.Fatal("failet to parse int", zap.String("int", s), zap.Error(err))
+			logger.Fatal("failed to parse int", zap.String("int", s), zap.Error(err))
 		}
 		return n
 	}
