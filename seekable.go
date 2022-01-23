@@ -106,7 +106,9 @@ func (f *SeekTableFooter) MarshalBinary() ([]byte, error) {
 
 func (f *SeekTableFooter) MarshalLogObject(enc zapcore.ObjectEncoder) error {
 	enc.AddUint32("NumberOfFrames", f.NumberOfFrames)
-	enc.AddObject("SeekTableDescriptor", &f.SeekTableDescriptor)
+	if err := enc.AddObject("SeekTableDescriptor", &f.SeekTableDescriptor); err != nil {
+		return err
+	}
 	enc.AddUint32("SeekableMagicNumber", f.SeekableMagicNumber)
 	return nil
 }
