@@ -1,6 +1,7 @@
 package seekable
 
 import (
+	"fmt"
 	"io"
 	"strconv"
 	"testing"
@@ -56,13 +57,28 @@ var noChecksum = []byte{
 
 type seekableBufferReader struct {
 	buf    []byte
-	offset uint64
+	offset int64
+}
+
+func (s *seekableBufferReader) ReadAt(p []byte, off int64) (n int, err error) {
+	if off < 0 {
+		return 0, fmt.Errorf("offset before the start of the file: %d", off)
+	}
+
+	size := uint64(len(s.buf)) - uint64(off)
+	if size > uint64(len(p)) {
+		size = uint64(len(p))
+	}
+
+	copy(p, s.buf[off:uint64(off)+size])
+
+	return int(size), nil
 }
 
 func (s *seekableBufferReader) Read(p []byte) (n int, err error) {
-	size := uint64(len(s.buf)) - s.offset
-	if size > uint64(len(p)) {
-		size = uint64(len(p))
+	size := int64(len(s.buf)) - s.offset
+	if size > int64(len(p)) {
+		size = int64(len(p))
 	}
 
 	copy(p, s.buf[s.offset:s.offset+size])
@@ -72,15 +88,23 @@ func (s *seekableBufferReader) Read(p []byte) (n int, err error) {
 }
 
 func (s *seekableBufferReader) Seek(offset int64, whence int) (int64, error) {
+	newOffset := s.offset
 	switch whence {
 	case io.SeekCurrent:
-		s.offset += uint64(offset)
+		newOffset += offset
 	case io.SeekStart:
-		s.offset = uint64(offset)
+		newOffset = offset
 	case io.SeekEnd:
-		s.offset = uint64(len(s.buf)) + uint64(offset)
+		newOffset = int64(len(s.buf)) + offset
 	}
-	return 0, nil
+
+	if newOffset < 0 {
+		return 0, fmt.Errorf("offset before the start of the file: %d (%d + %d)",
+			newOffset, s.offset, offset)
+	}
+
+	s.offset = newOffset
+	return s.offset, nil
 }
 
 func TestReader(t *testing.T) {
@@ -144,7 +168,7 @@ func TestReaderEdges(t *testing.T) {
 
 			for _, whence := range []int{io.SeekStart, io.SeekEnd} {
 				for n := int64(-1); n <= int64(len(source)); n++ {
-					for m := int64(0); n <= int64(len(source)); n++ {
+					for m := int64(0); m <= int64(len(source)); m++ {
 						var j int64
 						switch whence {
 						case io.SeekStart:
@@ -162,11 +186,14 @@ func TestReaderEdges(t *testing.T) {
 						tmp := make([]byte, m)
 						k, err := r.Read(tmp)
 						if n >= int64(len(source)) {
-							assert.Equal(t, err, io.EOF, "should return EOF at %d, buf: %d, whence: %d",
-								n, len(source), whence)
+							assert.Equal(t, err, io.EOF,
+								"%d: should return EOF at %d, len(source): %d, len(tmp): %d, k: %d, whence: %d",
+								i, n, len(source), m, k, whence)
+							continue
 						} else {
-							assert.NoError(t, err, "should not return err at %d, buf: %d, whence: %d",
-								n, len(source), whence)
+							assert.NoError(t, err,
+								"%d: should NOT return EOF at %d, len(source): %d, len(tmp): %d, k: %d, whence: %d",
+								i, n, len(source), m, k, whence)
 						}
 
 						assert.Equal(t, source[n:n+int64(k)], tmp[:k])
