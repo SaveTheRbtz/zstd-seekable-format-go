@@ -86,9 +86,9 @@ func main() {
 	}
 	defer w.Close()
 
-	ckunkParams := strings.SplitN(chunkingFlag, ":", 3)
-	if len(ckunkParams) != 3 {
-		logger.Fatal("failed parse chunker params. len() != 3", zap.Int("actual", len(ckunkParams)))
+	chunkParams := strings.SplitN(chunkingFlag, ":", 3)
+	if len(chunkParams) != 3 {
+		logger.Fatal("failed parse chunker params. len() != 3", zap.Int("actual", len(chunkParams)))
 	}
 	mustConv := func(s string) int {
 		n, err := strconv.Atoi(s)
@@ -98,9 +98,9 @@ func main() {
 		return n
 	}
 	opts := fastcdc.Options{
-		MinSize:     mustConv(ckunkParams[0]) * 1024,
-		AverageSize: mustConv(ckunkParams[1]) * 1024,
-		MaxSize:     mustConv(ckunkParams[2]) * 1024,
+		MinSize:     mustConv(chunkParams[0]) * 1024,
+		AverageSize: mustConv(chunkParams[1]) * 1024,
+		MaxSize:     mustConv(chunkParams[2]) * 1024,
 	}
 	chunker, err := fastcdc.NewChunker(input, opts)
 	if err != nil {
