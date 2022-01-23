@@ -54,7 +54,7 @@ type readerImpl struct {
 
 	o readerOptions
 
-	// TODO: add simple LRU cache ontop
+	// TODO: add simple LRU cache.
 	cachedFrame cachedFrame
 }
 
