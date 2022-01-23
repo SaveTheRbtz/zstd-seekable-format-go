@@ -8,9 +8,9 @@ The format consists of a number of frames (Zstandard compressed frames and skipp
 ### Seek Table Format
 The structure of the seek table frame is as follows:
 
-|`Skippable_Magic_Number`|`Frame_Size`|`[Seek_Table_Entries]`|`Seek_Table_Footer`|
-|------------------------|------------|----------------------|-------------------|
-| 4 bytes                | 4 bytes    | 8-12 bytes each      | 9 bytes           |
+	|`Skippable_Magic_Number`|`Frame_Size`|`[Seek_Table_Entries]`|`Seek_Table_Footer`|
+	|------------------------|------------|----------------------|-------------------|
+	| 4 bytes                | 4 bytes    | 8-12 bytes each      | 9 bytes           |
 
 __`Skippable_Magic_Number`__
 
@@ -52,11 +52,11 @@ SeekTableDescriptor is a Go representation of a bitfiled.
 
 A bitfield describing the format of the seek table.
 
-| Bit number | Field name                |
-| ---------- | ----------                |
-| 7          | `Checksum_Flag`           |
-| 6-2        | `Reserved_Bits`           |
-| 1-0        | `Unused_Bits`             |
+	| Bit number | Field name                |
+	| ---------- | ----------                |
+	| 7          | `Checksum_Flag`           |
+	| 6-2        | `Reserved_Bits`           |
+	| 1-0        | `Unused_Bits`             |
 
 While only `Checksum_Flag` currently exists, there are 7 other bits in this field that can be used for future changes to the format,
 for example the addition of inline dictionaries.
@@ -72,9 +72,9 @@ SeekTableFooter is the footer of a seekable ZSTD stream.
 
 The seek table footer format is as follows:
 
-|`Number_Of_Frames`|`Seek_Table_Descriptor`|`Seekable_Magic_Number`|
-|------------------|-----------------------|-----------------------|
-| 4 bytes          | 1 byte                | 4 bytes               |
+	|`Number_Of_Frames`|`Seek_Table_Descriptor`|`Seekable_Magic_Number`|
+	|------------------|-----------------------|-----------------------|
+	| 4 bytes          | 1 byte                | 4 bytes               |
 
 https://github.com/facebook/zstd/blob/dev/contrib/seekable_format/zstd_seekable_compression_format.md#seek_table_footer
 */
@@ -119,9 +119,9 @@ SeekTableEntry is an element of the Seek Table describing each of the ZSTD-compr
 
 `Seek_Table_Entries` consists of `Number_Of_Frames` (one for each frame in the data, not including the seek table frame) entries of the following form, in sequence:
 
-|`Compressed_Size`|`Decompressed_Size`|`[Checksum]`|
-|-----------------|-------------------|------------|
-| 4 bytes         | 4 bytes           | 4 bytes    |
+	|`Compressed_Size`|`Decompressed_Size`|`[Checksum]`|
+	|-----------------|-------------------|------------|
+	| 4 bytes         | 4 bytes           | 4 bytes    |
 
 https://github.com/facebook/zstd/blob/dev/contrib/seekable_format/zstd_seekable_compression_format.md#seek_table_entries
 */
@@ -169,9 +169,9 @@ func (e *SeekTableEntry) UnmarshalBinary(p []byte) error {
 /*
 CreateSkippableFrame returns a payload formatted as a ZSDT skippable frame.
 
-| `Magic_Number` | `Frame_Size` | `User_Data` |
-|:--------------:|:------------:|:-----------:|
-|   4 bytes      |  4 bytes     |   n bytes   |
+	| `Magic_Number` | `Frame_Size` | `User_Data` |
+	|:--------------:|:------------:|:-----------:|
+	|   4 bytes      |  4 bytes     |   n bytes   |
 
 Skippable frames allow the insertion of user-defined metadata
 into a flow of concatenated frames.
