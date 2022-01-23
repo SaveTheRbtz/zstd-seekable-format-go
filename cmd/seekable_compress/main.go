@@ -80,7 +80,7 @@ func main() {
 	var zstdOpts []zstd.EOption
 	zstdOpts = append(zstdOpts, zstd.WithEncoderLevel(zstd.EncoderLevelFromZstd(qualityFlag)))
 
-	w, err := seekable.NewWriter(output, seekable.WithWLogger(logger), seekable.WithZSTDWOptions(zstdOpts...))
+	w, err := seekable.NewWriter(output, seekable.WithWLogger(logger), seekable.WithZSTDEOptions(zstdOpts...))
 	if err != nil {
 		logger.Fatal("failed to create compressed writer", zap.Error(err))
 	}

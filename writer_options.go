@@ -18,7 +18,7 @@ func (o *writerOptions) setDefault() {
 	}
 }
 
-func WithZSTDWOptions(opts ...zstd.EOption) WOption {
+func WithZSTDEOptions(opts ...zstd.EOption) WOption {
 	return func(o *writerOptions) error { o.zstdEOpts = opts; return nil }
 }
 

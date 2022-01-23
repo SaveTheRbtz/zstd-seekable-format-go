@@ -9,7 +9,7 @@
 
 Writing is done through the `Writer` interface:
 ```go
-w, err := seekable.NewWriter(f, seekable.WithZSTDWOptions(zstd.WithEncoderLevel(zstd.SpeedFastest)))
+w, err := seekable.NewWriter(f, seekable.WithZSTDEOptions(zstd.WithEncoderLevel(zstd.SpeedFastest)))
 if err != nil {
 	log.Fatal(err)
 }
