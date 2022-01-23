@@ -63,8 +63,8 @@ type ZSTDReader interface {
 	io.ReaderAt
 }
 
-// NewReader returns zstd stream reader that can be randomly-accessible using uncompressed data offset.
-// Ideally, passed reader should implement io.ReaderAt interface.
+// NewReader returns ZSTD stream reader that can be randomly-accessible using uncompressed data offset.
+// Ideally, passed io.ReadSeeker should implement io.ReaderAt interface.
 func NewReader(rs io.ReadSeeker, opts ...ROption) (ZSTDReader, error) {
 	sr := ReaderImpl{
 		rs: rs,
@@ -101,7 +101,7 @@ func NewReader(rs io.ReadSeeker, opts ...ROption) (ZSTDReader, error) {
 
 // ReadAt implements io.ReaderAt interface to randomly access data.
 // This method is goroutine-safe and can be called concurrently ONLY if
-// the underlying reader supports ReaderAt interface.
+// the underlying reader supports io.ReaderAt interface.
 func (s *ReaderImpl) ReadAt(p []byte, off int64) (n int, err error) {
 	_, n, err = s.read(p, off)
 	return
