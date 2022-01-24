@@ -85,5 +85,5 @@ if !bytes.Equal(all, []byte("Hello World!")) {
 [ci]: https://github.com/SaveTheRbtz/zstd-seekable-format-go/actions/workflows/bazel.yml
 [report-img]: https://goreportcard.com/badge/SaveTheRbtz/zstd-seekable-format-go
 [report]: https://goreportcard.com/report/SaveTheRbtz/zstd-seekable-format-go
-[license-img]: https://img.shields.io/badge/License-BSD_3--Clause-blue.svg
-[license]: https://opensource.org/licenses/BSD-3-Clause
+[license-img]: https://img.shields.io/badge/License-MIT-blue.svg
+[license]: https://opensource.org/licenses/MIT
