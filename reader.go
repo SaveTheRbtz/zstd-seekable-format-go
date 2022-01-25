@@ -330,6 +330,9 @@ func (s *ReaderImpl) indexFooter() (*btree.BTree, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to read footer: %w", err)
 	}
+	if len(buf) < seekTableFooterOffset {
+		return nil, fmt.Errorf("footer is too small: %d", len(buf))
+	}
 
 	// parse SeekTableFooter
 	footer := SeekTableFooter{}
@@ -354,6 +357,10 @@ func (s *ReaderImpl) indexFooter() (*btree.BTree, error) {
 	buf, err = s.o.env.ReadSkipFrame(skippableFrameOffset)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read footer: %w", err)
+	}
+
+	if len(buf) <= frameSizeFieldSize+skippableMagicNumberFieldSize+seekTableFooterOffset {
+		return nil, fmt.Errorf("skip frame is too small: %d", len(buf))
 	}
 
 	// parse SeekTableEntries
