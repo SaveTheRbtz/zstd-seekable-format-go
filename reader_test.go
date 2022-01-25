@@ -294,11 +294,11 @@ func (s *fakeReadEnvironment) GetFrameByIndex(index FrameOffsetEntry) ([]byte, e
 }
 
 func (s *fakeReadEnvironment) ReadFooter() ([]byte, error) {
-	return checksum[len(checksum)-10 : len(checksum)], nil
+	return checksum[len(checksum)-10:], nil
 }
 
 func (s *fakeReadEnvironment) ReadSkipFrame(skippableFrameOffset int64) ([]byte, error) {
-	return checksum[len(checksum)-41 : len(checksum)], nil
+	return checksum[len(checksum)-41:], nil
 }
 
 func TestReadEnvironment(t *testing.T) {
