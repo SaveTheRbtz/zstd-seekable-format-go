@@ -279,3 +279,50 @@ func TestReaderEdgesParallel(t *testing.T) {
 		}
 	}
 }
+
+type fakeReadEnvironment struct{}
+
+func (s *fakeReadEnvironment) GetFrameByIndex(index FrameOffsetEntry) ([]byte, error) {
+	switch index.ID {
+	case 0:
+		return checksum[:17], nil
+	case 1:
+		return checksum[17 : 17+18], nil
+	default:
+		return nil, fmt.Errorf("unknown index: %d, %+v", index.ID, index)
+	}
+}
+
+func (s *fakeReadEnvironment) ReadFooter() ([]byte, error) {
+	return checksum[len(checksum)-10 : len(checksum)], nil
+}
+
+func (s *fakeReadEnvironment) ReadSkipFrame(skippableFrameOffset int64) ([]byte, error) {
+	return checksum[len(checksum)-41 : len(checksum)], nil
+}
+
+func TestReadEnvironment(t *testing.T) {
+	t.Parallel()
+
+	r, err := NewReader(nil, WithREnvironment(&fakeReadEnvironment{}))
+	assert.NoError(t, err)
+
+	bytes1 := []byte("test")
+	bytes2 := []byte("test2")
+
+	tmp := make([]byte, 4096)
+	n, err := r.Read(tmp)
+	assert.NoError(t, err)
+	assert.Equal(t, len(bytes1), n)
+	assert.Equal(t, bytes1, tmp[:n])
+
+	m, err := r.Read(tmp)
+	assert.NoError(t, err)
+	assert.Equal(t, len(bytes2), m)
+	assert.Equal(t, bytes2, tmp[:m])
+
+	_, err = r.Read(tmp)
+	assert.Equal(t, err, io.EOF)
+
+	assert.NoError(t, r.Close())
+}

@@ -10,6 +10,7 @@ type ROption func(*readerOptions) error
 type readerOptions struct {
 	logger    *zap.Logger
 	zstdDOpts []zstd.DOption
+	env       REnvironment
 }
 
 func (o *readerOptions) setDefault() {
@@ -24,4 +25,8 @@ func WithZSTDDOptions(opts ...zstd.DOption) ROption {
 
 func WithRLogger(l *zap.Logger) ROption {
 	return func(o *readerOptions) error { o.logger = l; return nil }
+}
+
+func WithREnvironment(env REnvironment) ROption {
+	return func(o *readerOptions) error { o.env = env; return nil }
 }

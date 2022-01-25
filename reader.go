@@ -42,8 +42,74 @@ func (f *cachedFrame) get() (uint64, []byte) {
 	return f.offset, f.data
 }
 
+// Environment can be used to inject a custom file reader that is different from normal ReadSeeker.
+// This is useful when, for example there is a custom chunking code.
+type REnvironment interface {
+	// GetFrameByIndex returns the compressed frame by its index.
+	GetFrameByIndex(index FrameOffsetEntry) ([]byte, error)
+	// ReadFooter returns buffer whose last 9 bytes are interpreted as a `Seek_Table_Footer`.
+	ReadFooter() ([]byte, error)
+	// ReadSkipFrame returns the full Seek Table Skippable frame
+	// including the `Skippable_Magic_Number` and `Frame_Size`.
+	ReadSkipFrame(skippableFrameOffset int64) ([]byte, error)
+}
+
+// readSeekerEnvImpl is the environment implementation of for the underlying ReadSeeker.
+type readSeekerEnvImpl struct {
+	rs io.ReadSeeker
+}
+
+func (rs *readSeekerEnvImpl) GetFrameByIndex(index FrameOffsetEntry) (p []byte, err error) {
+	p = make([]byte, index.CompSize)
+	off := int64(index.CompOffset)
+
+	switch v := rs.rs.(type) {
+	case io.ReaderAt:
+		_, err = v.ReadAt(p, off)
+		if errors.Is(err, io.EOF) {
+			err = nil
+		}
+	default:
+		_, err = v.Seek(off, io.SeekStart)
+		if err != nil {
+			return nil, err
+		}
+		_, err = io.ReadFull(rs.rs, p)
+	}
+
+	return
+}
+
+func (rs *readSeekerEnvImpl) ReadFooter() ([]byte, error) {
+	n, err := rs.rs.Seek(-seekTableFooterOffset, io.SeekEnd)
+	if err != nil {
+		return nil, fmt.Errorf("failed to seek to: %d: %w", -seekTableFooterOffset, err)
+	}
+
+	buf := make([]byte, seekTableFooterOffset)
+	_, err = io.ReadFull(rs.rs, buf)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read footer at: %d: %w", n, err)
+	}
+
+	return buf, nil
+}
+
+func (rs *readSeekerEnvImpl) ReadSkipFrame(skippableFrameOffset int64) ([]byte, error) {
+	n, err := rs.rs.Seek(-skippableFrameOffset, io.SeekEnd)
+	if err != nil {
+		return nil, fmt.Errorf("failed to seek to: %d: %w", -skippableFrameOffset, err)
+	}
+
+	buf := make([]byte, skippableFrameOffset)
+	_, err = io.ReadFull(rs.rs, buf)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read skippable frame header at: %d: %w", n, err)
+	}
+	return buf, nil
+}
+
 type ReaderImpl struct {
-	rs    io.ReadSeeker
 	dec   *zstd.Decoder
 	index *btree.BTree
 
@@ -66,15 +132,19 @@ type ZSTDReader interface {
 // NewReader returns ZSTD stream reader that can be randomly-accessible using uncompressed data offset.
 // Ideally, passed io.ReadSeeker should implement io.ReaderAt interface.
 func NewReader(rs io.ReadSeeker, opts ...ROption) (ZSTDReader, error) {
-	sr := ReaderImpl{
-		rs: rs,
-	}
+	sr := ReaderImpl{}
 
 	sr.o.setDefault()
 	for _, o := range opts {
 		err := o(&sr.o)
 		if err != nil {
 			return nil, err
+		}
+	}
+
+	if sr.o.env == nil {
+		sr.o.env = &readSeekerEnvImpl{
+			rs: rs,
 		}
 	}
 
@@ -152,7 +222,7 @@ func (s *ReaderImpl) read(dst []byte, off int64) (int64, int, error) {
 		}
 	} else {
 		// slowpath
-		src, err := s.readSegmentByIndex(index)
+		src, err := s.o.env.GetFrameByIndex(index)
 		if err != nil {
 			return 0, 0, fmt.Errorf("failed to read compressed data at: %d, %w", index.CompOffset, err)
 		}
@@ -184,27 +254,6 @@ func (s *ReaderImpl) read(dst []byte, off int64) (int64, int, error) {
 	copy(dst, decompressed[offsetWithinFrame:offsetWithinFrame+size])
 
 	return off + int64(size), int(size), nil
-}
-
-func (s *ReaderImpl) readSegmentByIndex(index FrameOffsetEntry) (p []byte, err error) {
-	p = make([]byte, index.CompSize)
-	off := int64(index.CompOffset)
-
-	switch v := s.rs.(type) {
-	case io.ReaderAt:
-		_, err = v.ReadAt(p, off)
-		if errors.Is(err, io.EOF) {
-			err = nil
-		}
-	default:
-		_, err = v.Seek(off, io.SeekStart)
-		if err != nil {
-			return nil, err
-		}
-		_, err = io.ReadFull(s.rs, p)
-	}
-
-	return
 }
 
 // Seek implements io.Seeker interface to randomly access data.
@@ -275,43 +324,9 @@ func (o FrameOffsetEntry) Less(than btree.Item) bool {
 	return o.DecompOffset < than.(FrameOffsetEntry).DecompOffset
 }
 
-func (s *ReaderImpl) readFooter() ([]byte, error) {
-	n, err := s.rs.Seek(-seekTableFooterOffset, io.SeekEnd)
-	if err != nil {
-		return nil, fmt.Errorf("failed to seek to: %d: %w", -seekTableFooterOffset, err)
-	}
-
-	s.o.logger.Debug("loading footer", zap.Int64("offset", n))
-	buf := make([]byte, seekTableFooterOffset)
-	_, err = io.ReadFull(s.rs, buf)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read footer at: %d: %w", n, err)
-	}
-
-	return buf, nil
-}
-
-func (s *ReaderImpl) readSkipFrame(seekTableEntrySize, numberOfFrames int64) ([]byte, error) {
-	skippableFrameOffset := seekTableFooterOffset + seekTableEntrySize*numberOfFrames
-	skippableFrameOffset += frameSizeFieldSize
-	skippableFrameOffset += skippableMagicNumberFieldSize
-
-	n, err := s.rs.Seek(-skippableFrameOffset, io.SeekEnd)
-	if err != nil {
-		return nil, fmt.Errorf("failed to seek to: %d: %w", -skippableFrameOffset, err)
-	}
-
-	buf := make([]byte, skippableFrameOffset)
-	_, err = io.ReadFull(s.rs, buf)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read skippable frame header at: %d: %w", n, err)
-	}
-	return buf, nil
-}
-
 func (s *ReaderImpl) indexFooter() (*btree.BTree, error) {
 	// read SeekTableFooter
-	buf, err := s.readFooter()
+	buf, err := s.o.env.ReadFooter()
 	if err != nil {
 		return nil, fmt.Errorf("failed to read footer: %w", err)
 	}
@@ -332,7 +347,11 @@ func (s *ReaderImpl) indexFooter() (*btree.BTree, error) {
 		seekTableEntrySize += 4
 	}
 
-	buf, err = s.readSkipFrame(seekTableEntrySize, int64(footer.NumberOfFrames))
+	skippableFrameOffset := seekTableFooterOffset + seekTableEntrySize*int64(footer.NumberOfFrames)
+	skippableFrameOffset += frameSizeFieldSize
+	skippableFrameOffset += skippableMagicNumberFieldSize
+
+	buf, err = s.o.env.ReadSkipFrame(skippableFrameOffset)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read footer: %w", err)
 	}
