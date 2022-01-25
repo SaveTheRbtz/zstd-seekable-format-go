@@ -233,6 +233,7 @@ func TestReadeAt(t *testing.T) {
 
 	sectionReader := io.NewSectionReader(r, 3, 4)
 	tmp3, err := io.ReadAll(sectionReader)
+	assert.NoError(t, err)
 	assert.Equal(t, 4, len(tmp3))
 	assert.Equal(t, []byte("ttes"), tmp3)
 }
