@@ -21,7 +21,9 @@ var (
 // Environment can be used to inject a custom file reader that is different from normal ReadSeeker.
 // This is useful when, for example there is a custom chunking code.
 type WEnvironment interface {
+	// WriteFrame is called each time frame is encoded and needs to be written upstream.
 	WriteFrame(p []byte) (n int, err error)
+	// WriteSeekTable is called on Close to flush the seek table.
 	WriteSeekTable(p []byte) (n int, err error)
 }
 
