@@ -140,7 +140,6 @@ func (s *ReaderImpl) read(dst []byte, off int64) (int64, int, error) {
 			off, int64(index.decompOffset), int64(index.decompOffset)+int64(index.decompSize))
 	}
 
-	var err error
 	var decompressed []byte
 
 	cachedOffset, cachedData := s.cachedFrame.get()
@@ -153,8 +152,7 @@ func (s *ReaderImpl) read(dst []byte, off int64) (int64, int, error) {
 		}
 	} else {
 		// slowpath
-		src := make([]byte, index.compSize)
-		err = s.readSegment(src, int64(index.compOffset))
+		src, err := s.readSegmentByIndex(index)
 		if err != nil {
 			return 0, 0, fmt.Errorf("failed to read compressed data at: %d, %w", index.compOffset, err)
 		}
@@ -188,24 +186,25 @@ func (s *ReaderImpl) read(dst []byte, off int64) (int64, int, error) {
 	return off + int64(size), int(size), nil
 }
 
-func (s *ReaderImpl) readSegment(p []byte, off int64) (err error) {
+func (s *ReaderImpl) readSegmentByIndex(index frameOffset) (p []byte, err error) {
+	p = make([]byte, index.compSize)
+	off := int64(index.compOffset)
+
 	switch v := s.rs.(type) {
 	case io.ReaderAt:
-		n, err := v.ReadAt(p, off)
+		_, err = v.ReadAt(p, off)
 		if errors.Is(err, io.EOF) {
-			if n == len(p) {
-				return nil
-			}
+			err = nil
 		}
-		return err
 	default:
 		_, err = v.Seek(off, io.SeekStart)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		_, err = io.ReadFull(s.rs, p)
-		return err
 	}
+
+	return
 }
 
 // Seek implements io.Seeker interface to randomly access data.
@@ -243,6 +242,8 @@ func (s *ReaderImpl) Close() (err error) {
 }
 
 type frameOffset struct {
+	id uint64
+
 	compOffset   uint64
 	decompOffset uint64
 	compSize     uint32
@@ -252,11 +253,14 @@ type frameOffset struct {
 }
 
 func (o *frameOffset) MarshalLogObject(enc zapcore.ObjectEncoder) error {
+	enc.AddUint64("index", o.id)
+
 	enc.AddUint64("compOffset", o.compOffset)
 	enc.AddUint64("decompOffset", o.decompOffset)
 	enc.AddUint32("compSize", o.compSize)
 	enc.AddUint32("decompSize", o.decompSize)
 	enc.AddUint32("checksum", o.checksum)
+
 	return nil
 }
 
@@ -350,6 +354,7 @@ func (s *ReaderImpl) indexSeekTableEntries(p []byte, entrySize uint64) (*btree.B
 	entry := SeekTableEntry{}
 	var compOffset, decompOffset uint64
 
+	var i uint64
 	for indexOffset := uint64(0); indexOffset < uint64(len(p)); indexOffset += entrySize {
 		err := entry.UnmarshalBinary(p[indexOffset : indexOffset+entrySize])
 		if err != nil {
@@ -358,6 +363,7 @@ func (s *ReaderImpl) indexSeekTableEntries(p []byte, entrySize uint64) (*btree.B
 		}
 
 		t.ReplaceOrInsert(frameOffset{
+			id:           i,
 			compOffset:   compOffset,
 			decompOffset: decompOffset,
 			compSize:     entry.CompressedSize,
@@ -366,6 +372,7 @@ func (s *ReaderImpl) indexSeekTableEntries(p []byte, entrySize uint64) (*btree.B
 		})
 		compOffset += uint64(entry.CompressedSize)
 		decompOffset += uint64(entry.DecompressedSize)
+		i++
 	}
 
 	return t, nil
