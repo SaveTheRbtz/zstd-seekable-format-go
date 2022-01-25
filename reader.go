@@ -91,8 +91,8 @@ func NewReader(rs io.ReadSeeker, opts ...ROption) (ZSTDReader, error) {
 	sr.index = tree
 
 	sr.index.Descend(func(i btree.Item) bool {
-		last := i.(frameOffset)
-		sr.endOffset = int64(last.decompOffset) + int64(last.decompSize)
+		last := i.(FrameOffsetEntry)
+		sr.endOffset = int64(last.DecompOffset) + int64(last.DecompSize)
 		return false
 	})
 
@@ -129,50 +129,50 @@ func (s *ReaderImpl) read(dst []byte, off int64) (int64, int, error) {
 		return 0, 0, fmt.Errorf("offset before the start of the file: %d", off)
 	}
 
-	var index frameOffset
-	s.index.DescendLessOrEqual(frameOffset{decompOffset: uint64(off)}, func(i btree.Item) bool {
-		index = i.(frameOffset)
+	var index FrameOffsetEntry
+	s.index.DescendLessOrEqual(FrameOffsetEntry{DecompOffset: uint64(off)}, func(i btree.Item) bool {
+		index = i.(FrameOffsetEntry)
 		return false
 	})
 
-	if off < int64(index.decompOffset) || off > int64(index.decompOffset)+int64(index.decompSize) {
+	if off < int64(index.DecompOffset) || off > int64(index.DecompOffset)+int64(index.DecompSize) {
 		return 0, 0, fmt.Errorf("offset outside of index bounds: %d: min: %d, max: %d",
-			off, int64(index.decompOffset), int64(index.decompOffset)+int64(index.decompSize))
+			off, int64(index.DecompOffset), int64(index.DecompOffset)+int64(index.DecompSize))
 	}
 
 	var decompressed []byte
 
 	cachedOffset, cachedData := s.cachedFrame.get()
-	if cachedOffset == index.decompOffset && cachedData != nil {
+	if cachedOffset == index.DecompOffset && cachedData != nil {
 		// fastpath
 		decompressed = cachedData
-		if len(decompressed) != int(index.decompSize) {
+		if len(decompressed) != int(index.DecompSize) {
 			panic(fmt.Sprintf("cache corruption: len: %d, expected: %d",
-				len(decompressed), int(index.decompSize)))
+				len(decompressed), int(index.DecompSize)))
 		}
 	} else {
 		// slowpath
 		src, err := s.readSegmentByIndex(index)
 		if err != nil {
-			return 0, 0, fmt.Errorf("failed to read compressed data at: %d, %w", index.compOffset, err)
+			return 0, 0, fmt.Errorf("failed to read compressed data at: %d, %w", index.CompOffset, err)
 		}
 
 		decompressed, err = s.dec.DecodeAll(src, nil)
 		if err != nil {
-			return 0, 0, fmt.Errorf("failed to decompress data data at: %d, %w", index.compOffset, err)
+			return 0, 0, fmt.Errorf("failed to decompress data data at: %d, %w", index.CompOffset, err)
 		}
 
 		if s.checksums {
 			checksum := uint32((xxhash.Sum64(decompressed) << 32) >> 32)
-			if index.checksum != checksum {
+			if index.Checksum != checksum {
 				return 0, 0, fmt.Errorf("checksum verification failed at: %d: expected: %d, actual: %d",
-					index.compOffset, index.checksum, checksum)
+					index.CompOffset, index.Checksum, checksum)
 			}
 		}
-		s.cachedFrame.replace(index.decompOffset, decompressed)
+		s.cachedFrame.replace(index.DecompOffset, decompressed)
 	}
 
-	offsetWithinFrame := uint64(off) - index.decompOffset
+	offsetWithinFrame := uint64(off) - index.DecompOffset
 
 	size := uint64(len(decompressed)) - offsetWithinFrame
 	if size > uint64(len(dst)) {
@@ -186,9 +186,9 @@ func (s *ReaderImpl) read(dst []byte, off int64) (int64, int, error) {
 	return off + int64(size), int(size), nil
 }
 
-func (s *ReaderImpl) readSegmentByIndex(index frameOffset) (p []byte, err error) {
-	p = make([]byte, index.compSize)
-	off := int64(index.compOffset)
+func (s *ReaderImpl) readSegmentByIndex(index FrameOffsetEntry) (p []byte, err error) {
+	p = make([]byte, index.CompSize)
+	off := int64(index.CompOffset)
 
 	switch v := s.rs.(type) {
 	case io.ReaderAt:
@@ -241,31 +241,38 @@ func (s *ReaderImpl) Close() (err error) {
 	return
 }
 
-type frameOffset struct {
-	id uint64
+// FrameOffsetEntry is the post-proccessed view of the Seek_Table_Entries suitable for indexing.
+type FrameOffsetEntry struct {
+	// ID is the is the sequence number of the frame in the index
+	ID uint64
 
-	compOffset   uint64
-	decompOffset uint64
-	compSize     uint32
-	decompSize   uint32
+	// CompOffset is the offset within compressed stream
+	CompOffset uint64
+	// DecompOffset is the offset within decompressed stream
+	DecompOffset uint64
+	// CompSize is the size of the compressed frame
+	CompSize uint32
+	// DecompSize is the size of the original data
+	DecompSize uint32
 
-	checksum uint32
+	// Checksum is the lower 32 bits of the XXH64 hash of the uncompressed data
+	Checksum uint32
 }
 
-func (o *frameOffset) MarshalLogObject(enc zapcore.ObjectEncoder) error {
-	enc.AddUint64("index", o.id)
+func (o *FrameOffsetEntry) MarshalLogObject(enc zapcore.ObjectEncoder) error {
+	enc.AddUint64("ID", o.ID)
 
-	enc.AddUint64("compOffset", o.compOffset)
-	enc.AddUint64("decompOffset", o.decompOffset)
-	enc.AddUint32("compSize", o.compSize)
-	enc.AddUint32("decompSize", o.decompSize)
-	enc.AddUint32("checksum", o.checksum)
+	enc.AddUint64("CompOffset", o.CompOffset)
+	enc.AddUint64("DecompOffset", o.DecompOffset)
+	enc.AddUint32("CompSize", o.CompSize)
+	enc.AddUint32("DecompSize", o.DecompSize)
+	enc.AddUint32("Checksum", o.Checksum)
 
 	return nil
 }
 
-func (o frameOffset) Less(than btree.Item) bool {
-	return o.decompOffset < than.(frameOffset).decompOffset
+func (o FrameOffsetEntry) Less(than btree.Item) bool {
+	return o.DecompOffset < than.(FrameOffsetEntry).DecompOffset
 }
 
 func (s *ReaderImpl) readFooter() ([]byte, error) {
@@ -362,13 +369,13 @@ func (s *ReaderImpl) indexSeekTableEntries(p []byte, entrySize uint64) (*btree.B
 				p[indexOffset:indexOffset+entrySize], indexOffset, err)
 		}
 
-		t.ReplaceOrInsert(frameOffset{
-			id:           i,
-			compOffset:   compOffset,
-			decompOffset: decompOffset,
-			compSize:     entry.CompressedSize,
-			decompSize:   entry.DecompressedSize,
-			checksum:     entry.Checksum,
+		t.ReplaceOrInsert(FrameOffsetEntry{
+			ID:           i,
+			CompOffset:   compOffset,
+			DecompOffset: decompOffset,
+			CompSize:     entry.CompressedSize,
+			DecompSize:   entry.DecompressedSize,
+			Checksum:     entry.Checksum,
 		})
 		compOffset += uint64(entry.CompressedSize)
 		decompOffset += uint64(entry.DecompressedSize)
