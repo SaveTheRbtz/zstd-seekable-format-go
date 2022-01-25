@@ -84,7 +84,7 @@ func NewReader(rs io.ReadSeeker, opts ...ROption) (ZSTDReader, error) {
 		return nil, err
 	}
 
-	tree, err := sr.readFooter()
+	tree, err := sr.indexFooter()
 	if err != nil {
 		return nil, err
 	}
@@ -264,7 +264,7 @@ func (o frameOffset) Less(than btree.Item) bool {
 	return o.decompOffset < than.(frameOffset).decompOffset
 }
 
-func (s *ReaderImpl) readFooter() (*btree.BTree, error) {
+func (s *ReaderImpl) readFooter() ([]byte, error) {
 	n, err := s.rs.Seek(-seekTableFooterOffset, io.SeekEnd)
 	if err != nil {
 		return nil, fmt.Errorf("failed to seek to: %d: %w", -seekTableFooterOffset, err)
@@ -277,49 +277,70 @@ func (s *ReaderImpl) readFooter() (*btree.BTree, error) {
 		return nil, fmt.Errorf("failed to read footer at: %d: %w", n, err)
 	}
 
-	footer := SeekTableFooter{}
-	err = footer.UnmarshalBinary(buf)
+	return buf, nil
+}
+
+func (s *ReaderImpl) readSkipFrame(seekTableEntrySize, numberOfFrames int64) ([]byte, error) {
+	skippableFrameOffset := seekTableFooterOffset + seekTableEntrySize*numberOfFrames
+	skippableFrameOffset += frameSizeFieldSize
+	skippableFrameOffset += skippableMagicNumberFieldSize
+
+	n, err := s.rs.Seek(-skippableFrameOffset, io.SeekEnd)
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse footer %+v at: %d: %w", buf, n, err)
+		return nil, fmt.Errorf("failed to seek to: %d: %w", -skippableFrameOffset, err)
+	}
+
+	buf := make([]byte, skippableFrameOffset)
+	_, err = io.ReadFull(s.rs, buf)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read skippable frame header at: %d: %w", n, err)
+	}
+	return buf, nil
+}
+
+func (s *ReaderImpl) indexFooter() (*btree.BTree, error) {
+	// read SeekTableFooter
+	buf, err := s.readFooter()
+	if err != nil {
+		return nil, fmt.Errorf("failed to read footer: %w", err)
+	}
+
+	// parse SeekTableFooter
+	footer := SeekTableFooter{}
+	err = footer.UnmarshalBinary(buf[len(buf)-seekTableFooterOffset:])
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse footer %+v: %w", buf, err)
 	}
 	s.o.logger.Debug("loaded", zap.Object("footer", &footer))
 
 	s.checksums = footer.SeekTableDescriptor.ChecksumFlag
 
+	// read SeekTableEntries
 	seekTableEntrySize := int64(8)
 	if footer.SeekTableDescriptor.ChecksumFlag {
 		seekTableEntrySize += 4
 	}
 
-	skippableFrameOffset := seekTableFooterOffset + seekTableEntrySize*int64(footer.NumberOfFrames)
-	// Frame_Size
-	skippableFrameOffset += 4
-	// Skippable_Magic_Number
-	skippableFrameOffset += 4
-
-	n, err = s.rs.Seek(-skippableFrameOffset, io.SeekEnd)
+	buf, err = s.readSkipFrame(seekTableEntrySize, int64(footer.NumberOfFrames))
 	if err != nil {
-		return nil, fmt.Errorf("failed to seek to: %d: %w", -skippableFrameOffset, err)
+		return nil, fmt.Errorf("failed to read footer: %w", err)
 	}
 
-	buf = make([]byte, skippableFrameOffset-seekTableFooterOffset)
-	_, err = io.ReadFull(s.rs, buf)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read skippable frame header at: %d: %w", n, err)
-	}
-
-	magic := binary.LittleEndian.Uint32(buf[0:])
+	// parse SeekTableEntries
+	magic := binary.LittleEndian.Uint32(buf[0:4])
 	if magic != SkippableFrameMagic+seekableTag {
 		return nil, fmt.Errorf("skippable frame magic mismatch %d vs %d",
 			magic, SkippableFrameMagic+seekableTag)
 	}
-	frameSize := int64(binary.LittleEndian.Uint32(buf[4:]))
-	if frameSize != skippableFrameOffset-8 {
-		return nil, fmt.Errorf("skippable frame size mismatch %d vs %d",
-			frameSize, skippableFrameOffset-8)
+
+	expectedFrameSize := int64(len(buf)) - frameSizeFieldSize - skippableMagicNumberFieldSize
+	frameSize := int64(binary.LittleEndian.Uint32(buf[4:8]))
+	if frameSize != expectedFrameSize {
+		return nil, fmt.Errorf("skippable frame size mismatch: expected: %d, actual: %d",
+			expectedFrameSize, frameSize)
 	}
 
-	t, err := s.indexSeekTableEntries(buf[8:], uint64(seekTableEntrySize))
+	t, err := s.indexSeekTableEntries(buf[8:len(buf)-seekTableFooterOffset], uint64(seekTableEntrySize))
 	return t, err
 }
 

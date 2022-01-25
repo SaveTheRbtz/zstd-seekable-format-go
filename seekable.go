@@ -42,6 +42,9 @@ const (
 
 	seekTableFooterOffset = 9
 
+	frameSizeFieldSize            = 4
+	skippableMagicNumberFieldSize = 4
+
 	seekableTag = 0xE
 )
 
