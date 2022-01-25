@@ -64,6 +64,50 @@ func TestWriter(t *testing.T) {
 	assert.Equal(t, concat, readBuf[:n])
 }
 
+type fakeWriteEnvironment struct {
+	bw io.Writer
+}
+
+func (s *fakeWriteEnvironment) WriteFrame(p []byte) (n int, err error) {
+	return s.bw.Write(p)
+}
+
+func (s *fakeWriteEnvironment) WriteSeekTable(p []byte) (n int, err error) {
+	return s.bw.Write(p)
+}
+
+func TestWriteEnvironment(t *testing.T) {
+	t.Parallel()
+
+	var b bytes.Buffer
+
+	w, err := NewWriter(nil, WithWEnvironment(&fakeWriteEnvironment{
+		bw: io.Writer(&b),
+	}))
+	assert.NoError(t, err)
+
+	bytes1 := []byte("test")
+	_, err = w.Write(bytes1)
+	assert.NoError(t, err)
+	bytes2 := []byte("test2")
+	_, err = w.Write(bytes2)
+	assert.NoError(t, err)
+
+	err = w.Close()
+	assert.NoError(t, err)
+
+	// test decompression
+	br := io.Reader(&b)
+	dec, err := zstd.NewReader(br)
+	assert.NoError(t, err)
+	readBuf := make([]byte, 1024)
+	n, err := dec.Read(readBuf)
+	assert.Equal(t, err, io.EOF)
+	concat := append(bytes1, bytes2...)
+	assert.Equal(t, len(concat), n)
+	assert.Equal(t, concat, readBuf[:n])
+}
+
 func BenchmarkWrite(b *testing.B) {
 	t := []struct {
 		input []byte

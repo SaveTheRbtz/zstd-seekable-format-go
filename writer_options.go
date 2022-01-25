@@ -10,6 +10,7 @@ type WOption func(*writerOptions) error
 type writerOptions struct {
 	logger    *zap.Logger
 	zstdEOpts []zstd.EOption
+	env       WEnvironment
 }
 
 func (o *writerOptions) setDefault() {
@@ -24,4 +25,8 @@ func WithZSTDEOptions(opts ...zstd.EOption) WOption {
 
 func WithWLogger(l *zap.Logger) WOption {
 	return func(o *writerOptions) error { o.logger = l; return nil }
+}
+
+func WithWEnvironment(env WEnvironment) WOption {
+	return func(o *writerOptions) error { o.env = env; return nil }
 }

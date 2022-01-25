@@ -18,8 +18,27 @@ var (
 	_ io.Closer = (*WriterImpl)(nil)
 )
 
+// Environment can be used to inject a custom file reader that is different from normal ReadSeeker.
+// This is useful when, for example there is a custom chunking code.
+type WEnvironment interface {
+	WriteFrame(p []byte) (n int, err error)
+	WriteSeekTable(p []byte) (n int, err error)
+}
+
+// writerEnvImpl is the environment implementation of for the underlying ReadSeeker.
+type writerEnvImpl struct {
+	w io.Writer
+}
+
+func (w *writerEnvImpl) WriteFrame(p []byte) (n int, err error) {
+	return w.w.Write(p)
+}
+
+func (w *writerEnvImpl) WriteSeekTable(p []byte) (n int, err error) {
+	return w.w.Write(p)
+}
+
 type WriterImpl struct {
-	w            io.Writer
 	enc          *zstd.Encoder
 	frameEntries []SeekTableEntry
 
@@ -36,7 +55,6 @@ type ZSTDWriter interface {
 // Written data then can be randomly accessed through the NewReader's interface.
 func NewWriter(w io.Writer, opts ...WOption) (ZSTDWriter, error) {
 	sw := WriterImpl{
-		w:    w,
 		once: &sync.Once{},
 	}
 
@@ -45,6 +63,12 @@ func NewWriter(w io.Writer, opts ...WOption) (ZSTDWriter, error) {
 		err := o(&sw.o)
 		if err != nil {
 			return nil, err
+		}
+	}
+
+	if sw.o.env == nil {
+		sw.o.env = &writerEnvImpl{
+			w: w,
 		}
 	}
 
@@ -83,7 +107,7 @@ func (s *WriterImpl) Write(src []byte) (int, error) {
 		Checksum:         uint32((xxhash.Sum64(src) << 32) >> 32),
 	}
 
-	n, err := s.w.Write(dst)
+	n, err := s.o.env.WriteFrame(dst)
 	if err != nil {
 		return 0, err
 	}
@@ -136,6 +160,6 @@ func (s *WriterImpl) writeSeekTable() error {
 		return err
 	}
 
-	_, err = s.w.Write(seekTableBytes)
+	_, err = s.o.env.WriteSeekTable(seekTableBytes)
 	return err
 }
