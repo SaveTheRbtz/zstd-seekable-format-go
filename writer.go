@@ -107,6 +107,9 @@ func (s *WriterImpl) Write(src []byte) (int, error) {
 		Checksum:         uint32((xxhash.Sum64(src) << 32) >> 32),
 	}
 
+	s.o.logger.Debug("appending frame", zap.Object("frame", &entry))
+	s.frameEntries = append(s.frameEntries, entry)
+
 	n, err := s.o.env.WriteFrame(dst)
 	if err != nil {
 		return 0, err
@@ -114,9 +117,6 @@ func (s *WriterImpl) Write(src []byte) (int, error) {
 	if n != len(dst) {
 		return 0, fmt.Errorf("partial write: %d out of %d", n, len(dst))
 	}
-
-	s.o.logger.Debug("appending frame", zap.Object("frame", &entry))
-	s.frameEntries = append(s.frameEntries, entry)
 
 	return len(src), nil
 }
