@@ -66,6 +66,10 @@ func (s *WriterImpl) Write(src []byte) (int, error) {
 			len(src), math.MaxUint32)
 	}
 
+	if len(src) == 0 {
+		return 0, nil
+	}
+
 	dst := s.enc.EncodeAll(src, nil)
 
 	if len(dst) > math.MaxUint32 {
