@@ -293,7 +293,7 @@ func (s *ReaderImpl) Close() (err error) {
 // FrameOffsetEntry is the post-proccessed view of the Seek_Table_Entries suitable for indexing.
 type FrameOffsetEntry struct {
 	// ID is the is the sequence number of the frame in the index.
-	ID uint64
+	ID int64
 
 	// CompOffset is the offset within compressed stream.
 	CompOffset uint64
@@ -309,7 +309,7 @@ type FrameOffsetEntry struct {
 }
 
 func (o *FrameOffsetEntry) MarshalLogObject(enc zapcore.ObjectEncoder) error {
-	enc.AddUint64("ID", o.ID)
+	enc.AddInt64("ID", o.ID)
 
 	enc.AddUint64("CompOffset", o.CompOffset)
 	enc.AddUint64("DecompOffset", o.DecompOffset)
@@ -380,7 +380,7 @@ func (s *ReaderImpl) indexSeekTableEntries(p []byte, entrySize uint64) (*btree.B
 	entry := SeekTableEntry{}
 	var compOffset, decompOffset uint64
 
-	var i uint64
+	var i int64
 	for indexOffset := uint64(0); indexOffset < uint64(len(p)); indexOffset += entrySize {
 		err := entry.UnmarshalBinary(p[indexOffset : indexOffset+entrySize])
 		if err != nil {
