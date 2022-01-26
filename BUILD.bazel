@@ -18,7 +18,9 @@ gazelle(
 go_library(
     name = "zstd-seekable-format-go",
     srcs = [
+        "decoder.go",
         "doc.go",
+        "encoder.go",
         "reader.go",
         "reader_options.go",
         "seekable.go",
@@ -41,7 +43,9 @@ go_test(
     name = "zstd-seekable-format-go_test",
     size = "small",
     srcs = [
+        "decoder_test.go",
         "doc_test.go",
+        "encoder_test.go",
         "example_test.go",
         "reader_test.go",
         "seekable_test.go",

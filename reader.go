@@ -115,7 +115,9 @@ type ReaderImpl struct {
 
 	checksums bool
 
-	offset    int64
+	offset int64
+
+	numFrames int64
 	endOffset int64
 
 	o readerOptions
@@ -160,11 +162,16 @@ func NewReader(rs io.ReadSeeker, opts ...ROption) (ZSTDReader, error) {
 	}
 	sr.index = tree
 
+	var last *FrameOffsetEntry
 	sr.index.Descend(func(i btree.Item) bool {
-		last := i.(FrameOffsetEntry)
-		sr.endOffset = int64(last.DecompOffset) + int64(last.DecompSize)
+		last = i.(*FrameOffsetEntry)
 		return false
 	})
+	if last == nil {
+		return nil, fmt.Errorf("seek index is empty")
+	}
+	sr.endOffset = int64(last.DecompOffset) + int64(last.DecompSize)
+	sr.numFrames = last.ID + 1
 
 	return &sr, nil
 }
@@ -199,12 +206,10 @@ func (s *ReaderImpl) read(dst []byte, off int64) (int64, int, error) {
 		return 0, 0, fmt.Errorf("offset before the start of the file: %d", off)
 	}
 
-	var index FrameOffsetEntry
-	s.index.DescendLessOrEqual(FrameOffsetEntry{DecompOffset: uint64(off)}, func(i btree.Item) bool {
-		index = i.(FrameOffsetEntry)
-		return false
-	})
-
+	index := s.GetIndexByDecompOffset(uint64(off))
+	if index == nil {
+		return 0, 0, fmt.Errorf("failed to get index by offest: %d", off)
+	}
 	if off < int64(index.DecompOffset) || off > int64(index.DecompOffset)+int64(index.DecompSize) {
 		return 0, 0, fmt.Errorf("offset outside of index bounds: %d: min: %d, max: %d",
 			off, int64(index.DecompOffset), int64(index.DecompOffset)+int64(index.DecompSize))
@@ -222,7 +227,7 @@ func (s *ReaderImpl) read(dst []byte, off int64) (int64, int, error) {
 		}
 	} else {
 		// slowpath
-		src, err := s.o.env.GetFrameByIndex(index)
+		src, err := s.o.env.GetFrameByIndex(*index)
 		if err != nil {
 			return 0, 0, fmt.Errorf("failed to read compressed data at: %d, %w", index.CompOffset, err)
 		}
@@ -250,7 +255,7 @@ func (s *ReaderImpl) read(dst []byte, off int64) (int64, int, error) {
 	}
 
 	s.o.logger.Debug("decompressed", zap.Uint64("offsetWithinFrame", offsetWithinFrame), zap.Uint64("end", offsetWithinFrame+size),
-		zap.Uint64("size", size), zap.Int("lenDecompressed", len(decompressed)), zap.Int("lenDst", len(dst)), zap.Object("index", &index))
+		zap.Uint64("size", size), zap.Int("lenDecompressed", len(decompressed)), zap.Int("lenDst", len(dst)), zap.Object("index", index))
 	copy(dst, decompressed[offsetWithinFrame:offsetWithinFrame+size])
 
 	return off + int64(size), int(size), nil
@@ -320,8 +325,8 @@ func (o *FrameOffsetEntry) MarshalLogObject(enc zapcore.ObjectEncoder) error {
 	return nil
 }
 
-func (o FrameOffsetEntry) Less(than btree.Item) bool {
-	return o.DecompOffset < than.(FrameOffsetEntry).DecompOffset
+func (o *FrameOffsetEntry) Less(than btree.Item) bool {
+	return o.DecompOffset < than.(*FrameOffsetEntry).DecompOffset
 }
 
 func (s *ReaderImpl) indexFooter() (*btree.BTree, error) {
@@ -395,7 +400,7 @@ func (s *ReaderImpl) indexSeekTableEntries(p []byte, entrySize uint64) (*btree.B
 				p[indexOffset:indexOffset+entrySize], indexOffset, err)
 		}
 
-		t.ReplaceOrInsert(FrameOffsetEntry{
+		t.ReplaceOrInsert(&FrameOffsetEntry{
 			ID:           i,
 			CompOffset:   compOffset,
 			DecompOffset: decompOffset,

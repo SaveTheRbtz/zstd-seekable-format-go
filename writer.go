@@ -3,14 +3,11 @@ package seekable
 import (
 	"fmt"
 	"io"
-	"math"
 	"sync"
 
-	"github.com/cespare/xxhash"
 	"github.com/klauspost/compress/zstd"
 
 	"go.uber.org/multierr"
-	"go.uber.org/zap"
 )
 
 var (
@@ -87,30 +84,10 @@ func NewWriter(w io.Writer, opts ...WOption) (ZSTDWriter, error) {
 // Note that Write does not do any coalescing nor splitting of data,
 // so each write will map to a separate ZSTD Frame.
 func (s *WriterImpl) Write(src []byte) (int, error) {
-	if len(src) > math.MaxUint32 {
-		return 0, fmt.Errorf("chunk size too big for seekable format: %d > %d",
-			len(src), math.MaxUint32)
+	dst, err := s.Encode(src)
+	if err != nil {
+		return 0, err
 	}
-
-	if len(src) == 0 {
-		return 0, nil
-	}
-
-	dst := s.enc.EncodeAll(src, nil)
-
-	if len(dst) > math.MaxUint32 {
-		return 0, fmt.Errorf("result size too big for seekable format: %d > %d",
-			len(src), math.MaxUint32)
-	}
-
-	entry := SeekTableEntry{
-		CompressedSize:   uint32(len(dst)),
-		DecompressedSize: uint32(len(src)),
-		Checksum:         uint32((xxhash.Sum64(src) << 32) >> 32),
-	}
-
-	s.o.logger.Debug("appending frame", zap.Object("frame", &entry))
-	s.frameEntries = append(s.frameEntries, entry)
 
 	n, err := s.o.env.WriteFrame(dst)
 	if err != nil {
@@ -131,33 +108,11 @@ func (s *WriterImpl) Close() (err error) {
 	s.once.Do(func() {
 		err = multierr.Append(err, s.writeSeekTable())
 	})
-
-	s.frameEntries = nil
-	err = multierr.Append(err, s.enc.Close())
 	return
 }
 
 func (s *WriterImpl) writeSeekTable() error {
-	seekTable := make([]byte, len(s.frameEntries)*12+9)
-	for i, e := range s.frameEntries {
-		e.marshalBinaryInline(seekTable[i*12 : (i+1)*12])
-	}
-
-	if len(s.frameEntries) > math.MaxUint32 {
-		return fmt.Errorf("number of frames for seekable format: %d > %d",
-			len(s.frameEntries), math.MaxUint32)
-	}
-
-	footer := SeekTableFooter{
-		NumberOfFrames: uint32(len(s.frameEntries)),
-		SeekTableDescriptor: SeekTableDescriptor{
-			ChecksumFlag: true,
-		},
-		SeekableMagicNumber: seekableMagicNumber,
-	}
-
-	footer.marshalBinaryInline(seekTable[len(s.frameEntries)*12 : len(s.frameEntries)*12+9])
-	seekTableBytes, err := CreateSkippableFrame(seekableTag, seekTable)
+	seekTableBytes, err := s.EndStream()
 	if err != nil {
 		return err
 	}

@@ -228,6 +228,16 @@ func TestReadeAt(t *testing.T) {
 	k2, err := r.ReadAt(tmp2, 3)
 	assert.Error(t, err, io.EOF)
 
+	tmp_last := make([]byte, 1)
+	k_last, err := r.ReadAt(tmp_last, 8)
+	assert.Equal(t, 1, k_last)
+	assert.Equal(t, []byte("2"), tmp_last)
+	assert.NoError(t, err)
+
+	tmp_oob := make([]byte, 1)
+	_, err = r.ReadAt(tmp_oob, 9)
+	assert.Error(t, err, io.EOF)
+
 	assert.Equal(t, 6, k2)
 	assert.Equal(t, []byte("ttest2"), tmp2[:k2])
 
