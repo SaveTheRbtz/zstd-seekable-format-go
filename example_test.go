@@ -29,13 +29,15 @@ func Example() {
 		log.Fatal(err)
 	}
 
-	helloWorld := []byte("Hello World!")
-	// Writer
-	_, err = w.Write(helloWorld)
-	if err != nil {
-		log.Fatal(err)
+	// Write data in chunks.
+	for _, b := range [][]byte{[]byte("Hello"), []byte(" World!")} {
+		_, err = w.Write(b)
+		if err != nil {
+			log.Fatal(err)
+		}
 	}
-	// Closer
+
+	// Close and flush seek table.
 	err = w.Close()
 	if err != nil {
 		log.Fatal(err)
@@ -72,10 +74,9 @@ func Example() {
 	}
 	fmt.Printf("Offset: -6 from the end: %s\n", string(world))
 
-	// Reset
 	_, _ = f.Seek(0, io.SeekStart)
 
-	// Standard ZSTD Reader
+	// Standard ZSTD Reader.
 	dec, err = zstd.NewReader(f)
 	if err != nil {
 		log.Fatal(err)

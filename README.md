@@ -10,20 +10,30 @@
 Writing is done through the `Writer` interface:
 ```go
 import (
+	"github.com/klauspost/compress/zstd"
 	seekable "github.com/SaveTheRbtz/zstd-seekable-format-go"
 )
 
-w, err := seekable.NewWriter(f, seekable.WithZSTDEOptions(zstd.WithEncoderLevel(zstd.SpeedFastest)))
+enc, err := zstd.NewWriter(nil, zstd.WithEncoderLevel(zstd.SpeedFastest))
 if err != nil {
 	log.Fatal(err)
 }
-helloWorld := []byte("Hello World!")
-// Writer
-_, err = w.Write(helloWorld)
+defer enc.Close()
+
+w, err := seekable.NewWriter(f, enc)
 if err != nil {
 	log.Fatal(err)
 }
-// Closer
+
+// Write data in chunks.
+for _, b := range [][]byte{[]byte("Hello"), []byte(" World!")} {
+	_, err = w.Write(b)
+	if err != nil {
+		log.Fatal(err)
+	}
+}
+
+// Close and flush seek table.
 err = w.Close()
 if err != nil {
 	log.Fatal(err)
@@ -34,11 +44,15 @@ NB! Do not forget to call `Close` since it is responsible for flushing the seek 
 Reading can either be done through `ReaderAt` interface:
 
 ```go
-r, err := seekable.NewReader(f)
+dec, err := zstd.NewReader(nil)
 if err != nil {
 	log.Fatal(err)
 }
-defer r.Close()
+
+r, err := seekable.NewReader(f, dec)
+if err != nil {
+	log.Fatal(err)
+}
 
 ello := make([]byte, 4)
 // ReaderAt
