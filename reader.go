@@ -191,6 +191,9 @@ func (s *ReaderImpl) ReadAt(p []byte, off int64) (n int, err error) {
 func (s *ReaderImpl) Read(p []byte) (n int, err error) {
 	offset, n, err := s.read(p, s.offset)
 	if err != nil {
+		if errors.Is(err, io.EOF) {
+			s.offset = s.endOffset
+		}
 		return
 	}
 	s.offset = offset
