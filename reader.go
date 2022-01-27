@@ -223,15 +223,16 @@ func (s *ReaderImpl) read(dst []byte, off int64) (int64, int, error) {
 	if cachedOffset == index.DecompOffset && cachedData != nil {
 		// fastpath
 		decompressed = cachedData
-		if len(decompressed) != int(index.DecompSize) {
-			panic(fmt.Sprintf("cache corruption: len: %d, expected: %d",
-				len(decompressed), int(index.DecompSize)))
-		}
 	} else {
 		// slowpath
 		src, err := s.o.env.GetFrameByIndex(*index)
 		if err != nil {
 			return 0, 0, fmt.Errorf("failed to read compressed data at: %d, %w", index.CompOffset, err)
+		}
+
+		if len(src) != int(index.CompSize) {
+			return 0, 0, fmt.Errorf("compressed size does not match index at: %d: expected: %d, index: %+v",
+				off, len(src), index)
 		}
 
 		decompressed, err = s.dec.DecodeAll(src, nil)
@@ -247,6 +248,11 @@ func (s *ReaderImpl) read(dst []byte, off int64) (int64, int, error) {
 			}
 		}
 		s.cachedFrame.replace(index.DecompOffset, decompressed)
+	}
+
+	if len(decompressed) != int(index.DecompSize) {
+		panic(fmt.Sprintf("index corruption: len: %d, expected: %d",
+			len(decompressed), int(index.DecompSize)))
 	}
 
 	offsetWithinFrame := uint64(off) - index.DecompOffset
