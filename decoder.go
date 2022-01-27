@@ -22,10 +22,10 @@ type Decoder interface {
 // NewDecoder creates a byte-oriented Decode interface from a given seektable index.
 // This index can either be produced by either Writer's WriteSeekTable or Encoder's EndStream.
 // Decoder can be used concurrently.
-func NewDecoder(seekTable []byte, opts ...ROption) (Decoder, error) {
+func NewDecoder(seekTable []byte, decoder ZSTDDecoder, opts ...ROption) (Decoder, error) {
 	opts = append(opts, WithREnvironment(&decoderEnv{seekTable: seekTable}))
 
-	sr, err := NewReader(nil, opts...)
+	sr, err := NewReader(nil, decoder, opts...)
 
 	// Release seekTable reference to not leak memory.
 	sr.(*ReaderImpl).o.env = nil

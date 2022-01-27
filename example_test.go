@@ -18,7 +18,13 @@ func Example() {
 	}
 	defer os.Remove(f.Name())
 
-	w, err := seekable.NewWriter(f, seekable.WithZSTDEOptions(zstd.WithEncoderLevel(zstd.SpeedFastest)))
+	enc, err := zstd.NewWriter(nil, zstd.WithEncoderLevel(zstd.SpeedFastest))
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer enc.Close()
+
+	w, err := seekable.NewWriter(f, enc)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -35,11 +41,15 @@ func Example() {
 		log.Fatal(err)
 	}
 
-	r, err := seekable.NewReader(f)
+	dec, err := zstd.NewReader(nil)
 	if err != nil {
 		log.Fatal(err)
 	}
-	defer r.Close()
+
+	r, err := seekable.NewReader(f, dec)
+	if err != nil {
+		log.Fatal(err)
+	}
 
 	ello := make([]byte, 4)
 	// ReaderAt
@@ -66,7 +76,7 @@ func Example() {
 	_, _ = f.Seek(0, io.SeekStart)
 
 	// Standard ZSTD Reader
-	dec, err := zstd.NewReader(f)
+	dec, err = zstd.NewReader(f)
 	if err != nil {
 		log.Fatal(err)
 	}

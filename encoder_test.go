@@ -10,7 +10,10 @@ import (
 func TestEncoder(t *testing.T) {
 	t.Parallel()
 
-	e, err := NewEncoder()
+	enc, err := zstd.NewWriter(nil)
+	assert.NoError(t, err)
+
+	e, err := NewEncoder(enc)
 	assert.NoError(t, err)
 
 	decBytes1 := sourceString[:4]
@@ -34,7 +37,7 @@ func TestEncoder(t *testing.T) {
 	assert.Equal(t, sourceString, string(decompressed))
 
 	// Seekable Decoder.
-	d, err := NewDecoder(footer)
+	d, err := NewDecoder(footer, dec)
 	assert.NoError(t, err)
 
 	assert.Equal(t, int64(len(sourceString)), d.Size())

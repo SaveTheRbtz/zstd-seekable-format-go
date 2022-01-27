@@ -13,7 +13,7 @@ func TestDecoder(t *testing.T) {
 	dec, err := zstd.NewReader(nil)
 	assert.NoError(t, err)
 
-	d, err := NewDecoder(checksum[17+18:])
+	d, err := NewDecoder(checksum[17+18:], dec)
 	assert.NoError(t, err)
 
 	assert.Equal(t, int64(len(sourceString)), d.Size())

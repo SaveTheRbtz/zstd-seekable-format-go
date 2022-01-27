@@ -78,8 +78,12 @@ func main() {
 
 	var zstdOpts []zstd.EOption
 	zstdOpts = append(zstdOpts, zstd.WithEncoderLevel(zstd.EncoderLevelFromZstd(qualityFlag)))
+	enc, err := zstd.NewWriter(nil, zstdOpts...)
+	if err != nil {
+		logger.Fatal("failed to create zstd encoder", zap.Error(err))
+	}
 
-	w, err := seekable.NewWriter(output, seekable.WithWLogger(logger), seekable.WithZSTDEOptions(zstdOpts...))
+	w, err := seekable.NewWriter(output, enc, seekable.WithWLogger(logger))
 	if err != nil {
 		logger.Fatal("failed to create compressed writer", zap.Error(err))
 	}
@@ -135,11 +139,15 @@ func main() {
 		}
 		defer verify.Close()
 
-		reader, err := seekable.NewReader(verify, seekable.WithRLogger(logger))
+		dec, err := zstd.NewReader(nil)
+		if err != nil {
+			logger.Fatal("failed to create zstd decompressor", zap.Error(err))
+		}
+
+		reader, err := seekable.NewReader(verify, dec, seekable.WithRLogger(logger))
 		if err != nil {
 			logger.Fatal("failed to create new seekable reader", zap.Error(err))
 		}
-		defer reader.Close()
 
 		chunk := make([]byte, 4096)
 		actual := blake3.New()

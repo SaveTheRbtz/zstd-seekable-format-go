@@ -16,8 +16,8 @@ type Encoder interface {
 	EndStream() ([]byte, error)
 }
 
-func NewEncoder(opts ...WOption) (Encoder, error) {
-	sw, err := NewWriter(nil, opts...)
+func NewEncoder(encoder ZSTDEncoder, opts ...WOption) (Encoder, error) {
+	sw, err := NewWriter(nil, encoder, opts...)
 	return sw.(*WriterImpl), err
 }
 

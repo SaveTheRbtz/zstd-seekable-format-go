@@ -14,9 +14,12 @@ import (
 func TestWriter(t *testing.T) {
 	t.Parallel()
 
+	enc, err := zstd.NewWriter(nil, zstd.WithEncoderLevel(zstd.SpeedFastest))
+	assert.NoError(t, err)
+
 	var b bytes.Buffer
 	bw := io.Writer(&b)
-	w, err := NewWriter(bw, WithZSTDEOptions(zstd.WithEncoderLevel(zstd.SpeedFastest)))
+	w, err := NewWriter(bw, enc)
 	assert.NoError(t, err)
 
 	bytes1 := []byte("test")
@@ -81,7 +84,10 @@ func TestWriteEnvironment(t *testing.T) {
 
 	var b bytes.Buffer
 
-	w, err := NewWriter(nil, WithWEnvironment(&fakeWriteEnvironment{
+	enc, err := zstd.NewWriter(nil, zstd.WithEncoderLevel(zstd.SpeedFastest))
+	assert.NoError(t, err)
+
+	w, err := NewWriter(nil, enc, WithWEnvironment(&fakeWriteEnvironment{
 		bw: io.Writer(&b),
 	}))
 	assert.NoError(t, err)
@@ -109,6 +115,9 @@ func TestWriteEnvironment(t *testing.T) {
 }
 
 func BenchmarkWrite(b *testing.B) {
+	enc, err := zstd.NewWriter(nil, zstd.WithEncoderLevel(zstd.SpeedFastest))
+	assert.NoError(b, err)
+
 	t := []struct {
 		input []byte
 	}{
@@ -122,7 +131,7 @@ func BenchmarkWrite(b *testing.B) {
 		writeBuf := data.input[:]
 		var buf bytes.Buffer
 		bw := io.Writer(&buf)
-		w, err := NewWriter(bw)
+		w, err := NewWriter(bw, enc)
 		assert.NoError(b, err)
 
 		b.Run(fmt.Sprintf("%d", len(writeBuf)), func(b *testing.B) {

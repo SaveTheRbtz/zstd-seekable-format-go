@@ -8,7 +8,6 @@ import (
 	"sync"
 
 	"github.com/cespare/xxhash"
-	"github.com/klauspost/compress/zstd"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 
@@ -16,8 +15,8 @@ import (
 )
 
 var (
-	_ io.ReadSeekCloser = (*ReaderImpl)(nil)
-	_ io.ReaderAt       = (*ReaderImpl)(nil)
+	_ io.ReadSeeker = (*ReaderImpl)(nil)
+	_ io.ReaderAt   = (*ReaderImpl)(nil)
 )
 
 type cachedFrame struct {
@@ -54,7 +53,7 @@ type REnvironment interface {
 	ReadSkipFrame(skippableFrameOffset int64) ([]byte, error)
 }
 
-// readSeekerEnvImpl is the environment implementation of for the underlying ReadSeeker.
+// readSeekerEnvImpl is the environment implementation for the io.ReadSeeker.
 type readSeekerEnvImpl struct {
 	rs io.ReadSeeker
 }
@@ -110,7 +109,7 @@ func (rs *readSeekerEnvImpl) ReadSkipFrame(skippableFrameOffset int64) ([]byte, 
 }
 
 type ReaderImpl struct {
-	dec   *zstd.Decoder
+	dec   ZSTDDecoder
 	index *btree.BTree
 
 	checksums bool
@@ -126,15 +125,21 @@ type ReaderImpl struct {
 	cachedFrame cachedFrame
 }
 
-type ZSTDReader interface {
-	io.ReadSeekCloser
+type Reader interface {
+	io.ReadSeeker
 	io.ReaderAt
 }
 
-// NewReader returns ZSTD stream reader that can be randomly-accessible using uncompressed data offset.
+type ZSTDDecoder interface {
+	DecodeAll(input, dst []byte) ([]byte, error)
+}
+
+// NewReader returns ZSTD stream reader that can be randomly accessed using uncompressed data offset.
 // Ideally, passed io.ReadSeeker should implement io.ReaderAt interface.
-func NewReader(rs io.ReadSeeker, opts ...ROption) (ZSTDReader, error) {
-	sr := ReaderImpl{}
+func NewReader(rs io.ReadSeeker, decoder ZSTDDecoder, opts ...ROption) (Reader, error) {
+	sr := ReaderImpl{
+		dec: decoder,
+	}
 
 	sr.o.setDefault()
 	for _, o := range opts {
@@ -148,12 +153,6 @@ func NewReader(rs io.ReadSeeker, opts ...ROption) (ZSTDReader, error) {
 		sr.o.env = &readSeekerEnvImpl{
 			rs: rs,
 		}
-	}
-
-	var err error
-	sr.dec, err = zstd.NewReader(nil, sr.o.zstdDOpts...)
-	if err != nil {
-		return nil, err
 	}
 
 	tree, err := sr.indexFooter()
@@ -282,17 +281,6 @@ func (s *ReaderImpl) Seek(offset int64, whence int) (int64, error) {
 
 	s.offset = newOffset
 	return s.offset, nil
-}
-
-// Close implement io.Closer interface.  Calling Close releases occupied memory.
-//
-// Caller is still responsible to Close the underlying reader.
-func (s *ReaderImpl) Close() (err error) {
-	s.index.Clear(false)
-	s.dec.Close()
-
-	s.cachedFrame.replace(0, nil)
-	return
 }
 
 // FrameOffsetEntry is the post-proccessed view of the Seek_Table_Entries suitable for indexing.

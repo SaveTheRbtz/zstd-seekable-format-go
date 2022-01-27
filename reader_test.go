@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"testing"
 
+	"github.com/klauspost/compress/zstd"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -112,9 +113,12 @@ func (s *seekableBufferReader) Seek(offset int64, whence int) (int64, error) {
 func TestReader(t *testing.T) {
 	t.Parallel()
 
+	dec, err := zstd.NewReader(nil)
+	assert.NoError(t, err)
+
 	for _, b := range [][]byte{checksum, noChecksum} {
 		br := &seekableBufferReader{buf: b}
-		r, err := NewReader(br)
+		r, err := NewReader(br, dec)
 		assert.NoError(t, err)
 
 		sr := r.(*ReaderImpl)
@@ -149,13 +153,14 @@ func TestReader(t *testing.T) {
 
 		_, err = r.Read(tmp)
 		assert.Equal(t, err, io.EOF)
-
-		assert.NoError(t, r.Close())
 	}
 }
 
 func TestReaderEdges(t *testing.T) {
 	t.Parallel()
+
+	dec, err := zstd.NewReader(nil)
+	assert.NoError(t, err)
 
 	source := []byte(sourceString)
 	for i, b := range [][]byte{checksum, noChecksum} {
@@ -164,9 +169,8 @@ func TestReaderEdges(t *testing.T) {
 			t.Parallel()
 
 			sr := &seekableBufferReader{buf: b}
-			r, err := NewReader(sr)
+			r, err := NewReader(sr, dec)
 			assert.NoError(t, err)
-			defer r.Close()
 
 			for _, whence := range []int{io.SeekStart, io.SeekEnd} {
 				for n := int64(-1); n <= int64(len(source)); n++ {
@@ -212,10 +216,12 @@ func TestReaderEdges(t *testing.T) {
 func TestReadeAt(t *testing.T) {
 	t.Parallel()
 
-	sr := &seekableBufferReader{buf: checksum}
-	r, err := NewReader(sr)
+	dec, err := zstd.NewReader(nil)
 	assert.NoError(t, err)
-	defer r.Close()
+
+	sr := &seekableBufferReader{buf: checksum}
+	r, err := NewReader(sr, dec)
+	assert.NoError(t, err)
 
 	tmp1 := make([]byte, 3)
 	k1, err := r.ReadAt(tmp1, 3)
@@ -250,15 +256,16 @@ func TestReadeAt(t *testing.T) {
 
 func TestReaderEdgesParallel(t *testing.T) {
 	t.Parallel()
+	dec, err := zstd.NewReader(nil)
+	assert.NoError(t, err)
 
 	source := []byte(sourceString)
 	for i, b := range [][]byte{checksum, noChecksum} {
 		b := b
 
 		sr := &seekableBufferReader{buf: b}
-		r, err := NewReader(sr)
+		r, err := NewReader(sr, dec)
 		assert.NoError(t, err)
-		defer r.Close()
 
 		for n := int64(-1); n <= int64(len(source)); n++ {
 			for m := int64(0); m <= int64(len(source)); m++ {
@@ -313,8 +320,10 @@ func (s *fakeReadEnvironment) ReadSkipFrame(skippableFrameOffset int64) ([]byte,
 
 func TestReadEnvironment(t *testing.T) {
 	t.Parallel()
+	dec, err := zstd.NewReader(nil)
+	assert.NoError(t, err)
 
-	r, err := NewReader(nil, WithREnvironment(&fakeReadEnvironment{}))
+	r, err := NewReader(nil, dec, WithREnvironment(&fakeReadEnvironment{}))
 	assert.NoError(t, err)
 
 	bytes1 := []byte("test")
@@ -333,6 +342,4 @@ func TestReadEnvironment(t *testing.T) {
 
 	_, err = r.Read(tmp)
 	assert.Equal(t, err, io.EOF)
-
-	assert.NoError(t, r.Close())
 }

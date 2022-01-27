@@ -5,8 +5,6 @@ import (
 	"io"
 	"sync"
 
-	"github.com/klauspost/compress/zstd"
-
 	"go.uber.org/multierr"
 )
 
@@ -38,7 +36,7 @@ func (w *writerEnvImpl) WriteSeekTable(p []byte) (n int, err error) {
 }
 
 type WriterImpl struct {
-	enc          *zstd.Encoder
+	enc          ZSTDEncoder
 	frameEntries []SeekTableEntry
 
 	o writerOptions
@@ -46,15 +44,20 @@ type WriterImpl struct {
 	once *sync.Once
 }
 
-type ZSTDWriter interface {
+type Writer interface {
 	io.WriteCloser
 }
 
-// NewWriter wraps the passed writer into with an indexer and ZSTD encoder.
-// Written data then can be randomly accessed through the NewReader's interface.
-func NewWriter(w io.Writer, opts ...WOption) (ZSTDWriter, error) {
+type ZSTDEncoder interface {
+	EncodeAll(src, dst []byte) []byte
+}
+
+// NewWriter wraps the passed io.Writer and Encoder into and indexed ZSTD stream.
+// Resulting stream then can be randomly accessed through the Reader and Decoder interfaces.
+func NewWriter(w io.Writer, encoder ZSTDEncoder, opts ...WOption) (Writer, error) {
 	sw := WriterImpl{
 		once: &sync.Once{},
+		enc:  encoder,
 	}
 
 	sw.o.setDefault()
@@ -71,11 +74,6 @@ func NewWriter(w io.Writer, opts ...WOption) (ZSTDWriter, error) {
 		}
 	}
 
-	var err error
-	sw.enc, err = zstd.NewWriter(nil, sw.o.zstdEOpts...)
-	if err != nil {
-		return nil, err
-	}
 	return &sw, nil
 }
 
