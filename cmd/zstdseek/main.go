@@ -18,6 +18,11 @@ import (
 	seekable "github.com/SaveTheRbtz/zstd-seekable-format-go"
 )
 
+type readCloser struct {
+	io.Reader
+	io.Closer
+}
+
 func main() {
 	var (
 		inputFlag, chunkingFlag, outputFlag string
@@ -27,7 +32,7 @@ func main() {
 
 	flag.StringVar(&inputFlag, "f", "", "input filename")
 	flag.StringVar(&outputFlag, "o", "", "output filename")
-	flag.StringVar(&chunkingFlag, "c", "16:64:1024", "min:avg:max chunking block size (in kb)")
+	flag.StringVar(&chunkingFlag, "c", "16:64:128", "min:avg:max chunking block size (in kb)")
 	flag.BoolVar(&verifyFlag, "t", false, "test reading after the write")
 	flag.IntVar(&qualityFlag, "q", 1, "compression quality (lower == faster)")
 	flag.BoolVar(&verboseFlag, "v", false, "be verbose")
@@ -55,14 +60,31 @@ func main() {
 		logger.Fatal("verify can't be used with stdout output")
 	}
 
-	var input *os.File
+	var input io.ReadCloser
 	if inputFlag == "-" {
 		input = os.Stdin
 	} else {
 		if input, err = os.Open(inputFlag); err != nil {
 			logger.Fatal("failed to open input", zap.Error(err))
 		}
-		defer input.Close()
+	}
+
+	expected := blake3.New()
+	origDone := make(chan struct{})
+	if verifyFlag {
+		pr, pw := io.Pipe()
+
+		tee := io.TeeReader(input, pw)
+		input = readCloser{tee, pw}
+
+		go func() {
+			defer close(origDone)
+
+			m, err := io.CopyBuffer(expected, pr, make([]byte, 128<<10))
+			if err != nil {
+				logger.Fatal("failed to compute expected csum", zap.Int64("proccessed", m), zap.Error(err))
+			}
+		}()
 	}
 
 	var output *os.File
@@ -110,7 +132,6 @@ func main() {
 		logger.Fatal("failed to create chunker", zap.Error(err))
 	}
 
-	expected := blake3.New()
 	for {
 		chunk, err := chunker.Next()
 		if err != nil {
@@ -119,17 +140,12 @@ func main() {
 			}
 			logger.Fatal("failed to read", zap.Error(err))
 		}
-		if verifyFlag {
-			m, err := expected.Write(chunk.Data)
-			if err != nil || m != chunk.Length {
-				logger.Fatal("failed to update checksum", zap.Error(err))
-			}
-		}
-		m, err := w.Write(chunk.Data)
-		if err != nil || m != chunk.Length {
+		_, err = w.Write(chunk.Data)
+		if err != nil {
 			logger.Fatal("failed to write data", zap.Error(err))
 		}
 	}
+	input.Close()
 	w.Close()
 
 	if verifyFlag {
@@ -149,21 +165,12 @@ func main() {
 			logger.Fatal("failed to create new seekable reader", zap.Error(err))
 		}
 
-		chunk := make([]byte, 4096)
 		actual := blake3.New()
-		for {
-			n, err := reader.Read(chunk)
-			if err != nil {
-				if errors.Is(err, io.EOF) {
-					break
-				}
-				logger.Fatal("failed to read", zap.Error(err))
-			}
-			m, err := actual.Write(chunk[:n])
-			if err != nil || m != n {
-				logger.Fatal("failed to update checksum", zap.Error(err))
-			}
+		m, err := io.CopyBuffer(actual, reader, make([]byte, 128<<10))
+		if err != nil {
+			logger.Fatal("failed to compute actual csum", zap.Int64("proccessed", m), zap.Error(err))
 		}
+		<-origDone
 
 		if !bytes.Equal(actual.Sum(nil), expected.Sum(nil)) {
 			logger.Fatal("checksum verification failed",
