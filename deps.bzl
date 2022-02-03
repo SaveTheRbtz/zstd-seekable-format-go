@@ -133,8 +133,8 @@ def go_dependencies():
         name = "com_github_zeebo_blake3",
         build_directives = ["gazelle:exclude **/**_test.go", "gazelle:exclude testing", "gazelle:exclude **/testdata"],
         importpath = "github.com/zeebo/blake3",
-        sum = "h1:O+N0Y8Re2XAYjp0adlZDA2juyRguhMfPCgh8YIf7vyE=",
-        version = "v0.2.1",
+        sum = "h1:ddH9fUIlef5r+pqvJShGgSXFd6c7k54eQXZ48hNjotQ=",
+        version = "v0.2.2",
     )
     go_repository(
         name = "com_github_zeebo_pcg",
