@@ -18,6 +18,10 @@ type Encoder interface {
 
 func NewEncoder(encoder ZSTDEncoder, opts ...WOption) (Encoder, error) {
 	sw, err := NewWriter(nil, encoder, opts...)
+	if err != nil {
+		return nil, err
+	}
+
 	return sw.(*WriterImpl), err
 }
 
