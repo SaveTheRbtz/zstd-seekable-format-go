@@ -385,6 +385,14 @@ func (s *ReaderImpl) indexFooter() (*btree.BTree, error) {
 }
 
 func (s *ReaderImpl) indexSeekTableEntries(p []byte, entrySize uint64) (*btree.BTree, error) {
+	if len(p) == 0 {
+		return nil, fmt.Errorf("seek table is empty")
+	}
+
+	if uint64(len(p))%entrySize != 0 {
+		return nil, fmt.Errorf("seek table size is not multiple of %d", entrySize)
+	}
+
 	// TODO: Rewrite btree using generics.
 	t := btree.New(16)
 	entry := SeekTableEntry{}
