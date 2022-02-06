@@ -26,6 +26,9 @@ func NewDecoder(seekTable []byte, decoder ZSTDDecoder, opts ...ROption) (Decoder
 	opts = append(opts, WithREnvironment(&decoderEnv{seekTable: seekTable}))
 
 	sr, err := NewReader(nil, decoder, opts...)
+	if err != nil {
+		return nil, err
+	}
 
 	// Release seekTable reference to not leak memory.
 	sr.(*ReaderImpl).o.env = nil
