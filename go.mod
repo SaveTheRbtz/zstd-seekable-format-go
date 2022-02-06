@@ -1,6 +1,6 @@
 module github.com/SaveTheRbtz/zstd-seekable-format-go
 
-go 1.17
+go 1.18
 
 require (
 	github.com/cespare/xxhash v1.1.0
