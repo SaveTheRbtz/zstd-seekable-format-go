@@ -73,6 +73,10 @@ func (s *seekableBufferReader) ReadAt(p []byte, off int64) (n int, err error) {
 		size = uint64(len(p))
 	}
 
+	if off > int64(len(s.buf)) {
+		return 0, io.EOF
+	}
+
 	copy(p, s.buf[off:uint64(off)+size])
 
 	return int(size), nil
@@ -82,6 +86,10 @@ func (s *seekableBufferReader) Read(p []byte) (n int, err error) {
 	size := int64(len(s.buf)) - s.offset
 	if size > int64(len(p)) {
 		size = int64(len(p))
+	}
+
+	if s.offset > int64(len(s.buf)) {
+		return 0, io.EOF
 	}
 
 	copy(p, s.buf[s.offset:s.offset+size])
