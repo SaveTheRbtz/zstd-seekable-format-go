@@ -281,6 +281,8 @@ func (s *ReaderImpl) Seek(offset int64, whence int) (int64, error) {
 		newOffset = offset
 	case io.SeekEnd:
 		newOffset = s.endOffset + offset
+	default:
+		return 0, fmt.Errorf("unknown whence: %d", whence)
 	}
 
 	if newOffset < 0 {

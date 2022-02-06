@@ -343,3 +343,17 @@ func TestReadEnvironment(t *testing.T) {
 	_, err = r.Read(tmp)
 	assert.Equal(t, err, io.EOF)
 }
+
+func TestSeek(t *testing.T) {
+	t.Parallel()
+
+	dec, err := zstd.NewReader(nil)
+	assert.NoError(t, err)
+
+	sr := &seekableBufferReader{buf: checksum}
+	r, err := NewReader(sr, dec)
+	assert.NoError(t, err)
+
+	_, err = r.Seek(0, 9999)
+	assert.Errorf(t, err, "unknown whence: %d", 9999)
+}
