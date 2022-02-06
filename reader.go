@@ -251,8 +251,7 @@ func (s *ReaderImpl) read(dst []byte, off int64) (int64, int, error) {
 	}
 
 	if len(decompressed) != int(index.DecompSize) {
-		panic(fmt.Sprintf("index corruption: len: %d, expected: %d",
-			len(decompressed), int(index.DecompSize)))
+		return 0, 0, fmt.Errorf("index corruption: len: %d, expected: %d", len(decompressed), int(index.DecompSize))
 	}
 
 	offsetWithinFrame := uint64(off) - index.DecompOffset
