@@ -5,6 +5,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"io"
+	"math/rand"
 	"testing"
 
 	"github.com/klauspost/compress/zstd"
@@ -118,31 +119,26 @@ func BenchmarkWrite(b *testing.B) {
 	enc, err := zstd.NewWriter(nil, zstd.WithEncoderLevel(zstd.SpeedFastest))
 	assert.NoError(b, err)
 
-	t := []struct {
-		input []byte
-	}{
-		{input: make([]byte, 128)},
-		{input: make([]byte, 4*1024)},
-		{input: make([]byte, 16*1024)},
-		{input: make([]byte, 64*1024)},
-		{input: make([]byte, 1*1024*1024)},
-	}
-	for _, data := range t {
-		writeBuf := data.input[:]
+	sizes := []int64{128, 4 * 1024, 16 * 1024, 64 * 1024, 1 * 1024 * 1024}
+	for _, sz := range sizes {
+		writeBuf := make([]byte, sz)
+		_, err := rand.Read(writeBuf)
+		assert.NoError(b, err)
 		var buf bytes.Buffer
 		bw := io.Writer(&buf)
 		w, err := NewWriter(bw, enc)
 		assert.NoError(b, err)
 
-		b.Run(fmt.Sprintf("%d", len(writeBuf)), func(b *testing.B) {
-			for i := 0; i < b.N; i++ {
-				_, err := w.Write(writeBuf)
-				assert.NoError(b, err)
-			}
+		b.Run(fmt.Sprintf("%d", sz), func(b *testing.B) {
+			b.SetBytes(sz)
+			b.ResetTimer()
+
 			// TODO: Limit memory consumption.
-			err = w.Close()
-			assert.NoError(b, err)
-			buf.Reset()
+			for i := 0; i < b.N; i++ {
+				_, _ = w.Write(writeBuf)
+			}
 		})
+		err = w.Close()
+		assert.NoError(b, err)
 	}
 }
