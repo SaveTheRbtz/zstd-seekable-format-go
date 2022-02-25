@@ -41,8 +41,8 @@ def go_dependencies():
         name = "com_github_klauspost_compress",
         build_directives = ["gazelle:exclude **/**_test.go", "gazelle:exclude testing", "gazelle:exclude **/testdata"],
         importpath = "github.com/klauspost/compress",
-        sum = "h1:S0OHlFk/Gbon/yauFJ4FfJJF5V0fc5HbBTJazi28pRw=",
-        version = "v1.14.2",
+        sum = "h1:DQv1WP+iS4srNjibdnHtqu8JNWCDMluj5NzPnFJsnvk=",
+        version = "v1.14.3",
     )
     go_repository(
         name = "com_github_kr_pretty",

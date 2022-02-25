@@ -5,7 +5,7 @@ go 1.17
 require (
 	github.com/cespare/xxhash v1.1.0
 	github.com/google/btree v1.0.1
-	github.com/klauspost/compress v1.14.2
+	github.com/klauspost/compress v1.14.3
 	github.com/reusee/fastcdc-go v0.2.1-0.20201121153712-1756352c2ae7
 	github.com/stretchr/testify v1.7.0
 	github.com/zeebo/blake3 v0.2.2
