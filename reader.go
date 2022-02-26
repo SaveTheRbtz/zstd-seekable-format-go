@@ -412,6 +412,7 @@ func (s *ReaderImpl) indexSeekTableEntries(p []byte, entrySize uint64) (*btree.B
 		i++
 	}
 
+	// TODO: empty file should be valid.
 	if last == nil {
 		return nil, nil, fmt.Errorf("seek index is empty")
 	}
