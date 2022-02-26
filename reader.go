@@ -161,16 +161,12 @@ func NewReader(rs io.ReadSeeker, decoder ZSTDDecoder, opts ...ROption) (Reader, 
 	}
 	sr.index = tree
 
-	var last *FrameOffsetEntry
-	sr.index.Descend(func(i btree.Item) bool {
-		last = i.(*FrameOffsetEntry)
-		return false
-	})
-	if last == nil {
+	if last, ok := sr.index.Max().(*FrameOffsetEntry); !ok && last != nil {
 		return nil, fmt.Errorf("seek index is empty")
+	} else {
+		sr.endOffset = int64(last.DecompOffset) + int64(last.DecompSize)
+		sr.numFrames = last.ID + 1
 	}
-	sr.endOffset = int64(last.DecompOffset) + int64(last.DecompSize)
-	sr.numFrames = last.ID + 1
 
 	return &sr, nil
 }
