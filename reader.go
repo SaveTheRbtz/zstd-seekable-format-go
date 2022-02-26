@@ -384,6 +384,7 @@ func (s *ReaderImpl) indexSeekTableEntries(p []byte, entrySize uint64) (*btree.B
 		return nil, nil, fmt.Errorf("seek table size is not multiple of %d", entrySize)
 	}
 
+	// TODO: make fan-out tunable?
 	t := btree.New(16)
 	entry := SeekTableEntry{}
 	var compOffset, decompOffset uint64
