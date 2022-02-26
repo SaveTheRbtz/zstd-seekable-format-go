@@ -155,18 +155,14 @@ func NewReader(rs io.ReadSeeker, decoder ZSTDDecoder, opts ...ROption) (Reader, 
 		}
 	}
 
-	tree, err := sr.indexFooter()
+	tree, last, err := sr.indexFooter()
 	if err != nil {
 		return nil, err
 	}
-	sr.index = tree
 
-	if last, ok := sr.index.Max().(*FrameOffsetEntry); !ok && last != nil {
-		return nil, fmt.Errorf("seek index is empty")
-	} else {
-		sr.endOffset = int64(last.DecompOffset) + int64(last.DecompSize)
-		sr.numFrames = last.ID + 1
-	}
+	sr.index = tree
+	sr.endOffset = int64(last.DecompOffset) + int64(last.DecompSize)
+	sr.numFrames = last.ID + 1
 
 	return &sr, nil
 }
@@ -323,21 +319,21 @@ func (o *FrameOffsetEntry) Less(than btree.Item) bool {
 	return o.DecompOffset < than.(*FrameOffsetEntry).DecompOffset
 }
 
-func (s *ReaderImpl) indexFooter() (*btree.BTree, error) {
+func (s *ReaderImpl) indexFooter() (*btree.BTree, *FrameOffsetEntry, error) {
 	// read SeekTableFooter
 	buf, err := s.o.env.ReadFooter()
 	if err != nil {
-		return nil, fmt.Errorf("failed to read footer: %w", err)
+		return nil, nil, fmt.Errorf("failed to read footer: %w", err)
 	}
 	if len(buf) < seekTableFooterOffset {
-		return nil, fmt.Errorf("footer is too small: %d", len(buf))
+		return nil, nil, fmt.Errorf("footer is too small: %d", len(buf))
 	}
 
 	// parse SeekTableFooter
 	footer := SeekTableFooter{}
 	err = footer.UnmarshalBinary(buf[len(buf)-seekTableFooterOffset:])
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse footer %+v: %w", buf, err)
+		return nil, nil, fmt.Errorf("failed to parse footer %+v: %w", buf, err)
 	}
 	s.o.logger.Debug("loaded", zap.Object("footer", &footer))
 
@@ -355,38 +351,37 @@ func (s *ReaderImpl) indexFooter() (*btree.BTree, error) {
 
 	buf, err = s.o.env.ReadSkipFrame(skippableFrameOffset)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read footer: %w", err)
+		return nil, nil, fmt.Errorf("failed to read footer: %w", err)
 	}
 
 	if len(buf) <= frameSizeFieldSize+skippableMagicNumberFieldSize+seekTableFooterOffset {
-		return nil, fmt.Errorf("skip frame is too small: %d", len(buf))
+		return nil, nil, fmt.Errorf("skip frame is too small: %d", len(buf))
 	}
 
 	// parse SeekTableEntries
 	magic := binary.LittleEndian.Uint32(buf[0:4])
 	if magic != SkippableFrameMagic+seekableTag {
-		return nil, fmt.Errorf("skippable frame magic mismatch %d vs %d",
+		return nil, nil, fmt.Errorf("skippable frame magic mismatch %d vs %d",
 			magic, SkippableFrameMagic+seekableTag)
 	}
 
 	expectedFrameSize := int64(len(buf)) - frameSizeFieldSize - skippableMagicNumberFieldSize
 	frameSize := int64(binary.LittleEndian.Uint32(buf[4:8]))
 	if frameSize != expectedFrameSize {
-		return nil, fmt.Errorf("skippable frame size mismatch: expected: %d, actual: %d",
+		return nil, nil, fmt.Errorf("skippable frame size mismatch: expected: %d, actual: %d",
 			expectedFrameSize, frameSize)
 	}
 
-	t, err := s.indexSeekTableEntries(buf[8:len(buf)-seekTableFooterOffset], uint64(seekTableEntrySize))
-	return t, err
+	return s.indexSeekTableEntries(buf[8:len(buf)-seekTableFooterOffset], uint64(seekTableEntrySize))
 }
 
-func (s *ReaderImpl) indexSeekTableEntries(p []byte, entrySize uint64) (*btree.BTree, error) {
+func (s *ReaderImpl) indexSeekTableEntries(p []byte, entrySize uint64) (*btree.BTree, *FrameOffsetEntry, error) {
 	if len(p) == 0 {
-		return nil, fmt.Errorf("seek table is empty")
+		return nil, nil, fmt.Errorf("seek table is empty")
 	}
 
 	if uint64(len(p))%entrySize != 0 {
-		return nil, fmt.Errorf("seek table size is not multiple of %d", entrySize)
+		return nil, nil, fmt.Errorf("seek table size is not multiple of %d", entrySize)
 	}
 
 	// TODO: Rewrite btree using generics.
@@ -394,26 +389,32 @@ func (s *ReaderImpl) indexSeekTableEntries(p []byte, entrySize uint64) (*btree.B
 	entry := SeekTableEntry{}
 	var compOffset, decompOffset uint64
 
+	var last *FrameOffsetEntry
 	var i int64
 	for indexOffset := uint64(0); indexOffset < uint64(len(p)); indexOffset += entrySize {
 		err := entry.UnmarshalBinary(p[indexOffset : indexOffset+entrySize])
 		if err != nil {
-			return nil, fmt.Errorf("failed to parse entry %+v at: %d: %w",
+			return nil, nil, fmt.Errorf("failed to parse entry %+v at: %d: %w",
 				p[indexOffset:indexOffset+entrySize], indexOffset, err)
 		}
 
-		t.ReplaceOrInsert(&FrameOffsetEntry{
+		last = &FrameOffsetEntry{
 			ID:           i,
 			CompOffset:   compOffset,
 			DecompOffset: decompOffset,
 			CompSize:     entry.CompressedSize,
 			DecompSize:   entry.DecompressedSize,
 			Checksum:     entry.Checksum,
-		})
+		}
+		t.ReplaceOrInsert(last)
 		compOffset += uint64(entry.CompressedSize)
 		decompOffset += uint64(entry.DecompressedSize)
 		i++
 	}
 
-	return t, nil
+	if last == nil {
+		return nil, nil, fmt.Errorf("seek index is empty")
+	}
+
+	return t, last, nil
 }
