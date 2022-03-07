@@ -9,7 +9,7 @@ require (
 	github.com/reusee/fastcdc-go v0.2.1-0.20201121153712-1756352c2ae7
 	github.com/stretchr/testify v1.7.0
 	github.com/zeebo/blake3 v0.2.2
-	go.uber.org/multierr v1.7.0
+	go.uber.org/multierr v1.8.0
 	go.uber.org/zap v1.21.0
 )
 
