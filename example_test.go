@@ -30,7 +30,7 @@ func Example() {
 	}
 
 	// Write data in chunks.
-	for _, b := range [][]byte{[]byte("Hello"), []byte(" World!")} {
+	for _, b := range [][]byte{[]byte("Hello"), []byte(" "), []byte("World!")} {
 		_, err = w.Write(b)
 		if err != nil {
 			log.Fatal(err)
