@@ -45,6 +45,9 @@ const (
 	frameSizeFieldSize            = 4
 	skippableMagicNumberFieldSize = 4
 
+	// maxFrameSize is the maximum framesize supported by decoder.  This is to prevent OOMs due to untrusted input.
+	maxDecoderFrameSize = 128 << 20
+
 	seekableTag = 0xE
 )
 

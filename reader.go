@@ -222,6 +222,11 @@ func (s *ReaderImpl) read(dst []byte, off int64) (int64, int, error) {
 		decompressed = cachedData
 	} else {
 		// slowpath
+		if index.CompSize > maxDecoderFrameSize {
+			return 0, 0, fmt.Errorf("index.CompSize is too big: %d > %d",
+				index.CompSize, maxDecoderFrameSize)
+		}
+
 		src, err := s.o.env.GetFrameByIndex(*index)
 		if err != nil {
 			return 0, 0, fmt.Errorf("failed to read compressed data at: %d, %w", index.CompOffset, err)
@@ -354,6 +359,11 @@ func (s *ReaderImpl) indexFooter() (*btree.BTree, *FrameOffsetEntry, error) {
 	skippableFrameOffset += frameSizeFieldSize
 	skippableFrameOffset += skippableMagicNumberFieldSize
 
+	if skippableFrameOffset > maxDecoderFrameSize {
+		return nil, nil, fmt.Errorf("frame offset is too big: %d > %d",
+			skippableFrameOffset, maxDecoderFrameSize)
+	}
+
 	buf, err = s.o.env.ReadSkipFrame(skippableFrameOffset)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to read footer: %w", err)
@@ -375,6 +385,10 @@ func (s *ReaderImpl) indexFooter() (*btree.BTree, *FrameOffsetEntry, error) {
 	if frameSize != expectedFrameSize {
 		return nil, nil, fmt.Errorf("skippable frame size mismatch: expected: %d, actual: %d",
 			expectedFrameSize, frameSize)
+	}
+
+	if frameSize > maxDecoderFrameSize {
+		return nil, nil, fmt.Errorf("frame is too big: %d > %d", frameSize, maxDecoderFrameSize)
 	}
 
 	return s.indexSeekTableEntries(buf[8:len(buf)-seekTableFooterOffset], uint64(seekTableEntrySize))
