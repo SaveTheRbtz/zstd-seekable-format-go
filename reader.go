@@ -161,8 +161,13 @@ func NewReader(rs io.ReadSeeker, decoder ZSTDDecoder, opts ...ROption) (Reader, 
 	}
 
 	sr.index = tree
-	sr.endOffset = int64(last.DecompOffset) + int64(last.DecompSize)
-	sr.numFrames = last.ID + 1
+	if last != nil {
+		sr.endOffset = int64(last.DecompOffset) + int64(last.DecompSize)
+		sr.numFrames = last.ID + 1
+	} else {
+		sr.endOffset = 0
+		sr.numFrames = 0
+	}
 
 	return &sr, nil
 }
@@ -354,7 +359,7 @@ func (s *ReaderImpl) indexFooter() (*btree.BTree, *FrameOffsetEntry, error) {
 		return nil, nil, fmt.Errorf("failed to read footer: %w", err)
 	}
 
-	if len(buf) <= frameSizeFieldSize+skippableMagicNumberFieldSize+seekTableFooterOffset {
+	if len(buf) < frameSizeFieldSize+skippableMagicNumberFieldSize+seekTableFooterOffset {
 		return nil, nil, fmt.Errorf("skip frame is too small: %d", len(buf))
 	}
 
@@ -376,10 +381,6 @@ func (s *ReaderImpl) indexFooter() (*btree.BTree, *FrameOffsetEntry, error) {
 }
 
 func (s *ReaderImpl) indexSeekTableEntries(p []byte, entrySize uint64) (*btree.BTree, *FrameOffsetEntry, error) {
-	if len(p) == 0 {
-		return nil, nil, fmt.Errorf("seek table is empty")
-	}
-
 	if uint64(len(p))%entrySize != 0 {
 		return nil, nil, fmt.Errorf("seek table size is not multiple of %d", entrySize)
 	}
@@ -410,11 +411,6 @@ func (s *ReaderImpl) indexSeekTableEntries(p []byte, entrySize uint64) (*btree.B
 		compOffset += uint64(entry.CompressedSize)
 		decompOffset += uint64(entry.DecompressedSize)
 		i++
-	}
-
-	// TODO: empty file should be valid.
-	if last == nil {
-		return nil, nil, fmt.Errorf("seek index is empty")
 	}
 
 	return t, last, nil

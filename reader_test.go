@@ -1,6 +1,7 @@
 package seekable
 
 import (
+	"bytes"
 	"fmt"
 	"io"
 	"strconv"
@@ -364,4 +365,48 @@ func TestSeek(t *testing.T) {
 
 	_, err = r.Seek(0, 9999)
 	assert.Errorf(t, err, "unknown whence: %d", 9999)
+}
+
+func TestEmptyWriteRead(t *testing.T) {
+	t.Parallel()
+
+	enc, err := zstd.NewWriter(nil, zstd.WithEncoderLevel(zstd.SpeedFastest))
+	assert.NoError(t, err)
+
+	var b bytes.Buffer
+	bw := io.Writer(&b)
+	w, err := NewWriter(bw, enc)
+	assert.NoError(t, err)
+
+	bytes1 := []byte("")
+	bytesWritten1, err := w.Write(bytes1)
+	assert.NoError(t, err)
+	assert.Equal(t, 0, bytesWritten1)
+
+	err = w.Close()
+	assert.NoError(t, err)
+
+	dec1, err := zstd.NewReader(nil)
+	assert.NoError(t, err)
+
+	// test seekable decompression
+	compressed := b.Bytes()
+
+	sr := &seekableBufferReader{buf: compressed}
+	r, err := NewReader(sr, dec1)
+	assert.NoError(t, err)
+
+	tmp1 := make([]byte, 1)
+	n, err := r.Read(tmp1)
+	assert.Equal(t, err, io.EOF)
+	assert.Equal(t, 0, n)
+
+	// test native decompression
+	dec2, err := zstd.NewReader(bytes.NewReader(compressed))
+	assert.NoError(t, err)
+
+	tmp2 := make([]byte, 1)
+	n, err = dec2.Read(tmp2)
+	assert.Equal(t, err, io.EOF)
+	assert.Equal(t, 0, n)
 }
