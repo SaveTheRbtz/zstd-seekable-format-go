@@ -218,10 +218,10 @@ func TestReaderEdges(t *testing.T) {
 	}
 }
 
-// TestReadeAt verified the following ReaderAt asssumption:
+// TestReaderAt verified the following ReaderAt asssumption:
 // 	When ReadAt returns n < len(p), it returns a non-nil error explaining why more bytes were not returned.
 // 	In this respect, ReadAt is stricter than Read.
-func TestReadeAt(t *testing.T) {
+func TestReaderAt(t *testing.T) {
 	t.Parallel()
 
 	dec, err := zstd.NewReader(nil)
