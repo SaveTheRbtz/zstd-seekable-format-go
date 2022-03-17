@@ -31,11 +31,7 @@ func FuzzReader(f *testing.F) {
 			return
 		}
 
-		if l > 1<<6 {
-			l = 1 << 6
-		}
 		buf1 := make([]byte, l)
-
 		n, err := r.Read(buf1)
 		if err != nil && err != io.EOF {
 			return
@@ -69,11 +65,7 @@ func FuzzReaderConst(f *testing.F) {
 			return
 		}
 
-		if l > 1<<6 {
-			l = 1 << 6
-		}
 		buf1 := make([]byte, l)
-
 		n, err := r.Read(buf1)
 		if err != nil && err != io.EOF {
 			return
