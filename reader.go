@@ -182,7 +182,7 @@ func (s *ReaderImpl) ReadAt(p []byte, off int64) (n int, err error) {
 	return
 }
 
-// Read implements io.Reader interface to randomly access data.
+// Read implements io.Reader interface to sequentially access data.
 // This method is NOT goroutine-safe and CAN NOT be called
 // concurrently since it modifies the underlying offset.
 func (s *ReaderImpl) Read(p []byte) (n int, err error) {
