@@ -45,6 +45,14 @@ def go_dependencies():
         version = "v1.15.1",
     )
     go_repository(
+        name = "com_github_klauspost_cpuid_v2",
+        build_directives = ["gazelle:exclude **/**_test.go", "gazelle:exclude testing", "gazelle:exclude **/testdata"],
+        importpath = "github.com/klauspost/cpuid/v2",
+        sum = "h1:p9dKCg8i4gmOxtv35DvrYoWqYzQrvEVdjQ762Y0OqZE=",
+        version = "v2.0.12",
+    )
+
+    go_repository(
         name = "com_github_kr_pretty",
         build_directives = ["gazelle:exclude **/**_test.go", "gazelle:exclude testing", "gazelle:exclude **/testdata"],
         importpath = "github.com/kr/pretty",
@@ -133,8 +141,8 @@ def go_dependencies():
         name = "com_github_zeebo_blake3",
         build_directives = ["gazelle:exclude **/**_test.go", "gazelle:exclude testing", "gazelle:exclude **/testdata"],
         importpath = "github.com/zeebo/blake3",
-        sum = "h1:ddH9fUIlef5r+pqvJShGgSXFd6c7k54eQXZ48hNjotQ=",
-        version = "v0.2.2",
+        sum = "h1:TFoLXsjeXqRNFxSbk35Dk4YtszE/MQQGK10BH4ptoTg=",
+        version = "v0.2.3",
     )
     go_repository(
         name = "com_github_zeebo_pcg",
@@ -203,8 +211,8 @@ def go_dependencies():
         name = "org_golang_x_sys",
         build_directives = ["gazelle:exclude **/**_test.go", "gazelle:exclude testing", "gazelle:exclude **/testdata"],
         importpath = "golang.org/x/sys",
-        sum = "h1:XfKQ4OlFl8okEOr5UvAqFRVj8pY/4yfcXrddB8qAbU0=",
-        version = "v0.0.0-20220114195835-da31bd327af9",
+        sum = "h1:gG67DSER+11cZvqIMb8S8bt0vZtiN6xWYARwirrOSfE=",
+        version = "v0.0.0-20210510120138-977fb7262007",
     )
     go_repository(
         name = "org_golang_x_term",
