@@ -50,6 +50,7 @@ dec, err := zstd.NewReader(nil)
 if err != nil {
 	log.Fatal(err)
 }
+defer dec.Close()
 
 r, err := seekable.NewReader(f, dec)
 if err != nil {
@@ -85,6 +86,7 @@ dec, err := zstd.NewReader(f)
 if err != nil {
 	log.Fatal(err)
 }
+defer dec.Close()
 
 all, err := io.ReadAll(dec)
 if err != nil {

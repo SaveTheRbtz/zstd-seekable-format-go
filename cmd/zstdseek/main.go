@@ -159,6 +159,7 @@ func main() {
 		if err != nil {
 			logger.Fatal("failed to create zstd decompressor", zap.Error(err))
 		}
+		defer dec.Close()
 
 		reader, err := seekable.NewReader(verify, dec, seekable.WithRLogger(logger))
 		if err != nil {
