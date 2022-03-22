@@ -410,3 +410,63 @@ func TestEmptyWriteRead(t *testing.T) {
 	assert.Equal(t, err, io.EOF)
 	assert.Equal(t, 0, n)
 }
+
+func TestSeekTableParsing(t *testing.T) {
+	var err error
+	var stf SeekTableFooter
+
+	t.Parallel()
+
+	// Checksum.
+	err = stf.UnmarshalBinary([]byte{
+		0x00, 0x00, 0x00, 0x00,
+		1 << 7,
+		0xb1, 0xea, 0x92, 0x8f,
+	})
+	assert.NoError(t, err)
+
+	// No checksum.
+	err = stf.UnmarshalBinary([]byte{
+		0x00, 0x00, 0x00, 0x00,
+		0x00,
+		0xb1, 0xea, 0x92, 0x8f,
+	})
+	assert.NoError(t, err)
+
+	// Unused bits.
+	assert.NoError(t, err)
+	err = stf.UnmarshalBinary([]byte{
+		0x00, 0x00, 0x00, 0x00,
+		(1 << 7) + 0x01 + 0x2,
+		0xb1, 0xea, 0x92, 0x8f,
+	})
+	assert.NoError(t, err)
+
+	// Reserved bits.
+	err = stf.UnmarshalBinary([]byte{
+		0x00, 0x00, 0x00, 0x00,
+		0x84,
+		0xb1, 0xea, 0x92, 0x8f,
+	})
+	assert.ErrorContains(t, err, "footer reserved bits")
+	err = stf.UnmarshalBinary([]byte{
+		0x00, 0x00, 0x00, 0x00,
+		0x80 + 0x40,
+		0xb1, 0xea, 0x92, 0x8f,
+	})
+	assert.ErrorContains(t, err, "footer reserved bits")
+
+	// Size.
+	err = stf.UnmarshalBinary([]byte{
+		0xb1, 0xea, 0x92, 0x8f,
+	})
+	assert.ErrorContains(t, err, "footer length mismatch")
+
+	// Magic.
+	err = stf.UnmarshalBinary([]byte{
+		0x00, 0x00, 0x00, 0x00,
+		0x80,
+		0xea, 0x92, 0x8f, 0xb1,
+	})
+	assert.ErrorContains(t, err, "footer magic mismatch")
+}

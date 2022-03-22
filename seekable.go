@@ -64,6 +64,12 @@ A bitfield describing the format of the seek table.
 
 While only `Checksum_Flag` currently exists, there are 7 other bits in this field that can be used for future changes to the format,
 for example the addition of inline dictionaries.
+
+`Reserved_Bits` are not currently used but may be used in the future for breaking changes,
+so a compliant decoder should ensure they are set to 0.
+
+`Unused_Bits` may be used in the future for non-breaking changes,
+so a compliant decoder should not interpret these bits.
 */
 type SeekTableDescriptor struct {
 	// If the checksum flag is set, each of the seek table entries contains a 4 byte checksum
@@ -122,6 +128,11 @@ func (f *SeekTableFooter) MarshalLogObject(enc zapcore.ObjectEncoder) error {
 func (f *SeekTableFooter) UnmarshalBinary(p []byte) error {
 	if len(p) != seekTableFooterOffset {
 		return fmt.Errorf("footer length mismatch %d vs %d", len(p), seekTableFooterOffset)
+	}
+	// Check that reserved bits are set to 0.
+	var reservedBits uint8 = (p[4] << 1) >> 3
+	if reservedBits != 0 {
+		return fmt.Errorf("footer reserved bits %d != 0", reservedBits)
 	}
 	f.NumberOfFrames = binary.LittleEndian.Uint32(p[0:])
 	f.SeekTableDescriptor.ChecksumFlag = (p[4] & (1 << 7)) > 0
