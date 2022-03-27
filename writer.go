@@ -8,7 +8,7 @@ import (
 	"go.uber.org/multierr"
 )
 
-// Environment can be used to inject a custom file reader that is different from normal ReadSeeker.
+// WEnvironment can be used to inject a custom file writer that is different from normal WriteCloser.
 // This is useful when, for example there is a custom chunking code.
 type WEnvironment interface {
 	// WriteFrame is called each time frame is encoded and needs to be written upstream.
@@ -17,7 +17,7 @@ type WEnvironment interface {
 	WriteSeekTable(p []byte) (n int, err error)
 }
 
-// writerEnvImpl is the environment implementation of for the underlying ReadSeeker.
+// writerEnvImpl is the environment implementation of for the underlying WriteCloser.
 type writerEnvImpl struct {
 	w io.Writer
 }
