@@ -22,10 +22,10 @@ func NewEncoder(encoder ZSTDEncoder, opts ...WOption) (Encoder, error) {
 		return nil, err
 	}
 
-	return sw.(*WriterImpl), err
+	return sw.(*writerImpl), err
 }
 
-func (s *WriterImpl) Encode(src []byte) ([]byte, error) {
+func (s *writerImpl) Encode(src []byte) ([]byte, error) {
 	if len(src) > math.MaxUint32 {
 		return nil, fmt.Errorf("chunk size too big for seekable format: %d > %d",
 			len(src), math.MaxUint32)
@@ -54,7 +54,7 @@ func (s *WriterImpl) Encode(src []byte) ([]byte, error) {
 	return dst, nil
 }
 
-func (s *WriterImpl) EndStream() ([]byte, error) {
+func (s *writerImpl) EndStream() ([]byte, error) {
 	seekTable := make([]byte, len(s.frameEntries)*12+9)
 	for i, e := range s.frameEntries {
 		e.marshalBinaryInline(seekTable[i*12 : (i+1)*12])

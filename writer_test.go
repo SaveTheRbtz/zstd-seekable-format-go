@@ -31,7 +31,7 @@ func TestWriter(t *testing.T) {
 	assert.NoError(t, err)
 
 	// test internals
-	sw := w.(*WriterImpl)
+	sw := w.(*writerImpl)
 	assert.Equal(t, 2, len(sw.frameEntries))
 	assert.Equal(t, uint32(len(bytes1)), sw.frameEntries[0].DecompressedSize)
 	assert.Equal(t, bytesWritten1, len(bytes1))

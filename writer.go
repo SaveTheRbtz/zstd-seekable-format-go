@@ -30,7 +30,7 @@ func (w *writerEnvImpl) WriteSeekTable(p []byte) (n int, err error) {
 	return w.w.Write(p)
 }
 
-type WriterImpl struct {
+type writerImpl struct {
 	enc          ZSTDEncoder
 	frameEntries []SeekTableEntry
 
@@ -39,7 +39,7 @@ type WriterImpl struct {
 	once *sync.Once
 }
 
-var _ io.WriteCloser = (*WriterImpl)(nil)
+var _ io.WriteCloser = (*writerImpl)(nil)
 
 type Writer interface {
 	io.WriteCloser
@@ -52,7 +52,7 @@ type ZSTDEncoder interface {
 // NewWriter wraps the passed io.Writer and Encoder into and indexed ZSTD stream.
 // Resulting stream then can be randomly accessed through the Reader and Decoder interfaces.
 func NewWriter(w io.Writer, encoder ZSTDEncoder, opts ...WOption) (Writer, error) {
-	sw := WriterImpl{
+	sw := writerImpl{
 		once: &sync.Once{},
 		enc:  encoder,
 	}
@@ -78,7 +78,7 @@ func NewWriter(w io.Writer, encoder ZSTDEncoder, opts ...WOption) (Writer, error
 //
 // Note that Write does not do any coalescing nor splitting of data,
 // so each write will map to a separate ZSTD Frame.
-func (s *WriterImpl) Write(src []byte) (int, error) {
+func (s *writerImpl) Write(src []byte) (int, error) {
 	dst, err := s.Encode(src)
 	if err != nil {
 		return 0, err
@@ -99,14 +99,14 @@ func (s *WriterImpl) Write(src []byte) (int, error) {
 // and releases occupied memory.
 //
 // Caller is still responsible to Close the underlying writer.
-func (s *WriterImpl) Close() (err error) {
+func (s *writerImpl) Close() (err error) {
 	s.once.Do(func() {
 		err = multierr.Append(err, s.writeSeekTable())
 	})
 	return
 }
 
-func (s *WriterImpl) writeSeekTable() error {
+func (s *writerImpl) writeSeekTable() error {
 	seekTableBytes, err := s.EndStream()
 	if err != nil {
 		return err
