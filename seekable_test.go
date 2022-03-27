@@ -1,4 +1,4 @@
-package seekable_test
+package seekable
 
 import (
 	"fmt"
@@ -7,8 +7,6 @@ import (
 
 	"github.com/klauspost/compress/zstd"
 	"github.com/stretchr/testify/assert"
-
-	seekable "github.com/SaveTheRbtz/zstd-seekable-format-go"
 )
 
 type bytesErr struct {
@@ -45,7 +43,7 @@ func TestCreateSkippableFrame(t *testing.T) {
 		tab := tab
 		t.Run(strconv.Itoa(i), func(t *testing.T) {
 			t.Parallel()
-			actualBytes, err := seekable.CreateSkippableFrame(tab.tag, tab.input)
+			actualBytes, err := createSkippableFrame(tab.tag, tab.input)
 			assert.Equal(t, tab.expectedErr, err, "createSkippableFrame err does not match expected")
 			if tab.expectedErr == nil && err == nil {
 				assert.Equal(t, tab.expectedBytes, actualBytes, "createSkippableFrame output does not match expected")

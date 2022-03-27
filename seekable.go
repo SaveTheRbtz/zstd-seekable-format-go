@@ -196,7 +196,7 @@ func (e *seekTableEntry) UnmarshalBinary(p []byte) error {
 }
 
 /*
-CreateSkippableFrame returns a payload formatted as a ZSDT skippable frame.
+createSkippableFrame returns a payload formatted as a ZSDT skippable frame.
 
 	| `Magic_Number` | `Frame_Size` | `User_Data` |
 	|:--------------:|:------------:|:-----------:|
@@ -225,7 +225,7 @@ The `User_Data` can be anything. Data will just be skipped by the decoder.
 
 https://github.com/facebook/zstd/blob/dev/doc/zstd_compression_format.md#skippable-frames
 */
-func CreateSkippableFrame(tag uint32, payload []byte) ([]byte, error) {
+func createSkippableFrame(tag uint32, payload []byte) ([]byte, error) {
 	if len(payload) == 0 {
 		return nil, nil
 	}

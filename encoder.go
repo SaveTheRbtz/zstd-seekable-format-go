@@ -74,5 +74,5 @@ func (s *writerImpl) EndStream() ([]byte, error) {
 	}
 
 	footer.marshalBinaryInline(seekTable[len(s.frameEntries)*12 : len(s.frameEntries)*12+9])
-	return CreateSkippableFrame(seekableTag, seekTable)
+	return createSkippableFrame(seekableTag, seekTable)
 }
