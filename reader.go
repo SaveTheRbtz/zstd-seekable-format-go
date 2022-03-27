@@ -132,6 +132,7 @@ type Reader interface {
 	io.ReaderAt
 }
 
+// ZSTDDecoder is the decompressor.  Tested with github.com/klauspost/compress/zstd.
 type ZSTDDecoder interface {
 	DecodeAll(input, dst []byte) ([]byte, error)
 }
