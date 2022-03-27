@@ -67,7 +67,7 @@ func (s *writerImpl) EndStream() ([]byte, error) {
 
 	footer := seekTableFooter{
 		NumberOfFrames: uint32(len(s.frameEntries)),
-		SeekTableDescriptor: SeekTableDescriptor{
+		SeekTableDescriptor: seekTableDescriptor{
 			ChecksumFlag: true,
 		},
 		SeekableMagicNumber: seekableMagicNumber,

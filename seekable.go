@@ -71,13 +71,13 @@ so a compliant decoder should ensure they are set to 0.
 `Unused_Bits` may be used in the future for non-breaking changes,
 so a compliant decoder should not interpret these bits.
 */
-type SeekTableDescriptor struct {
+type seekTableDescriptor struct {
 	// If the checksum flag is set, each of the seek table entries contains a 4 byte checksum
 	// of the uncompressed data contained in its frame.
 	ChecksumFlag bool
 }
 
-func (d *SeekTableDescriptor) MarshalLogObject(enc zapcore.ObjectEncoder) error {
+func (d *seekTableDescriptor) MarshalLogObject(enc zapcore.ObjectEncoder) error {
 	enc.AddBool("ChecksumFlag", d.ChecksumFlag)
 	return nil
 }
@@ -97,7 +97,7 @@ type seekTableFooter struct {
 	// The number of stored frames in the data.
 	NumberOfFrames uint32
 	// A bitfield describing the format of the seek table.
-	SeekTableDescriptor SeekTableDescriptor
+	SeekTableDescriptor seekTableDescriptor
 	// Value : 0x8F92EAB1.
 	SeekableMagicNumber uint32
 }
