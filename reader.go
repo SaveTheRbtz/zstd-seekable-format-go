@@ -121,12 +121,25 @@ type readerImpl struct {
 }
 
 var (
-	_ io.ReadSeeker = (*readerImpl)(nil)
-	_ io.ReaderAt   = (*readerImpl)(nil)
+	_ io.Seeker   = (*readerImpl)(nil)
+	_ io.Reader   = (*readerImpl)(nil)
+	_ io.ReaderAt = (*readerImpl)(nil)
 )
 
 type Reader interface {
-	io.ReadSeeker
+	// Seek implements io.Seeker interface to randomly access data.
+	// This method is NOT goroutine-safe and CAN NOT be called
+	// concurrently since it modifies the underlying offset.
+	io.Seeker
+
+	// Read implements io.Reader interface to sequentially access data.
+	// This method is NOT goroutine-safe and CAN NOT be called
+	// concurrently since it modifies the underlying offset.
+	io.Reader
+
+	// ReadAt implements io.ReaderAt interface to randomly access data.
+	// This method is goroutine-safe and can be called concurrently ONLY if
+	// the underlying reader supports io.ReaderAt interface.
 	io.ReaderAt
 }
 
@@ -172,9 +185,6 @@ func NewReader(rs io.ReadSeeker, decoder ZSTDDecoder, opts ...ROption) (Reader, 
 	return &sr, nil
 }
 
-// ReadAt implements io.ReaderAt interface to randomly access data.
-// This method is goroutine-safe and can be called concurrently ONLY if
-// the underlying reader supports io.ReaderAt interface.
 func (r *readerImpl) ReadAt(p []byte, off int64) (n int, err error) {
 	for m := 0; n < len(p) && err == nil; n += m {
 		_, m, err = r.read(p[n:], off+int64(n))
@@ -182,9 +192,6 @@ func (r *readerImpl) ReadAt(p []byte, off int64) (n int, err error) {
 	return
 }
 
-// Read implements io.Reader interface to sequentially access data.
-// This method is NOT goroutine-safe and CAN NOT be called
-// concurrently since it modifies the underlying offset.
 func (r *readerImpl) Read(p []byte) (n int, err error) {
 	offset, n, err := r.read(p, r.offset)
 	if err != nil {
@@ -270,9 +277,6 @@ func (r *readerImpl) read(dst []byte, off int64) (int64, int, error) {
 	return off + int64(size), int(size), nil
 }
 
-// Seek implements io.Seeker interface to randomly access data.
-// This method is NOT goroutine-safe and CAN NOT be called
-// concurrently since it modifies the underlying offset.
 func (r *readerImpl) Seek(offset int64, whence int) (int64, error) {
 	newOffset := r.offset
 	switch whence {
