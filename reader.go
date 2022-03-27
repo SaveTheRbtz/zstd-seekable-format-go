@@ -103,7 +103,7 @@ func (rs *readSeekerEnvImpl) ReadSkipFrame(skippableFrameOffset int64) ([]byte, 
 	return buf, nil
 }
 
-type ReaderImpl struct {
+type readerImpl struct {
 	dec   ZSTDDecoder
 	index *btree.BTree
 
@@ -121,9 +121,10 @@ type ReaderImpl struct {
 }
 
 var (
-	_ io.ReadSeeker = (*ReaderImpl)(nil)
-	_ io.ReaderAt   = (*ReaderImpl)(nil)
+	_ io.ReadSeeker = (*readerImpl)(nil)
+	_ io.ReaderAt   = (*readerImpl)(nil)
 )
+
 type Reader interface {
 	io.ReadSeeker
 	io.ReaderAt
@@ -136,7 +137,7 @@ type ZSTDDecoder interface {
 // NewReader returns ZSTD stream reader that can be randomly accessed using uncompressed data offset.
 // Ideally, passed io.ReadSeeker should implement io.ReaderAt interface.
 func NewReader(rs io.ReadSeeker, decoder ZSTDDecoder, opts ...ROption) (Reader, error) {
-	sr := ReaderImpl{
+	sr := readerImpl{
 		dec: decoder,
 	}
 
@@ -174,9 +175,9 @@ func NewReader(rs io.ReadSeeker, decoder ZSTDDecoder, opts ...ROption) (Reader, 
 // ReadAt implements io.ReaderAt interface to randomly access data.
 // This method is goroutine-safe and can be called concurrently ONLY if
 // the underlying reader supports io.ReaderAt interface.
-func (s *ReaderImpl) ReadAt(p []byte, off int64) (n int, err error) {
+func (r *readerImpl) ReadAt(p []byte, off int64) (n int, err error) {
 	for m := 0; n < len(p) && err == nil; n += m {
-		_, m, err = s.read(p[n:], off+int64(n))
+		_, m, err = r.read(p[n:], off+int64(n))
 	}
 	return
 }
@@ -184,27 +185,27 @@ func (s *ReaderImpl) ReadAt(p []byte, off int64) (n int, err error) {
 // Read implements io.Reader interface to sequentially access data.
 // This method is NOT goroutine-safe and CAN NOT be called
 // concurrently since it modifies the underlying offset.
-func (s *ReaderImpl) Read(p []byte) (n int, err error) {
-	offset, n, err := s.read(p, s.offset)
+func (r *readerImpl) Read(p []byte) (n int, err error) {
+	offset, n, err := r.read(p, r.offset)
 	if err != nil {
 		if errors.Is(err, io.EOF) {
-			s.offset = s.endOffset
+			r.offset = r.endOffset
 		}
 		return
 	}
-	s.offset = offset
+	r.offset = offset
 	return
 }
 
-func (s *ReaderImpl) read(dst []byte, off int64) (int64, int, error) {
-	if off >= s.endOffset {
+func (r *readerImpl) read(dst []byte, off int64) (int64, int, error) {
+	if off >= r.endOffset {
 		return 0, 0, io.EOF
 	}
 	if off < 0 {
 		return 0, 0, fmt.Errorf("offset before the start of the file: %d", off)
 	}
 
-	index := s.GetIndexByDecompOffset(uint64(off))
+	index := r.GetIndexByDecompOffset(uint64(off))
 	if index == nil {
 		return 0, 0, fmt.Errorf("failed to get index by offest: %d", off)
 	}
@@ -215,7 +216,7 @@ func (s *ReaderImpl) read(dst []byte, off int64) (int64, int, error) {
 
 	var decompressed []byte
 
-	cachedOffset, cachedData := s.cachedFrame.get()
+	cachedOffset, cachedData := r.cachedFrame.get()
 	if cachedOffset == index.DecompOffset && cachedData != nil {
 		// fastpath
 		decompressed = cachedData
@@ -226,7 +227,7 @@ func (s *ReaderImpl) read(dst []byte, off int64) (int64, int, error) {
 				index.CompSize, maxDecoderFrameSize)
 		}
 
-		src, err := s.o.env.GetFrameByIndex(*index)
+		src, err := r.o.env.GetFrameByIndex(*index)
 		if err != nil {
 			return 0, 0, fmt.Errorf("failed to read compressed data at: %d, %w", index.CompOffset, err)
 		}
@@ -236,19 +237,19 @@ func (s *ReaderImpl) read(dst []byte, off int64) (int64, int, error) {
 				off, len(src), index)
 		}
 
-		decompressed, err = s.dec.DecodeAll(src, nil)
+		decompressed, err = r.dec.DecodeAll(src, nil)
 		if err != nil {
 			return 0, 0, fmt.Errorf("failed to decompress data data at: %d, %w", index.CompOffset, err)
 		}
 
-		if s.checksums {
+		if r.checksums {
 			checksum := uint32((xxhash.Sum64(decompressed) << 32) >> 32)
 			if index.Checksum != checksum {
 				return 0, 0, fmt.Errorf("checksum verification failed at: %d: expected: %d, actual: %d",
 					index.CompOffset, index.Checksum, checksum)
 			}
 		}
-		s.cachedFrame.replace(index.DecompOffset, decompressed)
+		r.cachedFrame.replace(index.DecompOffset, decompressed)
 	}
 
 	if len(decompressed) != int(index.DecompSize) {
@@ -262,7 +263,7 @@ func (s *ReaderImpl) read(dst []byte, off int64) (int64, int, error) {
 		size = uint64(len(dst))
 	}
 
-	s.o.logger.Debug("decompressed", zap.Uint64("offsetWithinFrame", offsetWithinFrame), zap.Uint64("end", offsetWithinFrame+size),
+	r.o.logger.Debug("decompressed", zap.Uint64("offsetWithinFrame", offsetWithinFrame), zap.Uint64("end", offsetWithinFrame+size),
 		zap.Uint64("size", size), zap.Int("lenDecompressed", len(decompressed)), zap.Int("lenDst", len(dst)), zap.Object("index", index))
 	copy(dst, decompressed[offsetWithinFrame:offsetWithinFrame+size])
 
@@ -272,26 +273,26 @@ func (s *ReaderImpl) read(dst []byte, off int64) (int64, int, error) {
 // Seek implements io.Seeker interface to randomly access data.
 // This method is NOT goroutine-safe and CAN NOT be called
 // concurrently since it modifies the underlying offset.
-func (s *ReaderImpl) Seek(offset int64, whence int) (int64, error) {
-	newOffset := s.offset
+func (r *readerImpl) Seek(offset int64, whence int) (int64, error) {
+	newOffset := r.offset
 	switch whence {
 	case io.SeekCurrent:
 		newOffset += offset
 	case io.SeekStart:
 		newOffset = offset
 	case io.SeekEnd:
-		newOffset = s.endOffset + offset
+		newOffset = r.endOffset + offset
 	default:
 		return 0, fmt.Errorf("unknown whence: %d", whence)
 	}
 
 	if newOffset < 0 {
 		return 0, fmt.Errorf("offset before the start of the file: %d (%d + %d)",
-			newOffset, s.offset, offset)
+			newOffset, r.offset, offset)
 	}
 
-	s.offset = newOffset
-	return s.offset, nil
+	r.offset = newOffset
+	return r.offset, nil
 }
 
 // FrameOffsetEntry is the post-proccessed view of the Seek_Table_Entries suitable for indexing.
@@ -328,9 +329,9 @@ func (o *FrameOffsetEntry) Less(than btree.Item) bool {
 	return o.DecompOffset < than.(*FrameOffsetEntry).DecompOffset
 }
 
-func (s *ReaderImpl) indexFooter() (*btree.BTree, *FrameOffsetEntry, error) {
+func (r *readerImpl) indexFooter() (*btree.BTree, *FrameOffsetEntry, error) {
 	// read SeekTableFooter
-	buf, err := s.o.env.ReadFooter()
+	buf, err := r.o.env.ReadFooter()
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to read footer: %w", err)
 	}
@@ -344,9 +345,9 @@ func (s *ReaderImpl) indexFooter() (*btree.BTree, *FrameOffsetEntry, error) {
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to parse footer %+v: %w", buf, err)
 	}
-	s.o.logger.Debug("loaded", zap.Object("footer", &footer))
+	r.o.logger.Debug("loaded", zap.Object("footer", &footer))
 
-	s.checksums = footer.SeekTableDescriptor.ChecksumFlag
+	r.checksums = footer.SeekTableDescriptor.ChecksumFlag
 
 	// read SeekTableEntries
 	seekTableEntrySize := int64(8)
@@ -363,7 +364,7 @@ func (s *ReaderImpl) indexFooter() (*btree.BTree, *FrameOffsetEntry, error) {
 			skippableFrameOffset, maxDecoderFrameSize)
 	}
 
-	buf, err = s.o.env.ReadSkipFrame(skippableFrameOffset)
+	buf, err = r.o.env.ReadSkipFrame(skippableFrameOffset)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to read footer: %w", err)
 	}
@@ -390,10 +391,10 @@ func (s *ReaderImpl) indexFooter() (*btree.BTree, *FrameOffsetEntry, error) {
 		return nil, nil, fmt.Errorf("frame is too big: %d > %d", frameSize, maxDecoderFrameSize)
 	}
 
-	return s.indexSeekTableEntries(buf[8:len(buf)-seekTableFooterOffset], uint64(seekTableEntrySize))
+	return r.indexSeekTableEntries(buf[8:len(buf)-seekTableFooterOffset], uint64(seekTableEntrySize))
 }
 
-func (s *ReaderImpl) indexSeekTableEntries(p []byte, entrySize uint64) (*btree.BTree, *FrameOffsetEntry, error) {
+func (r *readerImpl) indexSeekTableEntries(p []byte, entrySize uint64) (*btree.BTree, *FrameOffsetEntry, error) {
 	if uint64(len(p))%entrySize != 0 {
 		return nil, nil, fmt.Errorf("seek table size is not multiple of %d", entrySize)
 	}

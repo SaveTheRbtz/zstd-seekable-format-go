@@ -31,9 +31,9 @@ func NewDecoder(seekTable []byte, decoder ZSTDDecoder, opts ...ROption) (Decoder
 	}
 
 	// Release seekTable reference to not leak memory.
-	sr.(*ReaderImpl).o.env = nil
+	sr.(*readerImpl).o.env = nil
 
-	return sr.(*ReaderImpl), err
+	return sr.(*readerImpl), err
 }
 
 type decoderEnv struct {
@@ -52,32 +52,32 @@ func (d *decoderEnv) ReadSkipFrame(skippableFrameOffset int64) ([]byte, error) {
 	return d.seekTable, nil
 }
 
-func (s *ReaderImpl) Size() int64 {
-	return s.endOffset
+func (r *readerImpl) Size() int64 {
+	return r.endOffset
 }
 
-func (s *ReaderImpl) NumFrames() int64 {
-	return s.numFrames
+func (r *readerImpl) NumFrames() int64 {
+	return r.numFrames
 }
 
-func (s *ReaderImpl) GetIndexByDecompOffset(off uint64) (found *FrameOffsetEntry) {
-	if off >= uint64(s.endOffset) {
+func (r *readerImpl) GetIndexByDecompOffset(off uint64) (found *FrameOffsetEntry) {
+	if off >= uint64(r.endOffset) {
 		return nil
 	}
 
-	s.index.DescendLessOrEqual(&FrameOffsetEntry{DecompOffset: off}, func(i btree.Item) bool {
+	r.index.DescendLessOrEqual(&FrameOffsetEntry{DecompOffset: off}, func(i btree.Item) bool {
 		found = i.(*FrameOffsetEntry)
 		return false
 	})
 	return
 }
 
-func (s *ReaderImpl) GetIndexByID(id int64) (found *FrameOffsetEntry) {
+func (r *readerImpl) GetIndexByID(id int64) (found *FrameOffsetEntry) {
 	if id < 0 {
 		return nil
 	}
 
-	s.index.Descend(func(i btree.Item) bool {
+	r.index.Descend(func(i btree.Item) bool {
 		index := i.(*FrameOffsetEntry)
 		if index.ID == id {
 			found = index
