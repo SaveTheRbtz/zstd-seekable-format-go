@@ -1,0 +1,15 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "options",
+    srcs = [
+        "reader_options.go",
+        "writer_options.go",
+    ],
+    importpath = "github.com/SaveTheRbtz/zstd-seekable-format-go/options",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//env",
+        "@org_uber_go_zap//:zap",
+    ],
+)

@@ -16,6 +16,7 @@ import (
 	"go.uber.org/zap"
 
 	seekable "github.com/SaveTheRbtz/zstd-seekable-format-go"
+	"github.com/SaveTheRbtz/zstd-seekable-format-go/options"
 )
 
 type readCloser struct {
@@ -105,7 +106,7 @@ func main() {
 		logger.Fatal("failed to create zstd encoder", zap.Error(err))
 	}
 
-	w, err := seekable.NewWriter(output, enc, seekable.WithWLogger(logger))
+	w, err := seekable.NewWriter(output, enc, options.WithWLogger(logger))
 	if err != nil {
 		logger.Fatal("failed to create compressed writer", zap.Error(err))
 	}
@@ -161,7 +162,7 @@ func main() {
 		}
 		defer dec.Close()
 
-		reader, err := seekable.NewReader(verify, dec, seekable.WithRLogger(logger))
+		reader, err := seekable.NewReader(verify, dec, options.WithRLogger(logger))
 		if err != nil {
 			logger.Fatal("failed to create new seekable reader", zap.Error(err))
 		}
