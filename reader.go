@@ -330,7 +330,7 @@ func (o *FrameOffsetEntry) Less(than btree.Item) bool {
 }
 
 func (r *readerImpl) indexFooter() (*btree.BTree, *FrameOffsetEntry, error) {
-	// read SeekTableFooter
+	// read seekTableFooter
 	buf, err := r.o.env.ReadFooter()
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to read footer: %w", err)
@@ -339,8 +339,8 @@ func (r *readerImpl) indexFooter() (*btree.BTree, *FrameOffsetEntry, error) {
 		return nil, nil, fmt.Errorf("footer is too small: %d", len(buf))
 	}
 
-	// parse SeekTableFooter
-	footer := SeekTableFooter{}
+	// parse seekTableFooter
+	footer := seekTableFooter{}
 	err = footer.UnmarshalBinary(buf[len(buf)-seekTableFooterOffset:])
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to parse footer %+v: %w", buf, err)

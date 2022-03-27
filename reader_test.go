@@ -413,7 +413,7 @@ func TestEmptyWriteRead(t *testing.T) {
 
 func TestSeekTableParsing(t *testing.T) {
 	var err error
-	var stf SeekTableFooter
+	var stf seekTableFooter
 
 	t.Parallel()
 

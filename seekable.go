@@ -83,7 +83,7 @@ func (d *SeekTableDescriptor) MarshalLogObject(enc zapcore.ObjectEncoder) error 
 }
 
 /*
-SeekTableFooter is the footer of a seekable ZSTD stream.
+seekTableFooter is the footer of a seekable ZSTD stream.
 
 The seek table footer format is as follows:
 
@@ -93,7 +93,7 @@ The seek table footer format is as follows:
 
 https://github.com/facebook/zstd/blob/dev/contrib/seekable_format/zstd_seekable_compression_format.md#seek_table_footer
 */
-type SeekTableFooter struct {
+type seekTableFooter struct {
 	// The number of stored frames in the data.
 	NumberOfFrames uint32
 	// A bitfield describing the format of the seek table.
@@ -102,7 +102,7 @@ type SeekTableFooter struct {
 	SeekableMagicNumber uint32
 }
 
-func (f *SeekTableFooter) marshalBinaryInline(dst []byte) {
+func (f *seekTableFooter) marshalBinaryInline(dst []byte) {
 	binary.LittleEndian.PutUint32(dst[0:], f.NumberOfFrames)
 	if f.SeekTableDescriptor.ChecksumFlag {
 		dst[4] |= 1 << 7
@@ -110,13 +110,13 @@ func (f *SeekTableFooter) marshalBinaryInline(dst []byte) {
 	binary.LittleEndian.PutUint32(dst[5:], seekableMagicNumber)
 }
 
-func (f *SeekTableFooter) MarshalBinary() ([]byte, error) {
+func (f *seekTableFooter) MarshalBinary() ([]byte, error) {
 	dst := make([]byte, seekTableFooterOffset)
 	f.marshalBinaryInline(dst)
 	return dst, nil
 }
 
-func (f *SeekTableFooter) MarshalLogObject(enc zapcore.ObjectEncoder) error {
+func (f *seekTableFooter) MarshalLogObject(enc zapcore.ObjectEncoder) error {
 	enc.AddUint32("NumberOfFrames", f.NumberOfFrames)
 	if err := enc.AddObject("SeekTableDescriptor", &f.SeekTableDescriptor); err != nil {
 		return err
@@ -125,7 +125,7 @@ func (f *SeekTableFooter) MarshalLogObject(enc zapcore.ObjectEncoder) error {
 	return nil
 }
 
-func (f *SeekTableFooter) UnmarshalBinary(p []byte) error {
+func (f *seekTableFooter) UnmarshalBinary(p []byte) error {
 	if len(p) != seekTableFooterOffset {
 		return fmt.Errorf("footer length mismatch %d vs %d", len(p), seekTableFooterOffset)
 	}
