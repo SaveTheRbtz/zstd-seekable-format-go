@@ -335,9 +335,9 @@ func (r *readerImpl) indexFooter() (*btree.BTree, *env.FrameOffsetEntry, error) 
 
 	// parse SeekTableEntries
 	magic := binary.LittleEndian.Uint32(buf[0:4])
-	if magic != SkippableFrameMagic+seekableTag {
+	if magic != skippableFrameMagic+seekableTag {
 		return nil, nil, fmt.Errorf("skippable frame magic mismatch %d vs %d",
-			magic, SkippableFrameMagic+seekableTag)
+			magic, skippableFrameMagic+seekableTag)
 	}
 
 	expectedFrameSize := int64(len(buf)) - frameSizeFieldSize - skippableMagicNumberFieldSize

@@ -36,7 +36,7 @@ const (
 
 		https://github.com/facebook/zstd/blob/dev/contrib/seekable_format/zstd_seekable_compression_format.md
 	*/
-	SkippableFrameMagic = 0x184D2A50
+	skippableFrameMagic = 0x184D2A50
 
 	seekableMagicNumber = 0x8F92EAB1
 
@@ -239,7 +239,7 @@ func createSkippableFrame(tag uint32, payload []byte) ([]byte, error) {
 	}
 
 	dst := make([]byte, 8, len(payload)+8)
-	binary.LittleEndian.PutUint32(dst[0:], SkippableFrameMagic+tag)
+	binary.LittleEndian.PutUint32(dst[0:], skippableFrameMagic+tag)
 	binary.LittleEndian.PutUint32(dst[4:], uint32(len(payload)))
 	return append(dst, payload...), nil
 }
