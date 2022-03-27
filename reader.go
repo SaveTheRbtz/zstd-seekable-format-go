@@ -36,7 +36,7 @@ func (f *cachedFrame) get() (uint64, []byte) {
 	return f.offset, f.data
 }
 
-// Environment can be used to inject a custom file reader that is different from normal ReadSeeker.
+// REnvironment can be used to inject a custom file reader that is different from normal ReadSeeker.
 // This is useful when, for example there is a custom chunking code.
 type REnvironment interface {
 	// GetFrameByIndex returns the compressed frame by its index.
