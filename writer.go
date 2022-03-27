@@ -39,12 +39,25 @@ type writerImpl struct {
 	once *sync.Once
 }
 
-var _ io.WriteCloser = (*writerImpl)(nil)
+var (
+	_ io.Writer = (*writerImpl)(nil)
+	_ io.Closer = (*writerImpl)(nil)
+)
 
 type Writer interface {
-	io.WriteCloser
+	// Write writes a chunk of data as a separate frame into the datastream.
+	//
+	// Note that Write does not do any coalescing nor splitting of data,
+	// so each write will map to a separate ZSTD Frame.
+	io.Writer
+	// Close implement io.Closer interface.  It writes the seek table footer
+	// and releases occupied memory.
+	//
+	// Caller is still responsible to Close the underlying writer.
+	io.Closer
 }
 
+// ZSTDEncoder is the compressor.  Tested with github.com/klauspost/compress/zstd.
 type ZSTDEncoder interface {
 	EncodeAll(src, dst []byte) []byte
 }
@@ -74,10 +87,6 @@ func NewWriter(w io.Writer, encoder ZSTDEncoder, opts ...WOption) (Writer, error
 	return &sw, nil
 }
 
-// Write writes a chunk of data as a separate frame into the datastream.
-//
-// Note that Write does not do any coalescing nor splitting of data,
-// so each write will map to a separate ZSTD Frame.
 func (s *writerImpl) Write(src []byte) (int, error) {
 	dst, err := s.Encode(src)
 	if err != nil {
@@ -95,10 +104,6 @@ func (s *writerImpl) Write(src []byte) (int, error) {
 	return len(src), nil
 }
 
-// Close implement io.Closer interface.  It writes the seek table footer
-// and releases occupied memory.
-//
-// Caller is still responsible to Close the underlying writer.
 func (s *writerImpl) Close() (err error) {
 	s.once.Do(func() {
 		err = multierr.Append(err, s.writeSeekTable())
