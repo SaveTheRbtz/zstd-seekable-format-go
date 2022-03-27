@@ -14,11 +14,6 @@ import (
 	"github.com/google/btree"
 )
 
-var (
-	_ io.ReadSeeker = (*ReaderImpl)(nil)
-	_ io.ReaderAt   = (*ReaderImpl)(nil)
-)
-
 type cachedFrame struct {
 	m sync.Mutex
 
@@ -125,6 +120,10 @@ type ReaderImpl struct {
 	cachedFrame cachedFrame
 }
 
+var (
+	_ io.ReadSeeker = (*ReaderImpl)(nil)
+	_ io.ReaderAt   = (*ReaderImpl)(nil)
+)
 type Reader interface {
 	io.ReadSeeker
 	io.ReaderAt

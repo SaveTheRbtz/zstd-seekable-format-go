@@ -8,11 +8,6 @@ import (
 	"go.uber.org/multierr"
 )
 
-var (
-	_ io.Writer = (*WriterImpl)(nil)
-	_ io.Closer = (*WriterImpl)(nil)
-)
-
 // Environment can be used to inject a custom file reader that is different from normal ReadSeeker.
 // This is useful when, for example there is a custom chunking code.
 type WEnvironment interface {
@@ -43,6 +38,8 @@ type WriterImpl struct {
 
 	once *sync.Once
 }
+
+var _ io.WriteCloser = (*WriterImpl)(nil)
 
 type Writer interface {
 	io.WriteCloser
