@@ -144,7 +144,7 @@ func (f *seekTableFooter) UnmarshalBinary(p []byte) error {
 }
 
 /*
-SeekTableEntry is an element of the Seek Table describing each of the ZSTD-compressed frames in the stream.
+seekTableEntry is an element of the Seek Table describing each of the ZSTD-compressed frames in the stream.
 
 `Seek_Table_Entries` consists of `Number_Of_Frames` (one for each frame in the data, not including the seek table frame) entries of the following form, in sequence:
 
@@ -154,7 +154,7 @@ SeekTableEntry is an element of the Seek Table describing each of the ZSTD-compr
 
 https://github.com/facebook/zstd/blob/dev/contrib/seekable_format/zstd_seekable_compression_format.md#seek_table_entries
 */
-type SeekTableEntry struct {
+type seekTableEntry struct {
 	// The compressed size of the frame.
 	// The cumulative sum of the `Compressed_Size` fields of frames `0` to `i` gives the offset in the compressed file of frame `i+1`.
 	CompressedSize uint32
@@ -164,26 +164,26 @@ type SeekTableEntry struct {
 	Checksum uint32
 }
 
-func (e *SeekTableEntry) marshalBinaryInline(dst []byte) {
+func (e *seekTableEntry) marshalBinaryInline(dst []byte) {
 	binary.LittleEndian.PutUint32(dst[0:], e.CompressedSize)
 	binary.LittleEndian.PutUint32(dst[4:], e.DecompressedSize)
 	binary.LittleEndian.PutUint32(dst[8:], e.Checksum)
 }
 
-func (e *SeekTableEntry) MarshalBinary() ([]byte, error) {
+func (e *seekTableEntry) MarshalBinary() ([]byte, error) {
 	dst := make([]byte, 12)
 	e.marshalBinaryInline(dst)
 	return dst, nil
 }
 
-func (e *SeekTableEntry) MarshalLogObject(enc zapcore.ObjectEncoder) error {
+func (e *seekTableEntry) MarshalLogObject(enc zapcore.ObjectEncoder) error {
 	enc.AddUint32("CompressedSize", e.CompressedSize)
 	enc.AddUint32("DecompressedSize", e.DecompressedSize)
 	enc.AddUint32("Checksum", e.Checksum)
 	return nil
 }
 
-func (e *SeekTableEntry) UnmarshalBinary(p []byte) error {
+func (e *seekTableEntry) UnmarshalBinary(p []byte) error {
 	if len(p) < 8 {
 		return fmt.Errorf("entry length mismatch %d vs %d", len(p), 8)
 	}

@@ -32,7 +32,7 @@ func (w *writerEnvImpl) WriteSeekTable(p []byte) (n int, err error) {
 
 type writerImpl struct {
 	enc          ZSTDEncoder
-	frameEntries []SeekTableEntry
+	frameEntries []seekTableEntry
 
 	o writerOptions
 
