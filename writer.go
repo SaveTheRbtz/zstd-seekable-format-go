@@ -6,16 +6,9 @@ import (
 	"sync"
 
 	"go.uber.org/multierr"
-)
 
-// WEnvironment can be used to inject a custom file writer that is different from normal WriteCloser.
-// This is useful when, for example there is a custom chunking code.
-type WEnvironment interface {
-	// WriteFrame is called each time frame is encoded and needs to be written upstream.
-	WriteFrame(p []byte) (n int, err error)
-	// WriteSeekTable is called on Close to flush the seek table.
-	WriteSeekTable(p []byte) (n int, err error)
-}
+	"github.com/SaveTheRbtz/zstd-seekable-format-go/options"
+)
 
 // writerEnvImpl is the environment implementation of for the underlying WriteCloser.
 type writerEnvImpl struct {
@@ -34,7 +27,7 @@ type writerImpl struct {
 	enc          ZSTDEncoder
 	frameEntries []seekTableEntry
 
-	o writerOptions
+	o options.WriterOptions
 
 	once *sync.Once
 }
@@ -64,13 +57,13 @@ type ZSTDEncoder interface {
 
 // NewWriter wraps the passed io.Writer and Encoder into and indexed ZSTD stream.
 // Resulting stream then can be randomly accessed through the Reader and Decoder interfaces.
-func NewWriter(w io.Writer, encoder ZSTDEncoder, opts ...WOption) (Writer, error) {
+func NewWriter(w io.Writer, encoder ZSTDEncoder, opts ...options.WOption) (Writer, error) {
 	sw := writerImpl{
 		once: &sync.Once{},
 		enc:  encoder,
 	}
 
-	sw.o.setDefault()
+	sw.o.SetDefault()
 	for _, o := range opts {
 		err := o(&sw.o)
 		if err != nil {
@@ -78,8 +71,8 @@ func NewWriter(w io.Writer, encoder ZSTDEncoder, opts ...WOption) (Writer, error
 		}
 	}
 
-	if sw.o.env == nil {
-		sw.o.env = &writerEnvImpl{
+	if sw.o.Env == nil {
+		sw.o.Env = &writerEnvImpl{
 			w: w,
 		}
 	}
@@ -93,7 +86,7 @@ func (s *writerImpl) Write(src []byte) (int, error) {
 		return 0, err
 	}
 
-	n, err := s.o.env.WriteFrame(dst)
+	n, err := s.o.Env.WriteFrame(dst)
 	if err != nil {
 		return 0, err
 	}
@@ -117,6 +110,6 @@ func (s *writerImpl) writeSeekTable() error {
 		return err
 	}
 
-	_, err = s.o.env.WriteSeekTable(seekTableBytes)
+	_, err = s.o.Env.WriteSeekTable(seekTableBytes)
 	return err
 }
