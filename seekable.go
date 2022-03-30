@@ -52,7 +52,7 @@ const (
 )
 
 /*
-SeekTableDescriptor is a Go representation of a bitfiled.
+seekTableDescriptor is a Go representation of a bitfiled.
 
 A bitfield describing the format of the seek table.
 
