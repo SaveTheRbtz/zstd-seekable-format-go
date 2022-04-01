@@ -83,7 +83,7 @@ func main() {
 
 			m, err := io.CopyBuffer(expected, pr, make([]byte, 128<<10))
 			if err != nil {
-				logger.Fatal("failed to compute expected csum", zap.Int64("proccessed", m), zap.Error(err))
+				logger.Fatal("failed to compute expected csum", zap.Int64("processed", m), zap.Error(err))
 			}
 		}()
 	}
@@ -170,7 +170,7 @@ func main() {
 		actual := blake3.New()
 		m, err := io.CopyBuffer(actual, reader, make([]byte, 128<<10))
 		if err != nil {
-			logger.Fatal("failed to compute actual csum", zap.Int64("proccessed", m), zap.Error(err))
+			logger.Fatal("failed to compute actual csum", zap.Int64("processed", m), zap.Error(err))
 		}
 		<-origDone
 

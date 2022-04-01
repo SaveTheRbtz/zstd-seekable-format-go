@@ -204,7 +204,7 @@ func (r *readerImpl) read(dst []byte, off int64) (int64, int, error) {
 
 	index := r.GetIndexByDecompOffset(uint64(off))
 	if index == nil {
-		return 0, 0, fmt.Errorf("failed to get index by offest: %d", off)
+		return 0, 0, fmt.Errorf("failed to get index by offset: %d", off)
 	}
 	if off < int64(index.DecompOffset) || off > int64(index.DecompOffset)+int64(index.DecompSize) {
 		return 0, 0, fmt.Errorf("offset outside of index bounds: %d: min: %d, max: %d",
