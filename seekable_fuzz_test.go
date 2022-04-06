@@ -21,7 +21,7 @@ func FuzzRoundTrip(f *testing.F) {
 
 	enc, err := zstd.NewWriter(nil, zstd.WithEncoderLevel(zstd.SpeedFastest))
 	assert.NoError(f, err)
-	defer enc.Close()
+	defer func() { assert.NoError(f, enc.Close()) }()
 
 	f.Add(int64(1), uint8(0), int16(1), int8(io.SeekStart))
 	f.Add(int64(10), uint8(1), int16(2), int8(io.SeekEnd))
@@ -56,6 +56,7 @@ func FuzzRoundTrip(f *testing.F) {
 
 		r, err := NewReader(bytes.NewReader(b.Bytes()), dec)
 		assert.NoError(t, err)
+		defer func() { assert.NoError(t, r.Close()) }()
 
 		off := rng.Int63n(1+4*int64(total)) - 2*int64(total)
 		i, err := r.Seek(off, int(whence))

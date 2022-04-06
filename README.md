@@ -56,6 +56,7 @@ r, err := seekable.NewReader(f, dec)
 if err != nil {
 	log.Fatal(err)
 }
+defer r.Close()
 
 ello := make([]byte, 4)
 // ReaderAt

@@ -113,6 +113,7 @@ var (
 	_ io.Seeker   = (*readerImpl)(nil)
 	_ io.Reader   = (*readerImpl)(nil)
 	_ io.ReaderAt = (*readerImpl)(nil)
+	_ io.Closer   = (*readerImpl)(nil)
 )
 
 type Reader interface {
@@ -130,6 +131,9 @@ type Reader interface {
 	// This method is goroutine-safe and can be called concurrently ONLY if
 	// the underlying reader supports io.ReaderAt interface.
 	io.ReaderAt
+
+	// Close implements io.Closer interface free up any resources.
+	io.Closer
 }
 
 // ZSTDDecoder is the decompressor.  Tested with github.com/klauspost/compress/zstd.
@@ -192,6 +196,12 @@ func (r *readerImpl) Read(p []byte) (n int, err error) {
 	}
 	r.offset = offset
 	return
+}
+
+func (r *readerImpl) Close() error {
+	r.cachedFrame.replace(0, nil)
+	r.index = nil
+	return nil
 }
 
 func (r *readerImpl) read(dst []byte, off int64) (int64, int, error) {

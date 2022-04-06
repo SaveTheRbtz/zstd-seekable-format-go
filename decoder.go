@@ -1,6 +1,8 @@
 package seekable
 
 import (
+	"io"
+
 	"github.com/google/btree"
 
 	"github.com/SaveTheRbtz/zstd-seekable-format-go/env"
@@ -22,6 +24,8 @@ type Decoder interface {
 
 	// NumFrames returns number of frames in the compressed stream.
 	NumFrames() int64
+
+	io.Closer
 }
 
 // NewDecoder creates a byte-oriented Decode interface from a given seektable index.
