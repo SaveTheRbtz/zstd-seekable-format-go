@@ -139,6 +139,7 @@ func TestReader(t *testing.T) {
 
 	dec, err := zstd.NewReader(nil)
 	assert.NoError(t, err)
+	defer dec.Close()
 
 	for _, b := range [][]byte{checksum, noChecksum} {
 		br := &seekableBufferReaderAt{buf: b}
@@ -177,6 +178,8 @@ func TestReader(t *testing.T) {
 
 		_, err = r.Read(tmp)
 		assert.Equal(t, err, io.EOF)
+		err = r.Close()
+		assert.NoError(t, err)
 	}
 }
 
@@ -195,6 +198,7 @@ func TestReaderEdges(t *testing.T) {
 			sr := &seekableBufferReaderAt{buf: b}
 			r, err := NewReader(sr, dec)
 			assert.NoError(t, err)
+			defer func() { assert.NoError(t, r.Close()) }()
 
 			for _, whence := range []int{io.SeekStart, io.SeekEnd} {
 				for n := int64(-1); n <= int64(len(source)); n++ {
@@ -242,6 +246,7 @@ func TestReaderAt(t *testing.T) {
 
 	dec, err := zstd.NewReader(nil)
 	assert.NoError(t, err)
+	defer dec.Close()
 
 	for _, sr := range []io.ReadSeeker{
 		&seekableBufferReader{seekableBufferReaderAt{buf: noChecksum}},
@@ -249,9 +254,9 @@ func TestReaderAt(t *testing.T) {
 	} {
 		sr := sr
 		t.Run(fmt.Sprintf("%T", sr), func(t *testing.T) {
-			t.Parallel()
 			r, err := NewReader(sr, dec)
 			assert.NoError(t, err)
+			defer func() { assert.NoError(t, r.Close()) }()
 
 			oldOffset, err := r.Seek(0, io.SeekCurrent)
 			assert.NoError(t, err)
@@ -307,6 +312,7 @@ func TestReaderEdgesParallel(t *testing.T) {
 		sr := &seekableBufferReaderAt{buf: b}
 		r, err := NewReader(sr, dec)
 		assert.NoError(t, err)
+		defer func() { assert.NoError(t, r.Close()) }()
 
 		for n := int64(-1); n <= int64(len(source)); n++ {
 			for m := int64(0); m <= int64(len(source)); m++ {
@@ -363,9 +369,11 @@ func TestReadEnvironment(t *testing.T) {
 	t.Parallel()
 	dec, err := zstd.NewReader(nil)
 	assert.NoError(t, err)
+	defer dec.Close()
 
 	r, err := NewReader(nil, dec, options.WithREnvironment(&fakeReadEnvironment{}))
 	assert.NoError(t, err)
+	defer func() { assert.NoError(t, r.Close()) }()
 
 	bytes1 := []byte("test")
 	bytes2 := []byte("test2")
@@ -390,6 +398,7 @@ func TestNoReaderAt(t *testing.T) {
 
 	dec, err := zstd.NewReader(nil)
 	assert.NoError(t, err)
+	defer dec.Close()
 
 	for _, sr := range []io.ReadSeeker{
 		&seekableBufferReader{seekableBufferReaderAt{buf: checksum}},
@@ -397,9 +406,9 @@ func TestNoReaderAt(t *testing.T) {
 	} {
 		sr := sr
 		t.Run(fmt.Sprintf("%T", sr), func(t *testing.T) {
-			t.Parallel()
 			r, err := NewReader(sr, dec)
 			assert.NoError(t, err)
+			defer func() { assert.NoError(t, r.Close()) }()
 
 			tmp := make([]byte, 3)
 			n, err := r.ReadAt(tmp, 5)
@@ -471,6 +480,7 @@ func TestEmptyWriteRead(t *testing.T) {
 	sr := &seekableBufferReaderAt{buf: compressed}
 	r, err := NewReader(sr, dec1)
 	assert.NoError(t, err)
+	defer func() { assert.NoError(t, r.Close()) }()
 
 	tmp1 := make([]byte, 1)
 	n, err := r.Read(tmp1)
@@ -480,6 +490,7 @@ func TestEmptyWriteRead(t *testing.T) {
 	// test native decompression
 	dec2, err := zstd.NewReader(bytes.NewReader(compressed))
 	assert.NoError(t, err)
+	defer dec2.Close()
 
 	tmp2 := make([]byte, 1)
 	n, err = dec2.Read(tmp2)
