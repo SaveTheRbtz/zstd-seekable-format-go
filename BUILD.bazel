@@ -40,7 +40,7 @@ go_library(
 
 go_test(
     name = "zstd-seekable-format-go_test",
-    size = "small",
+    size = "medium",
     srcs = [
         "decoder_test.go",
         "doc_test.go",
