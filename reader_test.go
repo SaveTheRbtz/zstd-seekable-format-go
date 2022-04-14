@@ -235,12 +235,21 @@ func TestReaderAt(t *testing.T) {
 	r, err := NewReader(sr, dec)
 	assert.NoError(t, err)
 
+	oldOffset, err := r.Seek(0, io.SeekCurrent)
+	assert.NoError(t, err)
+	assert.Equal(t, int64(0), oldOffset)
+
 	tmp1 := make([]byte, 3)
 	k1, err := r.ReadAt(tmp1, 3)
 	assert.NoError(t, err)
-
 	assert.Equal(t, 3, k1)
 	assert.Equal(t, []byte("tte"), tmp1)
+
+	// If ReadAt is reading from an input source with a seek offset,
+	// ReadAt should not affect nor be affected by the underlying seek offset.
+	newOffset, err := r.Seek(0, io.SeekCurrent)
+	assert.NoError(t, err)
+	assert.Equal(t, newOffset, oldOffset)
 
 	tmp2 := make([]byte, 100)
 	k2, err := r.ReadAt(tmp2, 3)
@@ -368,6 +377,44 @@ func TestSeek(t *testing.T) {
 
 	_, err = r.Seek(0, 9999)
 	assert.Errorf(t, err, "unknown whence: %d", 9999)
+}
+
+func hideReaderAt(rs Reader) io.ReadSeeker {
+	return rs
+}
+
+func TestNoReaderAt(t *testing.T) {
+	t.Parallel()
+
+	dec, err := zstd.NewReader(nil)
+	assert.NoError(t, err)
+
+	sr := hideReaderAt(&seekableBufferReader{buf: checksum})
+	r, err := NewReader(sr, dec)
+	assert.NoError(t, err)
+
+	tmp := make([]byte, 3)
+	n, err := r.ReadAt(tmp, 1)
+	assert.NoError(t, err)
+	assert.Equal(t, 3, n)
+	assert.Equal(t, tmp[:n], []byte("est"))
+
+	// If ReadAt is reading from an input source with a seek offset,
+	// ReadAt should not affect nor be affected by the underlying seek offset.
+	tmp = make([]byte, 4096)
+	n, err = r.Read(tmp)
+	assert.NoError(t, err)
+	assert.Equal(t, 4, n)
+	assert.Equal(t, tmp[:n], []byte("test"))
+
+	m, err := r.Seek(1, io.SeekCurrent)
+	assert.NoError(t, err)
+	assert.Equal(t, int64(5), m)
+
+	n, err = r.Read(tmp)
+	assert.NoError(t, err)
+	assert.Equal(t, 4, n)
+	assert.Equal(t, tmp[:n], []byte("est2"))
 }
 
 func TestEmptyWriteRead(t *testing.T) {
