@@ -3,7 +3,7 @@ module github.com/SaveTheRbtz/zstd-seekable-format-go
 go 1.18
 
 require (
-	github.com/cespare/xxhash v1.1.0
+	github.com/cespare/xxhash/v2 v2.1.2
 	github.com/google/btree v1.0.1
 	github.com/klauspost/compress v1.15.1
 	github.com/reusee/fastcdc-go v0.2.1-0.20201121153712-1756352c2ae7

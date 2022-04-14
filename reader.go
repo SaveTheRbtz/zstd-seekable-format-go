@@ -7,7 +7,7 @@ import (
 	"io"
 	"sync"
 
-	"github.com/cespare/xxhash"
+	"github.com/cespare/xxhash/v2"
 	"github.com/google/btree"
 	"go.uber.org/zap"
 
