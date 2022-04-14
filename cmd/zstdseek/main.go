@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"crypto/sha512"
 	"errors"
 	"flag"
 	"io"
@@ -12,7 +13,6 @@ import (
 
 	"github.com/klauspost/compress/zstd"
 	"github.com/reusee/fastcdc-go"
-	"github.com/zeebo/blake3"
 	"go.uber.org/zap"
 
 	seekable "github.com/SaveTheRbtz/zstd-seekable-format-go"
@@ -70,7 +70,7 @@ func main() {
 		}
 	}
 
-	expected := blake3.New()
+	expected := sha512.New512_256()
 	origDone := make(chan struct{})
 	if verifyFlag {
 		pr, pw := io.Pipe()
@@ -167,7 +167,7 @@ func main() {
 			logger.Fatal("failed to create new seekable reader", zap.Error(err))
 		}
 
-		actual := blake3.New()
+		actual := sha512.New512_256()
 		m, err := io.CopyBuffer(actual, reader, make([]byte, 128<<10))
 		if err != nil {
 			logger.Fatal("failed to compute actual csum", zap.Int64("processed", m), zap.Error(err))

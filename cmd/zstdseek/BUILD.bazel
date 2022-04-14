@@ -16,7 +16,6 @@ go_library(
         "//options",
         "@com_github_klauspost_compress//zstd",
         "@com_github_reusee_fastcdc_go//:fastcdc-go",
-        "@com_github_zeebo_blake3//:blake3",
         "@org_uber_go_zap//:zap",
     ],
 )
