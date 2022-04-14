@@ -1,0 +1,5 @@
+go test fuzz v1
+int64(54)
+byte('\x01')
+int16(8)
+int8(2)

@@ -1,0 +1,5 @@
+go test fuzz v1
+[]byte("0000\x80xxxx")
+int64(22)
+byte('°')
+int(73)

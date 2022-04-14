@@ -1,0 +1,5 @@
+go test fuzz v1
+int64(27)
+byte('L')
+int16(81)
+int8(-21)
