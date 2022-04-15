@@ -243,48 +243,56 @@ func TestReaderAt(t *testing.T) {
 	dec, err := zstd.NewReader(nil)
 	assert.NoError(t, err)
 
-	sr := &seekableBufferReaderAt{buf: checksum}
-	r, err := NewReader(sr, dec)
-	assert.NoError(t, err)
+	for _, sr := range []io.ReadSeeker{
+		&seekableBufferReader{seekableBufferReaderAt{buf: noChecksum}},
+		&seekableBufferReaderAt{buf: noChecksum},
+	} {
+		sr := sr
+		t.Run(fmt.Sprintf("%T", sr), func(t *testing.T) {
+			t.Parallel()
+			r, err := NewReader(sr, dec)
+			assert.NoError(t, err)
 
-	oldOffset, err := r.Seek(0, io.SeekCurrent)
-	assert.NoError(t, err)
-	assert.Equal(t, int64(0), oldOffset)
+			oldOffset, err := r.Seek(0, io.SeekCurrent)
+			assert.NoError(t, err)
+			assert.Equal(t, int64(0), oldOffset)
 
-	tmp1 := make([]byte, 3)
-	k1, err := r.ReadAt(tmp1, 3)
-	assert.NoError(t, err)
-	assert.Equal(t, 3, k1)
-	assert.Equal(t, []byte("tte"), tmp1)
+			tmp1 := make([]byte, 3)
+			k1, err := r.ReadAt(tmp1, 3)
+			assert.NoError(t, err)
+			assert.Equal(t, 3, k1)
+			assert.Equal(t, []byte("tte"), tmp1)
 
-	// If ReadAt is reading from an input source with a seek offset,
-	// ReadAt should not affect nor be affected by the underlying seek offset.
-	newOffset, err := r.Seek(0, io.SeekCurrent)
-	assert.NoError(t, err)
-	assert.Equal(t, newOffset, oldOffset)
+			// If ReadAt is reading from an input source with a seek offset,
+			// ReadAt should not affect nor be affected by the underlying seek offset.
+			newOffset, err := r.Seek(0, io.SeekCurrent)
+			assert.NoError(t, err)
+			assert.Equal(t, newOffset, oldOffset)
 
-	tmp2 := make([]byte, 100)
-	k2, err := r.ReadAt(tmp2, 3)
-	assert.Error(t, err, io.EOF)
+			tmp2 := make([]byte, 100)
+			k2, err := r.ReadAt(tmp2, 3)
+			assert.Error(t, err, io.EOF)
 
-	tmp_last := make([]byte, 1)
-	k_last, err := r.ReadAt(tmp_last, 8)
-	assert.Equal(t, 1, k_last)
-	assert.Equal(t, []byte("2"), tmp_last)
-	assert.NoError(t, err)
+			tmp_last := make([]byte, 1)
+			k_last, err := r.ReadAt(tmp_last, 8)
+			assert.Equal(t, 1, k_last)
+			assert.Equal(t, []byte("2"), tmp_last)
+			assert.NoError(t, err)
 
-	tmp_oob := make([]byte, 1)
-	_, err = r.ReadAt(tmp_oob, 9)
-	assert.Error(t, err, io.EOF)
+			tmp_oob := make([]byte, 1)
+			_, err = r.ReadAt(tmp_oob, 9)
+			assert.Error(t, err, io.EOF)
 
-	assert.Equal(t, 6, k2)
-	assert.Equal(t, []byte("ttest2"), tmp2[:k2])
+			assert.Equal(t, 6, k2)
+			assert.Equal(t, []byte("ttest2"), tmp2[:k2])
 
-	sectionReader := io.NewSectionReader(r, 3, 4)
-	tmp3, err := io.ReadAll(sectionReader)
-	assert.NoError(t, err)
-	assert.Equal(t, 4, len(tmp3))
-	assert.Equal(t, []byte("ttes"), tmp3)
+			sectionReader := io.NewSectionReader(r, 3, 4)
+			tmp3, err := io.ReadAll(sectionReader)
+			assert.NoError(t, err)
+			assert.Equal(t, 4, len(tmp3))
+			assert.Equal(t, []byte("ttes"), tmp3)
+		})
+	}
 }
 
 func TestReaderEdgesParallel(t *testing.T) {
