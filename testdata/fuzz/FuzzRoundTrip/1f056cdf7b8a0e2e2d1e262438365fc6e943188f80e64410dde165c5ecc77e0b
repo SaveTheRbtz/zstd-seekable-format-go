@@ -1,5 +1,0 @@
-go test fuzz v1
-int64(-121)
-byte('\u008e')
-int16(0)
-int8(0)

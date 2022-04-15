@@ -1,5 +1,0 @@
-go test fuzz v1
-[]byte("0xx0\x800x0x")
-int64(57)
-byte('\x00')
-int(1)
