@@ -62,12 +62,12 @@ var noChecksum = []byte{
 	0xb1, 0xea, 0x92, 0x8f,
 }
 
-type seekableBufferReader struct {
+type seekableBufferReaderAt struct {
 	buf    []byte
 	offset int64
 }
 
-func (s *seekableBufferReader) ReadAt(p []byte, off int64) (n int, err error) {
+func (s *seekableBufferReaderAt) ReadAt(p []byte, off int64) (n int, err error) {
 	if off < 0 {
 		return 0, fmt.Errorf("offset before the start of the file: %d", off)
 	}
@@ -86,7 +86,7 @@ func (s *seekableBufferReader) ReadAt(p []byte, off int64) (n int, err error) {
 	return int(size), nil
 }
 
-func (s *seekableBufferReader) Read(p []byte) (n int, err error) {
+func (s *seekableBufferReaderAt) Read(p []byte) (n int, err error) {
 	size := int64(len(s.buf)) - s.offset
 	if size > int64(len(p)) {
 		size = int64(len(p))
@@ -102,7 +102,7 @@ func (s *seekableBufferReader) Read(p []byte) (n int, err error) {
 	return int(size), nil
 }
 
-func (s *seekableBufferReader) Seek(offset int64, whence int) (int64, error) {
+func (s *seekableBufferReaderAt) Seek(offset int64, whence int) (int64, error) {
 	newOffset := s.offset
 	switch whence {
 	case io.SeekCurrent:
@@ -122,6 +122,18 @@ func (s *seekableBufferReader) Seek(offset int64, whence int) (int64, error) {
 	return s.offset, nil
 }
 
+type seekableBufferReader struct {
+	sra seekableBufferReaderAt
+}
+
+func (s *seekableBufferReader) Read(p []byte) (n int, err error) {
+	return s.sra.Read(p)
+}
+
+func (s *seekableBufferReader) Seek(offset int64, whence int) (int64, error) {
+	return s.sra.Seek(offset, whence)
+}
+
 func TestReader(t *testing.T) {
 	t.Parallel()
 
@@ -129,7 +141,7 @@ func TestReader(t *testing.T) {
 	assert.NoError(t, err)
 
 	for _, b := range [][]byte{checksum, noChecksum} {
-		br := &seekableBufferReader{buf: b}
+		br := &seekableBufferReaderAt{buf: b}
 		r, err := NewReader(br, dec)
 		assert.NoError(t, err)
 
@@ -180,7 +192,7 @@ func TestReaderEdges(t *testing.T) {
 		t.Run(strconv.Itoa(i), func(t *testing.T) {
 			t.Parallel()
 
-			sr := &seekableBufferReader{buf: b}
+			sr := &seekableBufferReaderAt{buf: b}
 			r, err := NewReader(sr, dec)
 			assert.NoError(t, err)
 
@@ -231,7 +243,7 @@ func TestReaderAt(t *testing.T) {
 	dec, err := zstd.NewReader(nil)
 	assert.NoError(t, err)
 
-	sr := &seekableBufferReader{buf: checksum}
+	sr := &seekableBufferReaderAt{buf: checksum}
 	r, err := NewReader(sr, dec)
 	assert.NoError(t, err)
 
@@ -284,7 +296,7 @@ func TestReaderEdgesParallel(t *testing.T) {
 	for i, b := range [][]byte{checksum, noChecksum} {
 		b := b
 
-		sr := &seekableBufferReader{buf: b}
+		sr := &seekableBufferReaderAt{buf: b}
 		r, err := NewReader(sr, dec)
 		assert.NoError(t, err)
 
@@ -371,16 +383,12 @@ func TestSeek(t *testing.T) {
 	dec, err := zstd.NewReader(nil)
 	assert.NoError(t, err)
 
-	sr := &seekableBufferReader{buf: checksum}
+	sr := &seekableBufferReaderAt{buf: checksum}
 	r, err := NewReader(sr, dec)
 	assert.NoError(t, err)
 
 	_, err = r.Seek(0, 9999)
 	assert.Errorf(t, err, "unknown whence: %d", 9999)
-}
-
-func hideReaderAt(rs Reader) io.ReadSeeker {
-	return rs
 }
 
 func TestNoReaderAt(t *testing.T) {
@@ -389,25 +397,29 @@ func TestNoReaderAt(t *testing.T) {
 	dec, err := zstd.NewReader(nil)
 	assert.NoError(t, err)
 
-	sr := hideReaderAt(&seekableBufferReader{buf: checksum})
+	sr := &seekableBufferReader{seekableBufferReaderAt{buf: checksum}}
 	r, err := NewReader(sr, dec)
 	assert.NoError(t, err)
 
 	tmp := make([]byte, 3)
-	n, err := r.ReadAt(tmp, 1)
+	n, err := r.ReadAt(tmp, 5)
 	assert.NoError(t, err)
 	assert.Equal(t, 3, n)
 	assert.Equal(t, tmp[:n], []byte("est"))
 
 	// If ReadAt is reading from an input source with a seek offset,
 	// ReadAt should not affect nor be affected by the underlying seek offset.
+	m, err := r.Seek(0, io.SeekCurrent)
+	assert.NoError(t, err)
+	assert.Equal(t, int64(0), m)
+
 	tmp = make([]byte, 4096)
 	n, err = r.Read(tmp)
 	assert.NoError(t, err)
 	assert.Equal(t, 4, n)
 	assert.Equal(t, tmp[:n], []byte("test"))
 
-	m, err := r.Seek(1, io.SeekCurrent)
+	m, err = r.Seek(1, io.SeekCurrent)
 	assert.NoError(t, err)
 	assert.Equal(t, int64(5), m)
 
@@ -442,7 +454,7 @@ func TestEmptyWriteRead(t *testing.T) {
 	// test seekable decompression
 	compressed := b.Bytes()
 
-	sr := &seekableBufferReader{buf: compressed}
+	sr := &seekableBufferReaderAt{buf: compressed}
 	r, err := NewReader(sr, dec1)
 	assert.NoError(t, err)
 

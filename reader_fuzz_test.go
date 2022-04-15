@@ -20,7 +20,7 @@ func FuzzReader(f *testing.F) {
 	f.Add(checksum, int64(1), uint8(0), io.SeekCurrent)
 
 	f.Fuzz(func(t *testing.T, in []byte, off int64, l uint8, whence int) {
-		sr := &seekableBufferReader{buf: in}
+		sr := &seekableBufferReaderAt{buf: in}
 		r, err := NewReader(sr, dec)
 		if err != nil {
 			return
@@ -55,7 +55,7 @@ func FuzzReaderConst(f *testing.F) {
 	dec, err := zstd.NewReader(nil)
 	assert.NoError(f, err)
 
-	sr := &seekableBufferReader{buf: checksum}
+	sr := &seekableBufferReaderAt{buf: checksum}
 	r, err := NewReader(sr, dec)
 	assert.NoError(f, err)
 
