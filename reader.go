@@ -5,10 +5,12 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"sync"
 
 	"github.com/cespare/xxhash/v2"
 	"github.com/google/btree"
+	"go.uber.org/atomic"
 	"go.uber.org/zap"
 
 	"github.com/SaveTheRbtz/zstd-seekable-format-go/env"
@@ -105,6 +107,8 @@ type readerImpl struct {
 
 	o options.ReaderOptions
 
+	closed atomic.Bool
+
 	// TODO: Add simple LRU cache.
 	cachedFrame cachedFrame
 }
@@ -199,12 +203,18 @@ func (r *readerImpl) Read(p []byte) (n int, err error) {
 }
 
 func (r *readerImpl) Close() error {
-	r.cachedFrame.replace(0, nil)
-	r.index = nil
+	if r.closed.CAS(false, true) {
+		r.cachedFrame.replace(math.MaxUint64, nil)
+		r.index = nil
+	}
 	return nil
 }
 
 func (r *readerImpl) read(dst []byte, off int64) (int64, int, error) {
+	if r.closed.Load() {
+		return 0, 0, fmt.Errorf("reader is closed")
+	}
+
 	if off >= r.endOffset {
 		return 0, 0, io.EOF
 	}
@@ -278,6 +288,10 @@ func (r *readerImpl) read(dst []byte, off int64) (int64, int, error) {
 }
 
 func (r *readerImpl) Seek(offset int64, whence int) (int64, error) {
+	if r.closed.Load() {
+		return 0, fmt.Errorf("reader is closed")
+	}
+
 	newOffset := r.offset
 	switch whence {
 	case io.SeekCurrent:
