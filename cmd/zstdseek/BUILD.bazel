@@ -15,7 +15,7 @@ go_library(
         "//:zstd-seekable-format-go",
         "//options",
         "@com_github_klauspost_compress//zstd",
-        "@com_github_reusee_fastcdc_go//:fastcdc-go",
+        "@com_github_restic_chunker//:chunker",
         "@org_uber_go_zap//:zap",
     ],
 )

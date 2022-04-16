@@ -12,7 +12,7 @@ import (
 	"strings"
 
 	"github.com/klauspost/compress/zstd"
-	"github.com/reusee/fastcdc-go"
+	"github.com/restic/chunker"
 	"go.uber.org/zap"
 
 	seekable "github.com/SaveTheRbtz/zstd-seekable-format-go"
@@ -33,7 +33,7 @@ func main() {
 
 	flag.StringVar(&inputFlag, "f", "", "input filename")
 	flag.StringVar(&outputFlag, "o", "", "output filename")
-	flag.StringVar(&chunkingFlag, "c", "16:64:128", "min:avg:max chunking block size (in kb)")
+	flag.StringVar(&chunkingFlag, "c", "16:128", "min:max chunking block size (in kb)")
 	flag.BoolVar(&verifyFlag, "t", false, "test reading after the write")
 	flag.IntVar(&qualityFlag, "q", 1, "compression quality (lower == faster)")
 	flag.BoolVar(&verboseFlag, "v", false, "be verbose")
@@ -112,29 +112,25 @@ func main() {
 	}
 	defer w.Close()
 
-	chunkParams := strings.SplitN(chunkingFlag, ":", 3)
-	if len(chunkParams) != 3 {
-		logger.Fatal("failed parse chunker params. len() != 3", zap.Int("actual", len(chunkParams)))
+	chunkParams := strings.SplitN(chunkingFlag, ":", 2)
+	if len(chunkParams) != 2 {
+		logger.Fatal("failed parse chunker params. len() != 2", zap.Int("actual", len(chunkParams)))
 	}
-	mustConv := func(s string) int {
+	mustConv := func(s string) uint {
 		n, err := strconv.Atoi(s)
 		if err != nil {
-			logger.Fatal("failed to parse int", zap.String("int", s), zap.Error(err))
+			logger.Fatal("failed to parse int", zap.String("string", s), zap.Error(err))
 		}
-		return n
+		return uint(n)
 	}
-	opts := fastcdc.Options{
-		MinSize:     mustConv(chunkParams[0]) * 1024,
-		AverageSize: mustConv(chunkParams[1]) * 1024,
-		MaxSize:     mustConv(chunkParams[2]) * 1024,
-	}
-	chunker, err := fastcdc.NewChunker(input, opts)
-	if err != nil {
-		logger.Fatal("failed to create chunker", zap.Error(err))
-	}
+	minChunkSize := mustConv(chunkParams[0]) * 1024
+	maxChunkSize := mustConv(chunkParams[1]) * 1024
+	chunker := chunker.NewWithBoundaries(
+		input, chunker.Pol(0x3DA3358B4DC173), minChunkSize, maxChunkSize)
 
+	buf := make([]byte, maxChunkSize)
 	for {
-		chunk, err := chunker.Next()
+		chunk, err := chunker.Next(buf)
 		if err != nil {
 			if errors.Is(err, io.EOF) {
 				break
