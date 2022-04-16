@@ -178,6 +178,15 @@ func TestReader(t *testing.T) {
 
 		_, err = r.Read(tmp)
 		assert.Equal(t, err, io.EOF)
+
+		err = r.Close()
+		assert.NoError(t, err)
+
+		// read after close
+		_, err = r.Read(tmp)
+		assert.ErrorContains(t, err, "reader is closed")
+
+		// double close
 		err = r.Close()
 		assert.NoError(t, err)
 	}
