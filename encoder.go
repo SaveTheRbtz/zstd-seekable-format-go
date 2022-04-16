@@ -14,6 +14,7 @@ import (
 type Encoder interface {
 	// Encode returns compressed data and appends a frame to in-memory seek table.
 	Encode(src []byte) ([]byte, error)
+
 	// EndStream returns in-memory seek table as a ZSTD's skippable frame.
 	EndStream() ([]byte, error)
 }

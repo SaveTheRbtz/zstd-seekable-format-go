@@ -124,20 +124,20 @@ type Reader interface {
 	// Seek implements io.Seeker interface to randomly access data.
 	// This method is NOT goroutine-safe and CAN NOT be called
 	// concurrently since it modifies the underlying offset.
-	io.Seeker
+	Seek(offset int64, whence int) (int64, error)
 
 	// Read implements io.Reader interface to sequentially access data.
 	// This method is NOT goroutine-safe and CAN NOT be called
 	// concurrently since it modifies the underlying offset.
-	io.Reader
+	Read(p []byte) (n int, err error)
 
 	// ReadAt implements io.ReaderAt interface to randomly access data.
 	// This method is goroutine-safe and can be called concurrently ONLY if
 	// the underlying reader supports io.ReaderAt interface.
-	io.ReaderAt
+	ReadAt(p []byte, off int64) (n int, err error)
 
 	// Close implements io.Closer interface free up any resources.
-	io.Closer
+	Close() error
 }
 
 // ZSTDDecoder is the decompressor.  Tested with github.com/klauspost/compress/zstd.

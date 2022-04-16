@@ -42,12 +42,13 @@ type Writer interface {
 	//
 	// Note that Write does not do any coalescing nor splitting of data,
 	// so each write will map to a separate ZSTD Frame.
-	io.Writer
+	Write(src []byte) (int, error)
+
 	// Close implement io.Closer interface.  It writes the seek table footer
 	// and releases occupied memory.
 	//
 	// Caller is still responsible to Close the underlying writer.
-	io.Closer
+	Close() (err error)
 }
 
 // ZSTDEncoder is the compressor.  Tested with github.com/klauspost/compress/zstd.
