@@ -32,6 +32,7 @@ go_library(
         "//options",
         "@com_github_cespare_xxhash_v2//:xxhash",
         "@com_github_google_btree//:btree",
+        "@org_uber_go_atomic//:atomic",
         "@org_uber_go_multierr//:multierr",
         "@org_uber_go_zap//:zap",
         "@org_uber_go_zap//zapcore",

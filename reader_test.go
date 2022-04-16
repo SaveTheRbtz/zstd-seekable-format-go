@@ -184,8 +184,6 @@ func TestReader(t *testing.T) {
 }
 
 func TestReaderEdges(t *testing.T) {
-	t.Parallel()
-
 	dec, err := zstd.NewReader(nil)
 	assert.NoError(t, err)
 
@@ -201,8 +199,8 @@ func TestReaderEdges(t *testing.T) {
 			defer func() { assert.NoError(t, r.Close()) }()
 
 			for _, whence := range []int{io.SeekStart, io.SeekEnd} {
-				for n := int64(-1); n <= int64(len(source)); n++ {
-					for m := int64(0); m <= int64(len(source)); m++ {
+				for n := int64(-1); n <= int64(len(source))+1; n++ {
+					for m := int64(0); m <= int64(len(source))+1; m++ {
 						var j int64
 						switch whence {
 						case io.SeekStart:
@@ -301,7 +299,6 @@ func TestReaderAt(t *testing.T) {
 }
 
 func TestReaderEdgesParallel(t *testing.T) {
-	t.Parallel()
 	dec, err := zstd.NewReader(nil)
 	assert.NoError(t, err)
 
@@ -312,17 +309,25 @@ func TestReaderEdgesParallel(t *testing.T) {
 		sr := &seekableBufferReaderAt{buf: b}
 		r, err := NewReader(sr, dec)
 		assert.NoError(t, err)
-		defer func() { assert.NoError(t, r.Close()) }()
 
 		for n := int64(-1); n <= int64(len(source)); n++ {
 			for m := int64(0); m <= int64(len(source)); m++ {
-				t.Run(fmt.Sprintf("%d/%d/%d", i, n, m), func(t *testing.T) {
+				t.Run(fmt.Sprintf("%d/len:%d/buf:%d", i, n, m), func(t *testing.T) {
 					t.Parallel()
 
 					tmp := make([]byte, m)
 					k, err := r.ReadAt(tmp, n)
-					if n < 0 {
-						assert.Error(t, err)
+					if n < 0 && m != 0 {
+						assert.Error(t, err,
+							"%d: should return Error at %d: ret: %d, bytes: %+v",
+							i, n, k, tmp)
+						return
+					}
+
+					if m == 0 {
+						assert.NoError(t, err)
+						assert.Equal(t, 0, k)
+						assert.Equal(t, make([]byte, m), tmp)
 						return
 					}
 
@@ -330,10 +335,16 @@ func TestReaderEdgesParallel(t *testing.T) {
 						assert.Equal(t, err, io.EOF,
 							"%d: should return EOF at %d, len(source): %d, len(tmp): %d, k: %d",
 							i, n, len(source), m, k)
+						assert.Equal(t, 0, k, "should not read anything at the end")
 						return
-					} else {
+					}
+					if n+m <= int64(len(source)) {
 						assert.NoError(t, err,
-							"%d: should NOT return EOF at %d, len(source): %d, len(tmp): %d, k: %d",
+							"%d: should NOT return Err at %d, len(source): %d, len(tmp): %d, k: %d",
+							i, n, len(source), m, k)
+					} else {
+						assert.Equal(t, err, io.EOF,
+							"%d: should return EOF at %d, len(source): %d, len(tmp): %d, k: %d",
 							i, n, len(source), m, k)
 					}
 
