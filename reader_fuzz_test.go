@@ -12,7 +12,7 @@ import (
 )
 
 func FuzzReader(f *testing.F) {
-	dec, err := zstd.NewReader(nil)
+	dec, err := zstd.NewReader(nil, zstd.WithDecoderMaxMemory(1<<24))
 	assert.NoError(f, err)
 	defer dec.Close()
 
