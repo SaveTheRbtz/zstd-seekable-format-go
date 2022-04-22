@@ -19,7 +19,7 @@ func FuzzRoundTrip(f *testing.F) {
 	assert.NoError(f, err)
 	defer dec.Close()
 
-	enc, err := zstd.NewWriter(nil, zstd.WithEncoderLevel(zstd.SpeedFastest))
+	enc, err := zstd.NewWriter(nil, zstd.WithEncoderLevel(zstd.SpeedDefault))
 	assert.NoError(f, err)
 	defer func() { assert.NoError(f, enc.Close()) }()
 
