@@ -7,6 +7,7 @@ import (
 	"flag"
 	"io"
 	"log"
+	"math"
 	"os"
 	"strconv"
 	"strings"
@@ -125,12 +126,22 @@ func main() {
 	}
 	minChunkSize := mustConv(chunkParams[0]) * 1024
 	maxChunkSize := mustConv(chunkParams[1]) * 1024
-	chunker := chunker.NewWithBoundaries(
+
+	// convert average chunk size to a number of bits
+	chunkBits := int(math.Log2(float64(minChunkSize + maxChunkSize/2)))
+	if chunkBits < 0 {
+		chunkBits = 8
+	} else if chunkBits > 32 {
+		chunkBits = 32
+	}
+	logger.Info("setting chunker params", zap.Int("bits", chunkBits), zap.Uint("min", minChunkSize), zap.Uint("max", maxChunkSize))
+	ch := chunker.NewWithBoundaries(
 		input, chunker.Pol(0x3DA3358B4DC173), minChunkSize, maxChunkSize)
+	ch.SetAverageBits(chunkBits)
 
 	buf := make([]byte, maxChunkSize)
 	for {
-		chunk, err := chunker.Next(buf)
+		chunk, err := ch.Next(buf)
 		if err != nil {
 			if errors.Is(err, io.EOF) {
 				break
