@@ -1,11 +1,9 @@
 name: ci
 
 on:
-  push:
-    branches: ['*']
-    tags: ['v*']
   pull_request:
-    branches: ['*']
+    branches: [main]
+    types: [opened, synchronize, closed]
 
 jobs:
   coverage:
@@ -23,3 +21,15 @@ jobs:
         run: go test -coverprofile=coverage.out -covermode=count
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v3
+  apidiff:
+    name: apidiff
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-go@v3
+        with:
+          go-version: '>=1.18'
+          check-latest: true
+      - run: git fetch origin main
+      - name: go-apidiff
+        uses: joelanford/go-apidiff@v0.4.0
