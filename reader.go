@@ -14,7 +14,6 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/SaveTheRbtz/zstd-seekable-format-go/env"
-	"github.com/SaveTheRbtz/zstd-seekable-format-go/options"
 )
 
 type cachedFrame struct {
@@ -105,7 +104,8 @@ type readerImpl struct {
 	numFrames int64
 	endOffset int64
 
-	o options.ReaderOptions
+	logger *zap.Logger
+	env    env.REnvironment
 
 	closed atomic.Bool
 
@@ -147,21 +147,21 @@ type ZSTDDecoder interface {
 
 // NewReader returns ZSTD stream reader that can be randomly accessed using uncompressed data offset.
 // Ideally, passed io.ReadSeeker should implement io.ReaderAt interface.
-func NewReader(rs io.ReadSeeker, decoder ZSTDDecoder, opts ...options.ROption) (Reader, error) {
+func NewReader(rs io.ReadSeeker, decoder ZSTDDecoder, opts ...rOption) (Reader, error) {
 	sr := readerImpl{
 		dec: decoder,
 	}
 
-	sr.o.SetDefault()
+	sr.logger = zap.NewNop()
 	for _, o := range opts {
-		err := o(&sr.o)
+		err := o(&sr)
 		if err != nil {
 			return nil, err
 		}
 	}
 
-	if sr.o.Env == nil {
-		sr.o.Env = &readSeekerEnvImpl{
+	if sr.env == nil {
+		sr.env = &readSeekerEnvImpl{
 			rs: rs,
 		}
 	}
@@ -244,7 +244,7 @@ func (r *readerImpl) read(dst []byte, off int64) (int64, int, error) {
 				index.CompSize, maxDecoderFrameSize)
 		}
 
-		src, err := r.o.Env.GetFrameByIndex(*index)
+		src, err := r.env.GetFrameByIndex(*index)
 		if err != nil {
 			return 0, 0, fmt.Errorf("failed to read compressed data at: %d, %w", index.CompOffset, err)
 		}
@@ -280,7 +280,7 @@ func (r *readerImpl) read(dst []byte, off int64) (int64, int, error) {
 		size = uint64(len(dst))
 	}
 
-	r.o.Logger.Debug("decompressed", zap.Uint64("offsetWithinFrame", offsetWithinFrame), zap.Uint64("end", offsetWithinFrame+size),
+	r.logger.Debug("decompressed", zap.Uint64("offsetWithinFrame", offsetWithinFrame), zap.Uint64("end", offsetWithinFrame+size),
 		zap.Uint64("size", size), zap.Int("lenDecompressed", len(decompressed)), zap.Int("lenDst", len(dst)), zap.Object("index", index))
 	copy(dst, decompressed[offsetWithinFrame:offsetWithinFrame+size])
 
@@ -311,7 +311,7 @@ func (r *readerImpl) Seek(offset int64, whence int) (int64, error) {
 
 func (r *readerImpl) indexFooter() (*btree.BTreeG[*env.FrameOffsetEntry], *env.FrameOffsetEntry, error) {
 	// read seekTableFooter
-	buf, err := r.o.Env.ReadFooter()
+	buf, err := r.env.ReadFooter()
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to read footer: %w", err)
 	}
@@ -325,7 +325,7 @@ func (r *readerImpl) indexFooter() (*btree.BTreeG[*env.FrameOffsetEntry], *env.F
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to parse footer %+v: %w", buf, err)
 	}
-	r.o.Logger.Debug("loaded", zap.Object("footer", &footer))
+	r.logger.Debug("loaded", zap.Object("footer", &footer))
 
 	r.checksums = footer.SeekTableDescriptor.ChecksumFlag
 
@@ -344,7 +344,7 @@ func (r *readerImpl) indexFooter() (*btree.BTreeG[*env.FrameOffsetEntry], *env.F
 			skippableFrameOffset, maxDecoderFrameSize)
 	}
 
-	buf, err = r.o.Env.ReadSkipFrame(skippableFrameOffset)
+	buf, err = r.env.ReadSkipFrame(skippableFrameOffset)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to read footer: %w", err)
 	}

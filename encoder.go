@@ -6,8 +6,6 @@ import (
 
 	"github.com/cespare/xxhash/v2"
 	"go.uber.org/zap"
-
-	"github.com/SaveTheRbtz/zstd-seekable-format-go/options"
 )
 
 // Encoder is a byte-oriented API that is useful where wrapping io.Writer is not desirable.
@@ -19,7 +17,7 @@ type Encoder interface {
 	EndStream() ([]byte, error)
 }
 
-func NewEncoder(encoder ZSTDEncoder, opts ...options.WOption) (Encoder, error) {
+func NewEncoder(encoder ZSTDEncoder, opts ...wOption) (Encoder, error) {
 	sw, err := NewWriter(nil, encoder, opts...)
 	if err != nil {
 		return nil, err
@@ -51,7 +49,7 @@ func (s *writerImpl) Encode(src []byte) ([]byte, error) {
 		Checksum:         uint32((xxhash.Sum64(src) << 32) >> 32),
 	}
 
-	s.o.Logger.Debug("appending frame", zap.Object("frame", &entry))
+	s.logger.Debug("appending frame", zap.Object("frame", &entry))
 	s.frameEntries = append(s.frameEntries, entry)
 
 	return dst, nil

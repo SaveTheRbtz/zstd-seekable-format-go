@@ -6,8 +6,9 @@ import (
 	"sync"
 
 	"go.uber.org/multierr"
+	"go.uber.org/zap"
 
-	"github.com/SaveTheRbtz/zstd-seekable-format-go/options"
+	"github.com/SaveTheRbtz/zstd-seekable-format-go/env"
 )
 
 // writerEnvImpl is the environment implementation of for the underlying WriteCloser.
@@ -27,7 +28,8 @@ type writerImpl struct {
 	enc          ZSTDEncoder
 	frameEntries []seekTableEntry
 
-	o options.WriterOptions
+	logger *zap.Logger
+	env    env.WEnvironment
 
 	once *sync.Once
 }
@@ -58,22 +60,22 @@ type ZSTDEncoder interface {
 
 // NewWriter wraps the passed io.Writer and Encoder into and indexed ZSTD stream.
 // Resulting stream then can be randomly accessed through the Reader and Decoder interfaces.
-func NewWriter(w io.Writer, encoder ZSTDEncoder, opts ...options.WOption) (Writer, error) {
+func NewWriter(w io.Writer, encoder ZSTDEncoder, opts ...wOption) (Writer, error) {
 	sw := writerImpl{
 		once: &sync.Once{},
 		enc:  encoder,
 	}
 
-	sw.o.SetDefault()
+	sw.logger = zap.NewNop()
 	for _, o := range opts {
-		err := o(&sw.o)
+		err := o(&sw)
 		if err != nil {
 			return nil, err
 		}
 	}
 
-	if sw.o.Env == nil {
-		sw.o.Env = &writerEnvImpl{
+	if sw.env == nil {
+		sw.env = &writerEnvImpl{
 			w: w,
 		}
 	}
@@ -87,7 +89,7 @@ func (s *writerImpl) Write(src []byte) (int, error) {
 		return 0, err
 	}
 
-	n, err := s.o.Env.WriteFrame(dst)
+	n, err := s.env.WriteFrame(dst)
 	if err != nil {
 		return 0, err
 	}
@@ -111,6 +113,6 @@ func (s *writerImpl) writeSeekTable() error {
 		return err
 	}
 
-	_, err = s.o.Env.WriteSeekTable(seekTableBytes)
+	_, err = s.env.WriteSeekTable(seekTableBytes)
 	return err
 }

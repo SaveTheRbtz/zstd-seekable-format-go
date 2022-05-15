@@ -10,8 +10,6 @@ import (
 
 	"github.com/klauspost/compress/zstd"
 	"github.com/stretchr/testify/assert"
-
-	"github.com/SaveTheRbtz/zstd-seekable-format-go/options"
 )
 
 func TestWriter(t *testing.T) {
@@ -90,7 +88,7 @@ func TestWriteEnvironment(t *testing.T) {
 	enc, err := zstd.NewWriter(nil, zstd.WithEncoderLevel(zstd.SpeedFastest))
 	assert.NoError(t, err)
 
-	w, err := NewWriter(nil, enc, options.WithWEnvironment(&fakeWriteEnvironment{
+	w, err := NewWriter(nil, enc, WithWEnvironment(&fakeWriteEnvironment{
 		bw: io.Writer(&b),
 	}))
 	assert.NoError(t, err)
