@@ -5,7 +5,7 @@ go 1.18
 require (
 	github.com/cespare/xxhash/v2 v2.1.2
 	github.com/google/btree v1.0.1
-	github.com/klauspost/compress v1.15.3
+	github.com/klauspost/compress v1.15.4
 	github.com/restic/chunker v0.4.0
 	github.com/stretchr/testify v1.7.1
 	go.uber.org/atomic v1.9.0
