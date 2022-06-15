@@ -23,6 +23,7 @@ jobs:
         uses: codecov/codecov-action@v3
   apidiff:
     name: apidiff
+    continue-on-error: true
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
