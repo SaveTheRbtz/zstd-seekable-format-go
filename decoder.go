@@ -1,8 +1,6 @@
 package seekable
 
 import (
-	"github.com/google/btree"
-
 	"github.com/SaveTheRbtz/zstd-seekable-format-go/env"
 	"github.com/SaveTheRbtz/zstd-seekable-format-go/options"
 )
@@ -73,8 +71,8 @@ func (r *readerImpl) GetIndexByDecompOffset(off uint64) (found *env.FrameOffsetE
 		return nil
 	}
 
-	r.index.DescendLessOrEqual(&env.FrameOffsetEntry{DecompOffset: off}, func(i btree.Item) bool {
-		found = i.(*env.FrameOffsetEntry)
+	r.index.DescendLessOrEqual(&env.FrameOffsetEntry{DecompOffset: off}, func(index *env.FrameOffsetEntry) bool {
+		found = index
 		return false
 	})
 	return
@@ -85,8 +83,7 @@ func (r *readerImpl) GetIndexByID(id int64) (found *env.FrameOffsetEntry) {
 		return nil
 	}
 
-	r.index.Descend(func(i btree.Item) bool {
-		index := i.(*env.FrameOffsetEntry)
+	r.index.Descend(func(index *env.FrameOffsetEntry) bool {
 		if index.ID == id {
 			found = index
 			return false
