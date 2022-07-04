@@ -382,7 +382,7 @@ func (r *readerImpl) indexSeekTableEntries(p []byte, entrySize uint64) (
 	}
 
 	// TODO: make fan-out tunable?
-	t := btree.NewG[*env.FrameOffsetEntry](8, env.Less)
+	t := btree.NewG(8, env.Less)
 	entry := seekTableEntry{}
 	var compOffset, decompOffset uint64
 
