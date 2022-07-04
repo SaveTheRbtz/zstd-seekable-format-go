@@ -7,7 +7,7 @@ require (
 	github.com/google/btree v1.0.1
 	github.com/klauspost/compress v1.15.7
 	github.com/restic/chunker v0.4.0
-	github.com/stretchr/testify v1.7.5
+	github.com/stretchr/testify v1.8.0
 	go.uber.org/atomic v1.9.0
 	go.uber.org/multierr v1.8.0
 	go.uber.org/zap v1.21.0
