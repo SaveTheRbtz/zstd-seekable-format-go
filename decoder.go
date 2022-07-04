@@ -2,7 +2,6 @@ package seekable
 
 import (
 	"github.com/SaveTheRbtz/zstd-seekable-format-go/env"
-	"github.com/SaveTheRbtz/zstd-seekable-format-go/options"
 )
 
 // Decoder is a byte-oriented API that is useful for cases where wrapping io.ReadSeeker is not desirable.
@@ -28,8 +27,8 @@ type Decoder interface {
 // NewDecoder creates a byte-oriented Decode interface from a given seektable index.
 // This index can either be produced by either Writer's WriteSeekTable or Encoder's EndStream.
 // Decoder can be used concurrently.
-func NewDecoder(seekTable []byte, decoder ZSTDDecoder, opts ...options.ROption) (Decoder, error) {
-	opts = append(opts, options.WithREnvironment(&decoderEnv{seekTable: seekTable}))
+func NewDecoder(seekTable []byte, decoder ZSTDDecoder, opts ...rOption) (Decoder, error) {
+	opts = append(opts, WithREnvironment(&decoderEnv{seekTable: seekTable}))
 
 	sr, err := NewReader(nil, decoder, opts...)
 	if err != nil {
@@ -37,7 +36,7 @@ func NewDecoder(seekTable []byte, decoder ZSTDDecoder, opts ...options.ROption) 
 	}
 
 	// Release seekTable reference to not leak memory.
-	sr.(*readerImpl).o.Env = nil
+	sr.(*readerImpl).env = nil
 
 	return sr.(*readerImpl), err
 }

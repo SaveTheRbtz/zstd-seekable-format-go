@@ -11,7 +11,6 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/SaveTheRbtz/zstd-seekable-format-go/env"
-	"github.com/SaveTheRbtz/zstd-seekable-format-go/options"
 )
 
 const sourceString = "testtest2"
@@ -391,7 +390,7 @@ func TestReadEnvironment(t *testing.T) {
 	assert.NoError(t, err)
 	defer dec.Close()
 
-	r, err := NewReader(nil, dec, options.WithREnvironment(&fakeReadEnvironment{}))
+	r, err := NewReader(nil, dec, WithREnvironment(&fakeReadEnvironment{}))
 	assert.NoError(t, err)
 	defer func() { assert.NoError(t, r.Close()) }()
 
