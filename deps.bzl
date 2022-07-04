@@ -101,8 +101,8 @@ def go_dependencies():
         name = "com_github_stretchr_testify",
         build_directives = ["gazelle:exclude **/**_test.go", "gazelle:exclude testing", "gazelle:exclude **/testdata"],
         importpath = "github.com/stretchr/testify",
-        sum = "h1:s5PTfem8p8EbKQOctVV53k6jCJt3UX4IEJzwh+C324Q=",
-        version = "v1.7.5",
+        sum = "h1:pSgiaMZlXftHpm5L7V1+rVB+AZJydKsMxsQBIJw4PKk=",
+        version = "v1.8.0",
     )
     go_repository(
         name = "com_github_yuin_goldmark",
