@@ -1,7 +1,6 @@
 package env
 
 import (
-	"github.com/google/btree"
 	"go.uber.org/zap/zapcore"
 )
 
@@ -34,6 +33,6 @@ func (o *FrameOffsetEntry) MarshalLogObject(enc zapcore.ObjectEncoder) error {
 	return nil
 }
 
-func (o *FrameOffsetEntry) Less(than btree.Item) bool {
-	return o.DecompOffset < than.(*FrameOffsetEntry).DecompOffset
+func Less(a, b *FrameOffsetEntry) bool {
+	return a.DecompOffset < b.DecompOffset
 }

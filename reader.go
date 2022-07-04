@@ -96,7 +96,7 @@ func (rs *readSeekerEnvImpl) ReadSkipFrame(skippableFrameOffset int64) ([]byte, 
 
 type readerImpl struct {
 	dec   ZSTDDecoder
-	index *btree.BTree
+	index *btree.BTreeG[*env.FrameOffsetEntry]
 
 	checksums bool
 
@@ -309,7 +309,7 @@ func (r *readerImpl) Seek(offset int64, whence int) (int64, error) {
 	return r.offset, nil
 }
 
-func (r *readerImpl) indexFooter() (*btree.BTree, *env.FrameOffsetEntry, error) {
+func (r *readerImpl) indexFooter() (*btree.BTreeG[*env.FrameOffsetEntry], *env.FrameOffsetEntry, error) {
 	// read seekTableFooter
 	buf, err := r.o.Env.ReadFooter()
 	if err != nil {
@@ -374,13 +374,15 @@ func (r *readerImpl) indexFooter() (*btree.BTree, *env.FrameOffsetEntry, error) 
 	return r.indexSeekTableEntries(buf[8:len(buf)-seekTableFooterOffset], uint64(seekTableEntrySize))
 }
 
-func (r *readerImpl) indexSeekTableEntries(p []byte, entrySize uint64) (*btree.BTree, *env.FrameOffsetEntry, error) {
+func (r *readerImpl) indexSeekTableEntries(p []byte, entrySize uint64) (
+	*btree.BTreeG[*env.FrameOffsetEntry], *env.FrameOffsetEntry, error,
+) {
 	if uint64(len(p))%entrySize != 0 {
 		return nil, nil, fmt.Errorf("seek table size is not multiple of %d", entrySize)
 	}
 
 	// TODO: make fan-out tunable?
-	t := btree.New(8)
+	t := btree.NewG[*env.FrameOffsetEntry](8, env.Less)
 	entry := seekTableEntry{}
 	var compOffset, decompOffset uint64
 
