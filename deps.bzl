@@ -34,8 +34,8 @@ def go_dependencies():
         name = "com_github_google_btree",
         build_directives = ["gazelle:exclude **/**_test.go", "gazelle:exclude testing", "gazelle:exclude **/testdata"],
         importpath = "github.com/google/btree",
-        sum = "h1:OMJCfqwmbcwNihVCadalGMZiHclz5T0mRv12gnIaV0Q=",
-        version = "v1.1.1",
+        sum = "h1:xf4v41cLI2Z6FxbKm+8Bu+m8ifhj15JuZ9sa0jZCMUU=",
+        version = "v1.1.2",
     )
 
     go_repository(
