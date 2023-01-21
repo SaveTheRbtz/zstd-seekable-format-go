@@ -32,7 +32,7 @@ func main() {
 
 	flag.StringVar(&inputFlag, "f", "", "input filename")
 	flag.StringVar(&outputFlag, "o", "", "output filename")
-	flag.StringVar(&chunkingFlag, "c", "16:128", "min:max chunking block size (in kb)")
+	flag.StringVar(&chunkingFlag, "c", "128:1024:8192", "min:avg:max chunking block size (in kb)")
 	flag.BoolVar(&verifyFlag, "t", false, "test reading after the write")
 	flag.IntVar(&qualityFlag, "q", 1, "compression quality (lower == faster)")
 	flag.BoolVar(&verboseFlag, "v", false, "be verbose")
@@ -98,9 +98,9 @@ func main() {
 		defer output.Close()
 	}
 
-	chunkParams := strings.SplitN(chunkingFlag, ":", 2)
-	if len(chunkParams) != 2 {
-		logger.Fatal("failed parse chunker params. len() != 2", zap.Int("actual", len(chunkParams)))
+	chunkParams := strings.Split(chunkingFlag, ":")
+	if len(chunkParams) != 3 {
+		logger.Fatal("failed parse chunker params. len() != 3", zap.Int("actual", len(chunkParams)))
 	}
 	mustConv := func(s string) int {
 		n, err := strconv.Atoi(s)
@@ -110,7 +110,8 @@ func main() {
 		return n
 	}
 	minChunkSize := mustConv(chunkParams[0]) * 1024
-	maxChunkSize := mustConv(chunkParams[1]) * 1024
+	avgChunkSize := mustConv(chunkParams[1]) * 1024
+	maxChunkSize := mustConv(chunkParams[2]) * 1024
 
 	var zstdOpts []zstd.EOption = []zstd.EOption{
 		zstd.WithEncoderLevel(zstd.EncoderLevelFromZstd(qualityFlag)),
@@ -132,7 +133,7 @@ func main() {
 		input,
 		fastcdc.Options{
 			MinSize:     minChunkSize,
-			AverageSize: (minChunkSize + maxChunkSize) / 2,
+			AverageSize: avgChunkSize,
 			MaxSize:     maxChunkSize,
 		},
 	)
