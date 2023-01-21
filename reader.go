@@ -43,7 +43,7 @@ type readSeekerEnvImpl struct {
 	rs io.ReadSeeker
 }
 
-func (rs *readSeekerEnvImpl) GetFrameByIndex(index env.FrameOffsetEntry) (p []byte, err error) {
+func (rs *readSeekerEnvImpl) GetFrameByIndex(index env.SeekIndexEntry) (p []byte, err error) {
 	p = make([]byte, index.CompSize)
 	off := int64(index.CompOffset)
 
@@ -95,7 +95,7 @@ func (rs *readSeekerEnvImpl) ReadSkipFrame(skippableFrameOffset int64) ([]byte, 
 
 type readerImpl struct {
 	dec   ZSTDDecoder
-	index *btree.BTreeG[*env.FrameOffsetEntry]
+	index *btree.BTreeG[*env.SeekIndexEntry]
 
 	checksums bool
 
@@ -309,7 +309,7 @@ func (r *readerImpl) Seek(offset int64, whence int) (int64, error) {
 	return r.offset, nil
 }
 
-func (r *readerImpl) indexFooter() (*btree.BTreeG[*env.FrameOffsetEntry], *env.FrameOffsetEntry, error) {
+func (r *readerImpl) indexFooter() (*btree.BTreeG[*env.SeekIndexEntry], *env.SeekIndexEntry, error) {
 	// read seekTableFooter
 	buf, err := r.env.ReadFooter()
 	if err != nil {
@@ -375,7 +375,7 @@ func (r *readerImpl) indexFooter() (*btree.BTreeG[*env.FrameOffsetEntry], *env.F
 }
 
 func (r *readerImpl) indexSeekTableEntries(p []byte, entrySize uint64) (
-	*btree.BTreeG[*env.FrameOffsetEntry], *env.FrameOffsetEntry, error,
+	*btree.BTreeG[*env.SeekIndexEntry], *env.SeekIndexEntry, error,
 ) {
 	if uint64(len(p))%entrySize != 0 {
 		return nil, nil, fmt.Errorf("seek table size is not multiple of %d", entrySize)
@@ -386,7 +386,7 @@ func (r *readerImpl) indexSeekTableEntries(p []byte, entrySize uint64) (
 	entry := seekTableEntry{}
 	var compOffset, decompOffset uint64
 
-	var last *env.FrameOffsetEntry
+	var last *env.SeekIndexEntry
 	var i int64
 	for indexOffset := uint64(0); indexOffset < uint64(len(p)); indexOffset += entrySize {
 		err := entry.UnmarshalBinary(p[indexOffset : indexOffset+entrySize])
@@ -395,7 +395,7 @@ func (r *readerImpl) indexSeekTableEntries(p []byte, entrySize uint64) (
 				p[indexOffset:indexOffset+entrySize], indexOffset, err)
 		}
 
-		last = &env.FrameOffsetEntry{
+		last = &env.SeekIndexEntry{
 			ID:           i,
 			CompOffset:   compOffset,
 			DecompOffset: decompOffset,

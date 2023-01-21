@@ -13,7 +13,7 @@ type WEnvironment interface {
 // This is useful when, for example there is a custom chunking code.
 type REnvironment interface {
 	// GetFrameByIndex returns the compressed frame by its index.
-	GetFrameByIndex(index FrameOffsetEntry) ([]byte, error)
+	GetFrameByIndex(index SeekIndexEntry) ([]byte, error)
 	// ReadFooter returns buffer whose last 9 bytes are interpreted as a `Seek_Table_Footer`.
 	ReadFooter() ([]byte, error)
 	// ReadSkipFrame returns the full Seek Table Skippable frame

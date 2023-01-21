@@ -4,8 +4,8 @@ import (
 	"go.uber.org/zap/zapcore"
 )
 
-// FrameOffsetEntry is the post-proccessed view of the Seek_Table_Entries suitable for indexing.
-type FrameOffsetEntry struct {
+// SeekIndexEntry is the post-proccessed view of the Seek_Table_Entries suitable for indexing.
+type SeekIndexEntry struct {
 	// ID is the is the sequence number of the frame in the index.
 	ID int64
 
@@ -22,7 +22,7 @@ type FrameOffsetEntry struct {
 	Checksum uint32
 }
 
-func (o *FrameOffsetEntry) MarshalLogObject(enc zapcore.ObjectEncoder) error {
+func (o *SeekIndexEntry) MarshalLogObject(enc zapcore.ObjectEncoder) error {
 	enc.AddInt64("ID", o.ID)
 	enc.AddUint64("CompOffset", o.CompOffset)
 	enc.AddUint64("DecompOffset", o.DecompOffset)
@@ -33,6 +33,6 @@ func (o *FrameOffsetEntry) MarshalLogObject(enc zapcore.ObjectEncoder) error {
 	return nil
 }
 
-func Less(a, b *FrameOffsetEntry) bool {
+func Less(a, b *SeekIndexEntry) bool {
 	return a.DecompOffset < b.DecompOffset
 }

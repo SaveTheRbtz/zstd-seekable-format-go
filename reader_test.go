@@ -245,8 +245,9 @@ func TestReaderEdges(t *testing.T) {
 }
 
 // TestReaderAt verified the following ReaderAt asssumption:
-// 	When ReadAt returns n < len(p), it returns a non-nil error explaining why more bytes were not returned.
-// 	In this respect, ReadAt is stricter than Read.
+//
+//	When ReadAt returns n < len(p), it returns a non-nil error explaining why more bytes were not returned.
+//	In this respect, ReadAt is stricter than Read.
 func TestReaderAt(t *testing.T) {
 	t.Parallel()
 
@@ -365,7 +366,7 @@ func TestReaderEdgesParallel(t *testing.T) {
 
 type fakeReadEnvironment struct{}
 
-func (s *fakeReadEnvironment) GetFrameByIndex(index env.FrameOffsetEntry) ([]byte, error) {
+func (s *fakeReadEnvironment) GetFrameByIndex(index env.SeekIndexEntry) ([]byte, error) {
 	switch index.ID {
 	case 0:
 		return checksum[:17], nil

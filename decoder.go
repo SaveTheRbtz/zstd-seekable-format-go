@@ -6,13 +6,13 @@ import (
 
 // Decoder is a byte-oriented API that is useful for cases where wrapping io.ReadSeeker is not desirable.
 type Decoder interface {
-	// GetIndexByDecompOffset returns FrameOffsetEntry for an offset in the decompressed stream.
+	// GetIndexByDecompOffset returns SeekIndexEntry for an offset in the decompressed stream.
 	// Will return nil if offset is greater or equal than Size().
-	GetIndexByDecompOffset(off uint64) *env.FrameOffsetEntry
+	GetIndexByDecompOffset(off uint64) *env.SeekIndexEntry
 
-	// GetIndexByID returns FrameOffsetEntry for a given frame id.
+	// GetIndexByID returns SeekIndexEntry for a given frame id.
 	// Will return nil if offset is greater or equal than NumFrames() or less than 0.
-	GetIndexByID(id int64) *env.FrameOffsetEntry
+	GetIndexByID(id int64) *env.SeekIndexEntry
 
 	// Size returns the size of the uncompressed stream.
 	Size() int64
@@ -45,7 +45,7 @@ type decoderEnv struct {
 	seekTable []byte
 }
 
-func (d *decoderEnv) GetFrameByIndex(index env.FrameOffsetEntry) (p []byte, err error) {
+func (d *decoderEnv) GetFrameByIndex(index env.SeekIndexEntry) (p []byte, err error) {
 	panic("should not be used")
 }
 
@@ -65,24 +65,24 @@ func (r *readerImpl) NumFrames() int64 {
 	return r.numFrames
 }
 
-func (r *readerImpl) GetIndexByDecompOffset(off uint64) (found *env.FrameOffsetEntry) {
+func (r *readerImpl) GetIndexByDecompOffset(off uint64) (found *env.SeekIndexEntry) {
 	if off >= uint64(r.endOffset) {
 		return nil
 	}
 
-	r.index.DescendLessOrEqual(&env.FrameOffsetEntry{DecompOffset: off}, func(index *env.FrameOffsetEntry) bool {
+	r.index.DescendLessOrEqual(&env.SeekIndexEntry{DecompOffset: off}, func(index *env.SeekIndexEntry) bool {
 		found = index
 		return false
 	})
 	return
 }
 
-func (r *readerImpl) GetIndexByID(id int64) (found *env.FrameOffsetEntry) {
+func (r *readerImpl) GetIndexByID(id int64) (found *env.SeekIndexEntry) {
 	if id < 0 {
 		return nil
 	}
 
-	r.index.Descend(func(index *env.FrameOffsetEntry) bool {
+	r.index.Descend(func(index *env.SeekIndexEntry) bool {
 		if index.ID == id {
 			found = index
 			return false
