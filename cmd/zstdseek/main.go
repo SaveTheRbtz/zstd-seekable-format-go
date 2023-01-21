@@ -98,19 +98,6 @@ func main() {
 		defer output.Close()
 	}
 
-	var zstdOpts []zstd.EOption
-	zstdOpts = append(zstdOpts, zstd.WithEncoderLevel(zstd.EncoderLevelFromZstd(qualityFlag)))
-	enc, err := zstd.NewWriter(nil, zstdOpts...)
-	if err != nil {
-		logger.Fatal("failed to create zstd encoder", zap.Error(err))
-	}
-
-	w, err := seekable.NewWriter(output, enc, seekable.WithWLogger(logger))
-	if err != nil {
-		logger.Fatal("failed to create compressed writer", zap.Error(err))
-	}
-	defer w.Close()
-
 	chunkParams := strings.SplitN(chunkingFlag, ":", 2)
 	if len(chunkParams) != 2 {
 		logger.Fatal("failed parse chunker params. len() != 2", zap.Int("actual", len(chunkParams)))
@@ -124,6 +111,20 @@ func main() {
 	}
 	minChunkSize := mustConv(chunkParams[0]) * 1024
 	maxChunkSize := mustConv(chunkParams[1]) * 1024
+
+	var zstdOpts []zstd.EOption = []zstd.EOption{
+		zstd.WithEncoderLevel(zstd.EncoderLevelFromZstd(qualityFlag)),
+	}
+	enc, err := zstd.NewWriter(nil, zstdOpts...)
+	if err != nil {
+		logger.Fatal("failed to create zstd encoder", zap.Error(err))
+	}
+
+	w, err := seekable.NewWriter(output, enc, seekable.WithWLogger(logger))
+	if err != nil {
+		logger.Fatal("failed to create compressed writer", zap.Error(err))
+	}
+	defer w.Close()
 
 	// convert average chunk size to a number of bits
 	logger.Info("setting chunker params", zap.Int("min", minChunkSize), zap.Int("max", maxChunkSize))
