@@ -5,8 +5,8 @@ package env
 type WEnvironment interface {
 	// WriteFrame is called each time frame is encoded and needs to be written upstream.
 	WriteFrame(p []byte) (n int, err error)
-	// WriteSeekTable is called on Close to flush the seek table.
-	WriteSeekTable(p []byte) (n int, err error)
+	// WriteSeekIndex is called on Close to flush the seek table.
+	WriteSeekIndex(p []byte) (n int, err error)
 }
 
 // REnvironment can be used to inject a custom file reader that is different from normal ReadSeeker.

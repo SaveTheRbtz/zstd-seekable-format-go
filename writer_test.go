@@ -76,7 +76,7 @@ func (s *fakeWriteEnvironment) WriteFrame(p []byte) (n int, err error) {
 	return s.bw.Write(p)
 }
 
-func (s *fakeWriteEnvironment) WriteSeekTable(p []byte) (n int, err error) {
+func (s *fakeWriteEnvironment) WriteSeekIndex(p []byte) (n int, err error) {
 	return s.bw.Write(p)
 }
 

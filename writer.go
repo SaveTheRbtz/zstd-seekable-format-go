@@ -20,7 +20,7 @@ func (w *writerEnvImpl) WriteFrame(p []byte) (n int, err error) {
 	return w.w.Write(p)
 }
 
-func (w *writerEnvImpl) WriteSeekTable(p []byte) (n int, err error) {
+func (w *writerEnvImpl) WriteSeekIndex(p []byte) (n int, err error) {
 	return w.w.Write(p)
 }
 
@@ -113,6 +113,6 @@ func (s *writerImpl) writeSeekTable() error {
 		return err
 	}
 
-	_, err = s.env.WriteSeekTable(seekTableBytes)
+	_, err = s.env.WriteSeekIndex(seekTableBytes)
 	return err
 }

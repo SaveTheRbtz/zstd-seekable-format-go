@@ -25,7 +25,7 @@ type Decoder interface {
 }
 
 // NewDecoder creates a byte-oriented Decode interface from a given seektable index.
-// This index can either be produced by either Writer's WriteSeekTable or Encoder's EndStream.
+// This index can either be produced by either Writer's WriteSeekIndex or Encoder's EndStream.
 // Decoder can be used concurrently.
 func NewDecoder(seekTable []byte, decoder ZSTDDecoder, opts ...rOption) (Decoder, error) {
 	opts = append(opts, WithREnvironment(&decoderEnv{seekTable: seekTable}))
