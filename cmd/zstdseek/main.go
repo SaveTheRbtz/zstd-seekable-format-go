@@ -7,13 +7,12 @@ import (
 	"flag"
 	"io"
 	"log"
-	"math"
 	"os"
 	"strconv"
 	"strings"
 
+	"github.com/SaveTheRbtz/fastcdc-go"
 	"github.com/klauspost/compress/zstd"
-	"github.com/restic/chunker"
 	"go.uber.org/zap"
 
 	seekable "github.com/SaveTheRbtz/zstd-seekable-format-go"
@@ -116,31 +115,32 @@ func main() {
 	if len(chunkParams) != 2 {
 		logger.Fatal("failed parse chunker params. len() != 2", zap.Int("actual", len(chunkParams)))
 	}
-	mustConv := func(s string) uint {
+	mustConv := func(s string) int {
 		n, err := strconv.Atoi(s)
 		if err != nil {
 			logger.Fatal("failed to parse int", zap.String("string", s), zap.Error(err))
 		}
-		return uint(n)
+		return n
 	}
 	minChunkSize := mustConv(chunkParams[0]) * 1024
 	maxChunkSize := mustConv(chunkParams[1]) * 1024
 
 	// convert average chunk size to a number of bits
-	chunkBits := int(math.Log2(float64(minChunkSize + maxChunkSize/2)))
-	if chunkBits < 0 {
-		chunkBits = 8
-	} else if chunkBits > 32 {
-		chunkBits = 32
+	logger.Info("setting chunker params", zap.Int("min", minChunkSize), zap.Int("max", maxChunkSize))
+	chunker, err := fastcdc.NewChunker(
+		input,
+		fastcdc.Options{
+			MinSize:     minChunkSize,
+			AverageSize: (minChunkSize + maxChunkSize) / 2,
+			MaxSize:     maxChunkSize,
+		},
+	)
+	if err != nil {
+		logger.Fatal("failed to create chunker", zap.Error(err))
 	}
-	logger.Info("setting chunker params", zap.Int("bits", chunkBits), zap.Uint("min", minChunkSize), zap.Uint("max", maxChunkSize))
-	ch := chunker.NewWithBoundaries(
-		input, chunker.Pol(0x3DA3358B4DC173), minChunkSize, maxChunkSize)
-	ch.SetAverageBits(chunkBits)
 
-	buf := make([]byte, maxChunkSize)
 	for {
-		chunk, err := ch.Next(buf)
+		chunk, err := chunker.Next()
 		if err != nil {
 			if errors.Is(err, io.EOF) {
 				break

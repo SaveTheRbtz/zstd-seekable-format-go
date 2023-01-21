@@ -61,11 +61,11 @@ def go_dependencies():
         version = "v1.0.0",
     )
     go_repository(
-        name = "com_github_restic_chunker",
+        name = "com_github_savetherbtz_fastcdc_go",
         build_directives = ["gazelle:exclude **/**_test.go", "gazelle:exclude testing", "gazelle:exclude **/testdata"],
-        importpath = "github.com/restic/chunker",
-        sum = "h1:YUPYCUn70MYP7VO4yllypp2SjmsRhRJaad3xKu1QFRw=",
-        version = "v0.4.0",
+        importpath = "github.com/SaveTheRbtz/fastcdc-go",
+        sum = "h1:JdHvLlnijDuisYIwpRDcHZEjbxvCqtEmJ3gf35VJBgA=",
+        version = "v0.3.0",
     )
 
     go_repository(

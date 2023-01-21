@@ -14,7 +14,7 @@ go_library(
     deps = [
         "//:zstd-seekable-format-go",
         "@com_github_klauspost_compress//zstd",
-        "@com_github_restic_chunker//:chunker",
+        "@com_github_savetherbtz_fastcdc_go//:fastcdc-go",
         "@org_uber_go_zap//:zap",
     ],
 )
