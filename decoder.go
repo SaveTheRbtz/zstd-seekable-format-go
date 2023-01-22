@@ -45,15 +45,15 @@ type decoderEnv struct {
 	seekTable []byte
 }
 
-func (d *decoderEnv) GetFrameByIndex(index env.SeekIndexEntry) (p []byte, err error) {
+func (d *decoderEnv) GetFrameByIndex(_ env.SeekIndexEntry) (p []byte, err error) {
 	panic("should not be used")
 }
 
-func (d *decoderEnv) ReadFooter() ([]byte, error) {
+func (d *decoderEnv) ReadSeekIndexFooter() ([]byte, error) {
 	return d.seekTable, nil
 }
 
-func (d *decoderEnv) ReadSkipFrame(skippableFrameOffset int64) ([]byte, error) {
+func (d *decoderEnv) ReadSeekIndex(skippableFrameOffset int64) ([]byte, error) {
 	return d.seekTable, nil
 }
 

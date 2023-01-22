@@ -64,7 +64,7 @@ func (rs *readSeekerEnvImpl) GetFrameByIndex(index env.SeekIndexEntry) (p []byte
 	return
 }
 
-func (rs *readSeekerEnvImpl) ReadFooter() ([]byte, error) {
+func (rs *readSeekerEnvImpl) ReadSeekIndexFooter() ([]byte, error) {
 	n, err := rs.rs.Seek(-seekTableFooterOffset, io.SeekEnd)
 	if err != nil {
 		return nil, fmt.Errorf("failed to seek to: %d: %w", -seekTableFooterOffset, err)
@@ -79,13 +79,13 @@ func (rs *readSeekerEnvImpl) ReadFooter() ([]byte, error) {
 	return buf, nil
 }
 
-func (rs *readSeekerEnvImpl) ReadSkipFrame(skippableFrameOffset int64) ([]byte, error) {
-	n, err := rs.rs.Seek(-skippableFrameOffset, io.SeekEnd)
+func (rs *readSeekerEnvImpl) ReadSeekIndex(indexPosition int64) ([]byte, error) {
+	n, err := rs.rs.Seek(-indexPosition, io.SeekEnd)
 	if err != nil {
-		return nil, fmt.Errorf("failed to seek to: %d: %w", -skippableFrameOffset, err)
+		return nil, fmt.Errorf("failed to seek to: %d: %w", -indexPosition, err)
 	}
 
-	buf := make([]byte, skippableFrameOffset)
+	buf := make([]byte, indexPosition)
 	_, err = io.ReadFull(rs.rs, buf)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read skippable frame header at: %d: %w", n, err)
@@ -311,7 +311,7 @@ func (r *readerImpl) Seek(offset int64, whence int) (int64, error) {
 
 func (r *readerImpl) indexFooter() (*btree.BTreeG[*env.SeekIndexEntry], *env.SeekIndexEntry, error) {
 	// read seekTableFooter
-	buf, err := r.env.ReadFooter()
+	buf, err := r.env.ReadSeekIndexFooter()
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to read footer: %w", err)
 	}
@@ -344,7 +344,7 @@ func (r *readerImpl) indexFooter() (*btree.BTreeG[*env.SeekIndexEntry], *env.See
 			skippableFrameOffset, maxDecoderFrameSize)
 	}
 
-	buf, err = r.env.ReadSkipFrame(skippableFrameOffset)
+	buf, err = r.env.ReadSeekIndex(skippableFrameOffset)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to read footer: %w", err)
 	}

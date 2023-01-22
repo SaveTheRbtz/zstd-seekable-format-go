@@ -14,9 +14,13 @@ type WEnvironment interface {
 type REnvironment interface {
 	// GetFrameByIndex returns the compressed frame by its index.
 	GetFrameByIndex(index SeekIndexEntry) ([]byte, error)
-	// ReadFooter returns buffer whose last 9 bytes are interpreted as a `Seek_Table_Footer`.
-	ReadFooter() ([]byte, error)
-	// ReadSkipFrame returns the full Seek Table Skippable frame
+	// ReadSeekIndexFooter returns footer of the Seek Table Skippable frame.
+	// This specifies format and location of the Seek Table.
+	// Then ReadSeekIndex is called to fetch and parse the Seek Table.
+	//
+	// If more than 9 bytes are returned only the first 9 bytes are used.
+	ReadSeekIndexFooter() ([]byte, error)
+	// ReadSeekIndex returns the full Seek Table Skippable frame
 	// including the `Skippable_Magic_Number` and `Frame_Size`.
-	ReadSkipFrame(skippableFrameOffset int64) ([]byte, error)
+	ReadSeekIndex(indexPosition int64) ([]byte, error)
 }

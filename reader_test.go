@@ -377,11 +377,11 @@ func (s *fakeReadEnvironment) GetFrameByIndex(index env.SeekIndexEntry) ([]byte,
 	}
 }
 
-func (s *fakeReadEnvironment) ReadFooter() ([]byte, error) {
+func (s *fakeReadEnvironment) ReadSeekIndexFooter() ([]byte, error) {
 	return checksum[len(checksum)-10:], nil
 }
 
-func (s *fakeReadEnvironment) ReadSkipFrame(skippableFrameOffset int64) ([]byte, error) {
+func (s *fakeReadEnvironment) ReadSeekIndex(skippableFrameOffset int64) ([]byte, error) {
 	return checksum[len(checksum)-41:], nil
 }
 
