@@ -56,14 +56,14 @@ func (s *writerImpl) Encode(src []byte) ([]byte, error) {
 }
 
 func (s *writerImpl) EndStream() ([]byte, error) {
-	seekTable := make([]byte, len(s.frameEntries)*12+9)
-	for i, e := range s.frameEntries {
-		e.marshalBinaryInline(seekTable[i*12 : (i+1)*12])
-	}
-
 	if len(s.frameEntries) > math.MaxUint32 {
 		return nil, fmt.Errorf("number of frames for seekable format: %d > %d",
 			len(s.frameEntries), math.MaxUint32)
+	}
+
+	seekTable := make([]byte, len(s.frameEntries)*12+9)
+	for i, e := range s.frameEntries {
+		e.marshalBinaryInline(seekTable[i*12 : (i+1)*12])
 	}
 
 	footer := seekTableFooter{
