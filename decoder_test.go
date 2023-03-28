@@ -16,7 +16,7 @@ func TestDecoder(t *testing.T) {
 
 	d, err := NewDecoder(checksum[17+18:], dec)
 	assert.NoError(t, err)
-	defer func() { assert.NoError(t, d.Close())}()
+	defer func() { assert.NoError(t, d.Close()) }()
 
 	assert.Equal(t, int64(len(sourceString)), d.Size())
 	assert.Equal(t, int64(2), d.NumFrames())
