@@ -197,6 +197,7 @@ func TestReaderEdges(t *testing.T) {
 
 	source := []byte(sourceString)
 	for i, b := range [][]byte{checksum, noChecksum} {
+		i := i
 		b := b
 		t.Run(strconv.Itoa(i), func(t *testing.T) {
 			t.Parallel()
@@ -245,8 +246,9 @@ func TestReaderEdges(t *testing.T) {
 }
 
 // TestReaderAt verified the following ReaderAt asssumption:
-// 	When ReadAt returns n < len(p), it returns a non-nil error explaining why more bytes were not returned.
-// 	In this respect, ReadAt is stricter than Read.
+//
+// When ReadAt returns n < len(p), it returns a non-nil error explaining why more bytes were not returned.
+// In this respect, ReadAt is stricter than Read.
 func TestReaderAt(t *testing.T) {
 	t.Parallel()
 
@@ -312,6 +314,7 @@ func TestReaderEdgesParallel(t *testing.T) {
 
 	source := []byte(sourceString)
 	for i, b := range [][]byte{checksum, noChecksum} {
+		i := i
 		b := b
 
 		sr := &seekableBufferReaderAt{buf: b}
@@ -320,6 +323,8 @@ func TestReaderEdgesParallel(t *testing.T) {
 
 		for n := int64(-1); n <= int64(len(source)); n++ {
 			for m := int64(0); m <= int64(len(source)); m++ {
+				n := n
+				m := m
 				t.Run(fmt.Sprintf("%d/len:%d/buf:%d", i, n, m), func(t *testing.T) {
 					t.Parallel()
 
