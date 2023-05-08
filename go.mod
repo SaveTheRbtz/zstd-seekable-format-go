@@ -8,7 +8,7 @@ require (
 	github.com/google/btree v1.1.2
 	github.com/klauspost/compress v1.15.15
 	github.com/stretchr/testify v1.8.1
-	go.uber.org/atomic v1.10.0
+	go.uber.org/atomic v1.11.0
 	go.uber.org/multierr v1.9.0
 	go.uber.org/zap v1.24.0
 )
