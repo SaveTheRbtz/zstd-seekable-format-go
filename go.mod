@@ -6,7 +6,7 @@ require (
 	github.com/SaveTheRbtz/fastcdc-go v0.3.0
 	github.com/cespare/xxhash/v2 v2.2.0
 	github.com/google/btree v1.1.2
-	github.com/klauspost/compress v1.16.7
+	github.com/klauspost/compress v1.17.4
 	github.com/stretchr/testify v1.8.4
 	go.uber.org/atomic v1.11.0
 	go.uber.org/multierr v1.11.0
