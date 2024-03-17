@@ -13,6 +13,7 @@ import (
 
 	"github.com/SaveTheRbtz/fastcdc-go"
 	"github.com/klauspost/compress/zstd"
+	"github.com/schollz/progressbar/v3"
 	"go.uber.org/zap"
 
 	seekable "github.com/SaveTheRbtz/zstd-seekable-format-go"
@@ -25,9 +26,9 @@ type readCloser struct {
 
 func main() {
 	var (
-		inputFlag, chunkingFlag, outputFlag string
-		qualityFlag                         int
-		verifyFlag, verboseFlag             bool
+		inputFlag, chunkingFlag, outputFlag   string
+		qualityFlag                           int
+		verifyFlag, verboseFlag, progressFlag bool
 	)
 
 	flag.StringVar(&inputFlag, "f", "", "input filename")
@@ -36,6 +37,7 @@ func main() {
 	flag.BoolVar(&verifyFlag, "t", false, "test reading after the write")
 	flag.IntVar(&qualityFlag, "q", 1, "compression quality (lower == faster)")
 	flag.BoolVar(&verboseFlag, "v", false, "be verbose")
+	flag.BoolVar(&progressFlag, "p", false, "display progress")
 
 	flag.Parse()
 
@@ -60,12 +62,28 @@ func main() {
 		logger.Fatal("verify can't be used with stdout output")
 	}
 
+	bar := progressbar.DefaultSilent(0, "")
+
 	var input io.ReadCloser
 	if inputFlag == "-" {
 		input = os.Stdin
 	} else {
 		if input, err = os.Open(inputFlag); err != nil {
 			logger.Fatal("failed to open input", zap.Error(err))
+		}
+
+		if progressFlag {
+			size := int64(-1)
+
+			stat, err := os.Stat(inputFlag)
+			if err == nil {
+				size = stat.Size()
+			}
+
+			bar = progressbar.DefaultBytes(
+				size,
+				"compressing",
+			)
 		}
 	}
 
@@ -149,11 +167,14 @@ func main() {
 			}
 			logger.Fatal("failed to read", zap.Error(err))
 		}
-		_, err = w.Write(chunk.Data)
+		n, err := w.Write(chunk.Data)
 		if err != nil {
 			logger.Fatal("failed to write data", zap.Error(err))
 		}
+
+		_ = bar.Add(n)
 	}
+	_ = bar.Finish()
 	input.Close()
 	w.Close()
 
