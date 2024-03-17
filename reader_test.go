@@ -161,8 +161,8 @@ func TestReader(t *testing.T) {
 
 		assert.Equal(t, int64(n), sr.offset)
 
-		offset1, data1 := sr.cachedFrame.get()
-		assert.Equal(t, uint64(0), offset1)
+		data1, ok := sr.cachedFrames.Get(0)
+		assert.Equal(t, true, ok)
 		assert.Equal(t, bytes1, data1)
 
 		m, err := r.Read(tmp)
@@ -171,8 +171,8 @@ func TestReader(t *testing.T) {
 		assert.Equal(t, bytes2, tmp[:m])
 
 		assert.Equal(t, int64(n)+int64(m), sr.offset)
-		offset2, data2 := sr.cachedFrame.get()
-		assert.Equal(t, uint64(len(bytes1)), offset2)
+		data2, ok := sr.cachedFrames.Get(uint64(len(bytes1)))
+		assert.Equal(t, true, ok)
 		assert.Equal(t, bytes2, data2)
 
 		_, err = r.Read(tmp)

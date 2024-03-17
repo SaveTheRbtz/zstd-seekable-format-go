@@ -5,8 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"math"
-	"sync"
 
 	"github.com/cespare/xxhash/v2"
 	"github.com/google/btree"
@@ -14,29 +12,8 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/SaveTheRbtz/zstd-seekable-format-go/env"
+	"github.com/hashicorp/golang-lru/v2"
 )
-
-type cachedFrame struct {
-	m sync.Mutex
-
-	offset uint64
-	data   []byte
-}
-
-func (f *cachedFrame) replace(offset uint64, data []byte) {
-	f.m.Lock()
-	defer f.m.Unlock()
-
-	f.offset = offset
-	f.data = data
-}
-
-func (f *cachedFrame) get() (uint64, []byte) {
-	f.m.Lock()
-	defer f.m.Unlock()
-
-	return f.offset, f.data
-}
 
 // readSeekerEnvImpl is the environment implementation for the io.ReadSeeker.
 type readSeekerEnvImpl struct {
@@ -110,7 +87,7 @@ type readerImpl struct {
 	closed atomic.Bool
 
 	// TODO: Add simple LRU cache.
-	cachedFrame cachedFrame
+	cachedFrames *lru.Cache[uint64, []byte]
 }
 
 var (
@@ -148,8 +125,14 @@ type ZSTDDecoder interface {
 // NewReader returns ZSTD stream reader that can be randomly accessed using uncompressed data offset.
 // Ideally, passed io.ReadSeeker should implement io.ReaderAt interface.
 func NewReader(rs io.ReadSeeker, decoder ZSTDDecoder, opts ...rOption) (Reader, error) {
+	cachedFrames, err := lru.New[uint64, []byte](200)
+	if err != nil {
+		return nil, err
+	}
+
 	sr := readerImpl{
-		dec: decoder,
+		dec:          decoder,
+		cachedFrames: cachedFrames,
 	}
 
 	sr.logger = zap.NewNop()
@@ -204,7 +187,7 @@ func (r *readerImpl) Read(p []byte) (n int, err error) {
 
 func (r *readerImpl) Close() error {
 	if r.closed.CompareAndSwap(false, true) {
-		r.cachedFrame.replace(math.MaxUint64, nil)
+		r.cachedFrames.Purge()
 		r.index = nil
 	}
 	return nil
@@ -233,8 +216,7 @@ func (r *readerImpl) read(dst []byte, off int64) (int64, int, error) {
 
 	var decompressed []byte
 
-	cachedOffset, cachedData := r.cachedFrame.get()
-	if cachedOffset == index.DecompOffset && cachedData != nil {
+	if cachedData, ok := r.cachedFrames.Get(index.DecompOffset); ok {
 		// fastpath
 		decompressed = cachedData
 	} else {
@@ -266,7 +248,7 @@ func (r *readerImpl) read(dst []byte, off int64) (int64, int, error) {
 					index.CompOffset, index.Checksum, checksum)
 			}
 		}
-		r.cachedFrame.replace(index.DecompOffset, decompressed)
+		r.cachedFrames.Add(index.DecompOffset, decompressed)
 	}
 
 	if len(decompressed) != int(index.DecompSize) {

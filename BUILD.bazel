@@ -33,6 +33,7 @@ go_library(
         "//env",
         "@com_github_cespare_xxhash_v2//:xxhash",
         "@com_github_google_btree//:btree",
+        "@com_github_hashicorp_golang_lru_v2//:go_default_library",
         "@org_uber_go_atomic//:atomic",
         "@org_uber_go_multierr//:multierr",
         "@org_uber_go_zap//:zap",
