@@ -19,8 +19,15 @@ http_archive(
 )
 
 load("@io_bazel_rules_go//go:deps.bzl", "go_register_toolchains", "go_rules_dependencies")
-load("@bazel_gazelle//:deps.bzl", "gazelle_dependencies")
+load("@bazel_gazelle//:deps.bzl", "gazelle_dependencies", "go_repository")
 load("//:deps.bzl", "go_dependencies")
+
+go_repository(
+    name = "com_github_schollz_progressbar_v3",
+    importpath = "github.com/schollz/progressbar/v3",
+    sum = "h1:EducH6uNLIWsr560zSV1KrTeUb/wZGAHqyMFIEa99ks=",
+    version = "v3.14.2",
+)
 
 # gazelle:repository_macro deps.bzl%go_dependencies
 go_dependencies()
