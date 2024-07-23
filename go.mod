@@ -7,7 +7,7 @@ require (
 	github.com/cespare/xxhash/v2 v2.2.0
 	github.com/google/btree v1.1.2
 	github.com/klauspost/compress v1.17.9
-	github.com/stretchr/testify v1.8.4
+	github.com/stretchr/testify v1.9.0
 	go.uber.org/atomic v1.11.0
 	go.uber.org/multierr v1.11.0
 	go.uber.org/zap v1.27.0
