@@ -4,7 +4,7 @@ go 1.19
 
 require (
 	github.com/SaveTheRbtz/fastcdc-go v0.3.0
-	github.com/cespare/xxhash/v2 v2.2.0
+	github.com/cespare/xxhash/v2 v2.3.0
 	github.com/google/btree v1.1.2
 	github.com/klauspost/compress v1.17.9
 	github.com/stretchr/testify v1.9.0
