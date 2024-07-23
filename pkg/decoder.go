@@ -1,7 +1,7 @@
 package seekable
 
 import (
-	"github.com/SaveTheRbtz/zstd-seekable-format-go/env"
+	"github.com/SaveTheRbtz/zstd-seekable-format-go/pkg/env"
 )
 
 // Decoder is a byte-oriented API that is useful for cases where wrapping io.ReadSeeker is not desirable.

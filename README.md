@@ -5,7 +5,7 @@
 This library provides a random access reader (using uncompressed file offsets) for ZSTD-compressed streams.  This can be used for creating transparent compression layers.  Coupled with Content Defined Chunking (CDC) it can also be used as a robust de-duplication layer.
 ## Installation
 
-`go get -u github.com/SaveTheRbtz/zstd-seekable-format-go`
+`go get -u github.com/SaveTheRbtz/zstd-seekable-format-go/pkg`
 
 ## Using the seekable format
 
@@ -13,7 +13,7 @@ Writing is done through the `Writer` interface:
 ```go
 import (
 	"github.com/klauspost/compress/zstd"
-	seekable "github.com/SaveTheRbtz/zstd-seekable-format-go"
+	seekable "github.com/SaveTheRbtz/zstd-seekable-format-go/pkg"
 )
 
 enc, err := zstd.NewWriter(nil, zstd.WithEncoderLevel(zstd.SpeedFastest))

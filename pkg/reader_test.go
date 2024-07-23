@@ -10,7 +10,7 @@ import (
 	"github.com/klauspost/compress/zstd"
 	"github.com/stretchr/testify/assert"
 
-	"github.com/SaveTheRbtz/zstd-seekable-format-go/env"
+	"github.com/SaveTheRbtz/zstd-seekable-format-go/pkg/env"
 )
 
 const sourceString = "testtest2"

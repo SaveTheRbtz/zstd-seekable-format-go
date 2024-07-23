@@ -15,7 +15,7 @@ import (
 	"github.com/klauspost/compress/zstd"
 	"go.uber.org/zap"
 
-	seekable "github.com/SaveTheRbtz/zstd-seekable-format-go"
+	seekable "github.com/SaveTheRbtz/zstd-seekable-format-go/pkg"
 )
 
 type readCloser struct {

@@ -8,7 +8,7 @@ import (
 
 	"github.com/klauspost/compress/zstd"
 
-	seekable "github.com/SaveTheRbtz/zstd-seekable-format-go"
+	seekable "github.com/SaveTheRbtz/zstd-seekable-format-go/pkg"
 )
 
 func Example() {

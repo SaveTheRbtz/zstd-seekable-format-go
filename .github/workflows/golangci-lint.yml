@@ -19,3 +19,4 @@ jobs:
         uses: golangci/golangci-lint-action@v6.0.1
         with:
           version: latest
+          working-directory: ./pkg
