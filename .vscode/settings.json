@@ -1,19 +1,8 @@
 {
-  "go.goroot": "${workspaceFolder}/bazel-zstd-seekable-format-go/external/go_sdk",
-  "go.toolsEnvVars": {
-    "GOPACKAGESDRIVER": "${workspaceFolder}/tools/gopackagesdriver.sh"
-  },
   "go.enableCodeLens": {
-    "references": false,
     "runtest": false
   },
   "gopls": {
-    "build.directoryFilters": [
-      "-bazel-bin",
-      "-bazel-out",
-      "-bazel-testlogs",
-      "-bazel-zstd-seekable-format-go",
-    ],
     "formatting.gofumpt": true,
     "formatting.local": "github.com/SaveTheRbtz/zstd-seekable-format-go",
     "ui.completion.usePlaceholders": true,

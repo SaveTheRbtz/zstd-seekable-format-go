@@ -66,7 +66,7 @@ func TestIntercompat(t *testing.T) {
 	for _, fn := range []string{
 		// t2sz README.md -l 22 -s 1024 -o testdata/intercompat-t2sz.zst
 		"testdata/intercompat-t2sz.zst",
-		// bazel run //cmd/zstdseek:zstdseek -- \
+		// go run ./cmd/zstdseek -- \
 		//	-f $(realpath README.md) -o $(realpath testdata/intercompat-zstdseek_v0.zst) \
 		//	-c 1:1 -t -q 13
 		"testdata/intercompat-zstdseek_v0.zst",
