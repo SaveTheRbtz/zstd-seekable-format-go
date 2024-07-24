@@ -99,7 +99,7 @@ if !bytes.Equal(all, []byte("Hello World!")) {
 ```
 
 [doc-img]: https://pkg.go.dev/badge/github.com/SaveTheRbtz/zstd-seekable-format-go
-[doc]: https://pkg.go.dev/github.com/SaveTheRbtz/zstd-seekable-format-go
+[doc]: https://pkg.go.dev/github.com/SaveTheRbtz/zstd-seekable-format-go/pkg
 [ci-img]: https://github.com/SaveTheRbtz/zstd-seekable-format-go/actions/workflows/go.yml/badge.svg
 [ci]: https://github.com/SaveTheRbtz/zstd-seekable-format-go/actions/workflows/go.yml
 [report-img]: https://goreportcard.com/badge/SaveTheRbtz/zstd-seekable-format-go
