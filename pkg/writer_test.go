@@ -2,10 +2,10 @@ package seekable
 
 import (
 	"bytes"
+	"crypto/rand"
 	"encoding/binary"
 	"fmt"
 	"io"
-	"crypto/rand"
 	"testing"
 
 	"github.com/klauspost/compress/zstd"
