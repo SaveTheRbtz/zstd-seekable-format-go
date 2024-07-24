@@ -76,7 +76,7 @@ func TestIntercompat(t *testing.T) {
 		t.Run(fn, func(t *testing.T) {
 			t.Parallel()
 
-			f, err := os.Open(fmt.Sprintf("../testdata/%s", fn))
+			f, err := os.Open(fmt.Sprintf("./testdata/%s", fn))
 			require.NoError(t, err)
 			defer f.Close()
 
