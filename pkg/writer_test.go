@@ -5,7 +5,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"io"
-	"math/rand"
+	"crypto/rand"
 	"testing"
 
 	"github.com/klauspost/compress/zstd"
