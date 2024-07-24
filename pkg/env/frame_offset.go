@@ -4,7 +4,7 @@ import (
 	"go.uber.org/zap/zapcore"
 )
 
-// FrameOffsetEntry is the post-proccessed view of the Seek_Table_Entries suitable for indexing.
+// FrameOffsetEntry is the post-processed view of the Seek_Table_Entries suitable for indexing.
 type FrameOffsetEntry struct {
 	// ID is the is the sequence number of the frame in the index.
 	ID int64
