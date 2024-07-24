@@ -1,9 +1,8 @@
-module github.com/SaveTheRbtz/zstd-seekable-format-go
+module github.com/SaveTheRbtz/zstd-seekable-format-go/pkg
 
-go 1.19
+go 1.22
 
 require (
-	github.com/SaveTheRbtz/fastcdc-go v0.3.0
 	github.com/cespare/xxhash/v2 v2.3.0
 	github.com/google/btree v1.1.2
 	github.com/klauspost/compress v1.17.9

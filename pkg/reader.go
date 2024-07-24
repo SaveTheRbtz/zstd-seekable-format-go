@@ -13,7 +13,7 @@ import (
 	"go.uber.org/atomic"
 	"go.uber.org/zap"
 
-	"github.com/SaveTheRbtz/zstd-seekable-format-go/env"
+	"github.com/SaveTheRbtz/zstd-seekable-format-go/pkg/env"
 )
 
 type cachedFrame struct {

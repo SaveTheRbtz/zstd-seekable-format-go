@@ -8,7 +8,7 @@ import (
 	"go.uber.org/multierr"
 	"go.uber.org/zap"
 
-	"github.com/SaveTheRbtz/zstd-seekable-format-go/env"
+	"github.com/SaveTheRbtz/zstd-seekable-format-go/pkg/env"
 )
 
 // writerEnvImpl is the environment implementation of for the underlying WriteCloser.

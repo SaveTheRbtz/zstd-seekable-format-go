@@ -9,6 +9,7 @@ import (
 
 	"github.com/klauspost/compress/zstd"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 type bytesErr struct {
@@ -64,19 +65,19 @@ func TestIntercompat(t *testing.T) {
 	assert.NoError(t, err)
 
 	for _, fn := range []string{
-		// t2sz README.md -l 22 -s 1024 -o testdata/intercompat-t2sz.zst
-		"testdata/intercompat-t2sz.zst",
+		// t2sz README.md -l 22 -s 1024 -o intercompat-t2sz.zst
+		"intercompat-t2sz.zst",
 		// go run ./cmd/zstdseek -- \
-		//	-f $(realpath README.md) -o $(realpath testdata/intercompat-zstdseek_v0.zst) \
+		//	-f $(realpath README.md) -o $(realpath intercompat-zstdseek_v0.zst) \
 		//	-c 1:1 -t -q 13
-		"testdata/intercompat-zstdseek_v0.zst",
+		"intercompat-zstdseek_v0.zst",
 	} {
 		fn := fn
 		t.Run(fn, func(t *testing.T) {
 			t.Parallel()
 
-			f, err := os.Open(fn)
-			assert.NoError(t, err)
+			f, err := os.Open(fmt.Sprintf("../testdata/%s", fn))
+			require.NoError(t, err)
 			defer f.Close()
 
 			r, err := NewReader(f, dec)

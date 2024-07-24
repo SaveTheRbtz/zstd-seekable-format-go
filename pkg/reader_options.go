@@ -3,7 +3,7 @@ package seekable
 import (
 	"go.uber.org/zap"
 
-	"github.com/SaveTheRbtz/zstd-seekable-format-go/env"
+	"github.com/SaveTheRbtz/zstd-seekable-format-go/pkg/env"
 )
 
 type rOption func(*readerImpl) error
