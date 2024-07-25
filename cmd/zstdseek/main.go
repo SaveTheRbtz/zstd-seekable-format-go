@@ -15,6 +15,7 @@ import (
 	"github.com/klauspost/compress/zstd"
 	"github.com/schollz/progressbar/v3"
 	"go.uber.org/zap"
+	"golang.org/x/term"
 
 	seekable "github.com/SaveTheRbtz/zstd-seekable-format-go/pkg"
 )
@@ -26,9 +27,9 @@ type readCloser struct {
 
 func main() {
 	var (
-		inputFlag, chunkingFlag, outputFlag   string
-		qualityFlag                           int
-		verifyFlag, verboseFlag, progressFlag bool
+		inputFlag, chunkingFlag, outputFlag string
+		qualityFlag                         int
+		verifyFlag, verboseFlag             bool
 	)
 
 	flag.StringVar(&inputFlag, "f", "", "input filename")
@@ -37,9 +38,10 @@ func main() {
 	flag.BoolVar(&verifyFlag, "t", false, "test reading after the write")
 	flag.IntVar(&qualityFlag, "q", 1, "compression quality (lower == faster)")
 	flag.BoolVar(&verboseFlag, "v", false, "be verbose")
-	flag.BoolVar(&progressFlag, "p", false, "display progress")
 
 	flag.Parse()
+
+	showProgressBar := term.IsTerminal(int(os.Stdout.Fd()))
 
 	var err error
 	var logger *zap.Logger
@@ -64,18 +66,15 @@ func main() {
 
 	bar := progressbar.DefaultSilent(0, "")
 
-	var input io.ReadCloser
-	if inputFlag == "-" {
-		input = os.Stdin
-	} else {
-		if input, err = os.Open(inputFlag); err != nil {
+	inputFile := os.Stdin
+	if inputFlag != "-" {
+		if inputFile, err = os.Open(inputFlag); err != nil {
 			logger.Fatal("failed to open input", zap.Error(err))
 		}
 
-		if progressFlag {
+		if showProgressBar {
 			size := int64(-1)
-
-			stat, err := os.Stat(inputFlag)
+			stat, err := inputFile.Stat()
 			if err == nil {
 				size = stat.Size()
 			}
@@ -87,12 +86,14 @@ func main() {
 		}
 	}
 
+	var input io.ReadCloser = inputFile
+
 	expected := sha512.New512_256()
 	origDone := make(chan struct{})
 	if verifyFlag {
 		pr, pw := io.Pipe()
 
-		tee := io.TeeReader(input, pw)
+		tee := io.TeeReader(inputFile, pw)
 		input = readCloser{tee, pw}
 
 		go func() {
@@ -105,11 +106,9 @@ func main() {
 		}()
 	}
 
-	var output *os.File
-	if outputFlag == "-" {
-		output = os.Stdout
-	} else {
-		output, err = os.OpenFile(outputFlag, os.O_TRUNC|os.O_WRONLY|os.O_CREATE, 0644)
+	output := os.Stdout
+	if outputFlag != "-" {
+		output, err = os.OpenFile(outputFlag, os.O_TRUNC|os.O_WRONLY|os.O_CREATE, 0o644)
 		if err != nil {
 			logger.Fatal("failed to open output", zap.Error(err))
 		}
@@ -146,7 +145,7 @@ func main() {
 	defer w.Close()
 
 	// convert average chunk size to a number of bits
-	logger.Info("setting chunker params", zap.Int("min", minChunkSize), zap.Int("max", maxChunkSize))
+	logger.Debug("setting chunker params", zap.Int("min", minChunkSize), zap.Int("max", maxChunkSize))
 	chunker, err := fastcdc.NewChunker(
 		input,
 		fastcdc.Options{
@@ -179,6 +178,8 @@ func main() {
 	w.Close()
 
 	if verifyFlag {
+		logger.Info("verifying checksum")
+
 		verify, err := os.Open(outputFlag)
 		if err != nil {
 			logger.Fatal("failed to open file for verification", zap.Error(err))
