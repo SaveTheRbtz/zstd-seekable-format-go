@@ -41,8 +41,6 @@ func main() {
 
 	flag.Parse()
 
-	showProgressBar := term.IsTerminal(int(os.Stdout.Fd()))
-
 	var err error
 	var logger *zap.Logger
 	if verboseFlag {
@@ -72,7 +70,7 @@ func main() {
 			logger.Fatal("failed to open input", zap.Error(err))
 		}
 
-		if showProgressBar {
+		if term.IsTerminal(int(os.Stdout.Fd())) {
 			size := int64(-1)
 			stat, err := inputFile.Stat()
 			if err == nil {
