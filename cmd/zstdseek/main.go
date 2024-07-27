@@ -13,7 +13,9 @@ import (
 
 	"github.com/SaveTheRbtz/fastcdc-go"
 	"github.com/klauspost/compress/zstd"
+	"github.com/schollz/progressbar/v3"
 	"go.uber.org/zap"
+	"golang.org/x/term"
 
 	seekable "github.com/SaveTheRbtz/zstd-seekable-format-go/pkg"
 )
@@ -60,21 +62,36 @@ func main() {
 		logger.Fatal("verify can't be used with stdout output")
 	}
 
-	var input io.ReadCloser
-	if inputFlag == "-" {
-		input = os.Stdin
-	} else {
-		if input, err = os.Open(inputFlag); err != nil {
+	bar := progressbar.DefaultSilent(0, "")
+
+	inputFile := os.Stdin
+	if inputFlag != "-" {
+		if inputFile, err = os.Open(inputFlag); err != nil {
 			logger.Fatal("failed to open input", zap.Error(err))
 		}
+
+		if term.IsTerminal(int(os.Stdout.Fd())) {
+			size := int64(-1)
+			stat, err := inputFile.Stat()
+			if err == nil {
+				size = stat.Size()
+			}
+
+			bar = progressbar.DefaultBytes(
+				size,
+				"compressing",
+			)
+		}
 	}
+
+	var input io.ReadCloser = inputFile
 
 	expected := sha512.New512_256()
 	origDone := make(chan struct{})
 	if verifyFlag {
 		pr, pw := io.Pipe()
 
-		tee := io.TeeReader(input, pw)
+		tee := io.TeeReader(inputFile, pw)
 		input = readCloser{tee, pw}
 
 		go func() {
@@ -87,11 +104,9 @@ func main() {
 		}()
 	}
 
-	var output *os.File
-	if outputFlag == "-" {
-		output = os.Stdout
-	} else {
-		output, err = os.OpenFile(outputFlag, os.O_TRUNC|os.O_WRONLY|os.O_CREATE, 0644)
+	output := os.Stdout
+	if outputFlag != "-" {
+		output, err = os.OpenFile(outputFlag, os.O_TRUNC|os.O_WRONLY|os.O_CREATE, 0o644)
 		if err != nil {
 			logger.Fatal("failed to open output", zap.Error(err))
 		}
@@ -128,7 +143,7 @@ func main() {
 	defer w.Close()
 
 	// convert average chunk size to a number of bits
-	logger.Info("setting chunker params", zap.Int("min", minChunkSize), zap.Int("max", maxChunkSize))
+	logger.Debug("setting chunker params", zap.Int("min", minChunkSize), zap.Int("max", maxChunkSize))
 	chunker, err := fastcdc.NewChunker(
 		input,
 		fastcdc.Options{
@@ -149,15 +164,20 @@ func main() {
 			}
 			logger.Fatal("failed to read", zap.Error(err))
 		}
-		_, err = w.Write(chunk.Data)
+		n, err := w.Write(chunk.Data)
 		if err != nil {
 			logger.Fatal("failed to write data", zap.Error(err))
 		}
+
+		_ = bar.Add(n)
 	}
+	_ = bar.Finish()
 	input.Close()
 	w.Close()
 
 	if verifyFlag {
+		logger.Info("verifying checksum")
+
 		verify, err := os.Open(outputFlag)
 		if err != nil {
 			logger.Fatal("failed to open file for verification", zap.Error(err))
