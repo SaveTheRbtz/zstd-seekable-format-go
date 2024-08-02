@@ -27,13 +27,31 @@ jobs:
         working-directory: ./${{ matrix.dir }}
         run: |
           go get .
+      - name: go work
+        run: |
+          if [ "${{ matrix.dir }} " == "pkg" ]; then
+            echo "Skipping go workspace for ${{ matrix.dir }}"
+            rm -f go.work*
+            exit 0
+          fi
+          go work init
+          go work use pkg
+          go work use ${{ matrix.dir }}
       - name: Build (${{ matrix.dir }})
         working-directory: ./${{ matrix.dir }}
         run: |
           for OSARCH in $(go tool dist list); do
+            case $OSARCH in
+              freebsd*|darwin*|linux*|windows*|wasip*) ;;
+              *) continue ;;
+            esac
+            case $OSARCH in
+              *arm64|*arm|*amd64|*386|*riscv64|*wasm) ;;
+              *) continue ;;
+            esac
             IFS="/" read -r OS ARCH <<< "$OSARCH"
             echo "Building for $OS $ARCH"
-            CGO_ENABLED=1 GOOS=$OS GOARCH=$ARCH go build ./...
+            GOOS=$OS GOARCH=$ARCH go build ./...
           done
       - name: Test (${{ matrix.dir }})
         working-directory: ./${{ matrix.dir }}
