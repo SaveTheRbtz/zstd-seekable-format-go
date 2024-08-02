@@ -29,7 +29,7 @@ jobs:
           go get .
       - name: go work
         run: |
-          if [ "${{ matrix.dir }} " == "pkg" ]; then
+          if [ "${{ matrix.dir }}" == "pkg" ]; then
             echo "Skipping go workspace for ${{ matrix.dir }}"
             rm -f go.work*
             exit 0
