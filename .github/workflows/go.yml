@@ -15,12 +15,13 @@ jobs:
         go-version: ['1.22']
         dir: ['pkg', 'cmd/zstdseek']
     steps:
+      - uses: dcarbone/install-jq-action@v2.1.0
       - uses: actions/checkout@v4
       - name: Setup Go ${{ matrix.go-version }}
         uses: actions/setup-go@v5
         with:
           go-version: ${{ matrix.go-version }}
-          cache-dependency-path: go.sum
+          cache-dependency-path: ${{ matrix.dir }}/go.sum
       - name: Display Go version
         run: go version
       - name: Install dependencies (${{ matrix.dir }})
@@ -40,7 +41,7 @@ jobs:
       - name: Build (${{ matrix.dir }})
         working-directory: ./${{ matrix.dir }}
         run: |
-          for OSARCH in $(go tool dist list); do
+          for OSARCH in $(go tool dist list -json | jq -r '.[] | select(.FirstClass) | [.GOOS , .GOARCH] | join("/")'); do
             case $OSARCH in
               freebsd*|darwin*|linux*|windows*|wasip*) ;;
               *) continue ;;
