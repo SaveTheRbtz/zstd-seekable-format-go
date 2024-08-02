@@ -55,9 +55,9 @@ func (s *writerImpl) Encode(src []byte) ([]byte, error) {
 }
 
 func (s *writerImpl) EndStream() ([]byte, error) {
-	if int64(len(s.frameEntries)) > maxChunkSize {
+	if int64(len(s.frameEntries)) > maxNumberOfFrames {
 		return nil, fmt.Errorf("number of frames for seekable format: %d > %d",
-			len(s.frameEntries), maxChunkSize)
+			len(s.frameEntries), maxNumberOfFrames)
 	}
 
 	seekTable := make([]byte, len(s.frameEntries)*12+9)

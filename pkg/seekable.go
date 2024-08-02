@@ -50,7 +50,11 @@ const (
 
 	seekableTag = 0xE
 
+	// maximum size of a single frame
 	maxChunkSize int64 = math.MaxUint32
+
+	// maximum number of frames in a seekable stream
+	maxNumberOfFrames int64 = math.MaxUint32
 )
 
 /*
