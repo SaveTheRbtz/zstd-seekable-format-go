@@ -2,7 +2,6 @@ package seekable
 
 import (
 	"fmt"
-	"math"
 
 	"github.com/cespare/xxhash/v2"
 	"go.uber.org/zap"
@@ -27,9 +26,9 @@ func NewEncoder(encoder ZSTDEncoder, opts ...wOption) (Encoder, error) {
 }
 
 func (s *writerImpl) Encode(src []byte) ([]byte, error) {
-	if len(src) > math.MaxUint32 {
+	if int64(len(src)) > maxChunkSize {
 		return nil, fmt.Errorf("chunk size too big for seekable format: %d > %d",
-			len(src), math.MaxUint32)
+			len(src), maxChunkSize)
 	}
 
 	if len(src) == 0 {
@@ -38,9 +37,9 @@ func (s *writerImpl) Encode(src []byte) ([]byte, error) {
 
 	dst := s.enc.EncodeAll(src, nil)
 
-	if len(dst) > math.MaxUint32 {
+	if int64(len(dst)) > maxChunkSize {
 		return nil, fmt.Errorf("result size too big for seekable format: %d > %d",
-			len(src), math.MaxUint32)
+			len(src), maxChunkSize)
 	}
 
 	entry := seekTableEntry{
@@ -56,9 +55,9 @@ func (s *writerImpl) Encode(src []byte) ([]byte, error) {
 }
 
 func (s *writerImpl) EndStream() ([]byte, error) {
-	if len(s.frameEntries) > math.MaxUint32 {
+	if int64(len(s.frameEntries)) > maxChunkSize {
 		return nil, fmt.Errorf("number of frames for seekable format: %d > %d",
-			len(s.frameEntries), math.MaxUint32)
+			len(s.frameEntries), maxChunkSize)
 	}
 
 	seekTable := make([]byte, len(s.frameEntries)*12+9)
