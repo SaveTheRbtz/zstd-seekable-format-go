@@ -4,14 +4,9 @@ builds:
     dir: ./cmd/zstdseek
     env:
       - CGO_ENABLED=0
-    goos:
-      - linux
-      - windows
-      - darwin
-      - freebsd
-    goarch:
-      - amd64
-      - arm64
+    # go tool dist list -json | jq -r '.[] | select(.FirstClass)'
+    targets:
+      - go_first_class
 checksum:
   name_template: 'checksums.txt'
 snapshot:
@@ -24,3 +19,6 @@ changelog:
     exclude:
       - '^docs:'
       - '^test:'
+      - '^tests:'
+      - '^chore:'
+      - '^chore\('
