@@ -29,7 +29,12 @@ jobs:
           go get .
       - name: Build (${{ matrix.dir }})
         working-directory: ./${{ matrix.dir }}
-        run: go build -v ./...
+        run: |
+          for OSARCH in $(go tool dist list); do
+            IFS="/" read -r OS ARCH <<< "$OSARCH"
+            echo "Building for $OS $ARCH"
+            GOOS=$OS GOARCH=$ARCH go build ./...
+          done
       - name: Test (${{ matrix.dir }})
         working-directory: ./${{ matrix.dir }}
         run: go test -v ./...
