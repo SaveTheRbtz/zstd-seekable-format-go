@@ -4,7 +4,7 @@ go 1.22
 
 require (
 	github.com/SaveTheRbtz/fastcdc-go v0.3.0
-	github.com/SaveTheRbtz/zstd-seekable-format-go/pkg v0.7.1-0.20240802145525-42610f01425d
+	github.com/SaveTheRbtz/zstd-seekable-format-go/pkg v0.7.1-0.20240802183547-d6cafef2f296
 	github.com/klauspost/compress v1.17.9
 	github.com/schollz/progressbar/v3 v3.14.5
 	go.uber.org/zap v1.27.0
