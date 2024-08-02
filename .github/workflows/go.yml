@@ -42,14 +42,6 @@ jobs:
         working-directory: ./${{ matrix.dir }}
         run: |
           for OSARCH in $(go tool dist list -json | jq -r '.[] | select(.FirstClass) | [.GOOS , .GOARCH] | join("/")'); do
-            case $OSARCH in
-              freebsd*|darwin*|linux*|windows*|wasip*) ;;
-              *) continue ;;
-            esac
-            case $OSARCH in
-              *arm64|*arm|*amd64|*386|*riscv64|*wasm) ;;
-              *) continue ;;
-            esac
             IFS="/" read -r OS ARCH <<< "$OSARCH"
             echo "Building for $OS $ARCH"
             GOOS=$OS GOARCH=$ARCH go build ./...
