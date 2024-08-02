@@ -36,9 +36,9 @@ const (
 
 		https://github.com/facebook/zstd/blob/dev/contrib/seekable_format/zstd_seekable_compression_format.md
 	*/
-	skippableFrameMagic = 0x184D2A50
+	skippableFrameMagic uint32 = 0x184D2A50
 
-	seekableMagicNumber = 0x8F92EAB1
+	seekableMagicNumber uint32 = 0x8F92EAB1
 
 	seekTableFooterOffset = 9
 
@@ -49,6 +49,12 @@ const (
 	maxDecoderFrameSize = 128 << 20
 
 	seekableTag = 0xE
+
+	// maximum size of a single frame
+	maxChunkSize int64 = math.MaxUint32
+
+	// maximum number of frames in a seekable stream
+	maxNumberOfFrames int64 = math.MaxUint32
 )
 
 /*
@@ -234,7 +240,7 @@ func createSkippableFrame(tag uint32, payload []byte) ([]byte, error) {
 		return nil, fmt.Errorf("requested tag (%d) > 0xf", tag)
 	}
 
-	if len(payload) > math.MaxUint32 {
+	if int64(len(payload)) > maxChunkSize {
 		return nil, fmt.Errorf("requested skippable frame size (%d) > max uint32", len(payload))
 	}
 
