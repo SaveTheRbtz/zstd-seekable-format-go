@@ -9,6 +9,7 @@ import (
 
 	"github.com/klauspost/compress/zstd"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/SaveTheRbtz/zstd-seekable-format-go/pkg/env"
 )
@@ -137,13 +138,13 @@ func TestReader(t *testing.T) {
 	t.Parallel()
 
 	dec, err := zstd.NewReader(nil)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	defer dec.Close()
 
 	for _, b := range [][]byte{checksum, noChecksum} {
 		br := &seekableBufferReaderAt{buf: b}
 		r, err := NewReader(br, dec)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 
 		sr := r.(*readerImpl)
 		assert.Equal(t, int64(9), sr.endOffset)
@@ -155,7 +156,7 @@ func TestReader(t *testing.T) {
 
 		tmp := make([]byte, 4096)
 		n, err := r.Read(tmp)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		assert.Equal(t, len(bytes1), n)
 		assert.Equal(t, bytes1, tmp[:n])
 
@@ -166,7 +167,7 @@ func TestReader(t *testing.T) {
 		assert.Equal(t, bytes1, data1)
 
 		m, err := r.Read(tmp)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		assert.Equal(t, len(bytes2), m)
 		assert.Equal(t, bytes2, tmp[:m])
 
@@ -176,24 +177,24 @@ func TestReader(t *testing.T) {
 		assert.Equal(t, bytes2, data2)
 
 		_, err = r.Read(tmp)
-		assert.Equal(t, err, io.EOF)
+		require.ErrorIs(t, err, io.EOF)
 
 		err = r.Close()
-		assert.NoError(t, err)
+		require.NoError(t, err)
 
 		// read after close
 		_, err = r.Read(tmp)
-		assert.ErrorContains(t, err, "reader is closed")
+		require.ErrorContains(t, err, "reader is closed")
 
 		// double close
 		err = r.Close()
-		assert.NoError(t, err)
+		require.NoError(t, err)
 	}
 }
 
 func TestReaderEdges(t *testing.T) {
 	dec, err := zstd.NewReader(nil)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	source := []byte(sourceString)
 	for i, b := range [][]byte{checksum, noChecksum} {
@@ -204,8 +205,8 @@ func TestReaderEdges(t *testing.T) {
 
 			sr := &seekableBufferReaderAt{buf: b}
 			r, err := NewReader(sr, dec)
-			assert.NoError(t, err)
-			defer func() { assert.NoError(t, r.Close()) }()
+			require.NoError(t, err)
+			defer func() { require.NoError(t, r.Close()) }()
 
 			for _, whence := range []int{io.SeekStart, io.SeekEnd} {
 				for n := int64(-1); n <= int64(len(source))+1; n++ {
@@ -218,24 +219,23 @@ func TestReaderEdges(t *testing.T) {
 							j, err = r.Seek(int64(-len(source))+n, whence)
 						}
 						if n < 0 {
-							assert.Error(t, err)
+							require.Error(t, err)
 							continue
 						}
-						assert.NoError(t, err)
+						require.NoError(t, err)
 						assert.Equal(t, n, j)
 
 						tmp := make([]byte, m)
 						k, err := r.Read(tmp)
 						if n >= int64(len(source)) {
-							assert.Equal(t, err, io.EOF,
+							require.ErrorIsf(t, err, io.EOF,
 								"%d: should return EOF at %d, len(source): %d, len(tmp): %d, k: %d, whence: %d",
 								i, n, len(source), m, k, whence)
 							continue
-						} else {
-							assert.NoError(t, err,
-								"%d: should NOT return EOF at %d, len(source): %d, len(tmp): %d, k: %d, whence: %d",
-								i, n, len(source), m, k, whence)
 						}
+						require.NoErrorf(t, err,
+							"%d: should NOT return EOF at %d, len(source): %d, len(tmp): %d, k: %d, whence: %d",
+							i, n, len(source), m, k, whence)
 
 						assert.Equal(t, source[n:n+int64(k)], tmp[:k])
 					}
@@ -253,7 +253,7 @@ func TestReaderAt(t *testing.T) {
 	t.Parallel()
 
 	dec, err := zstd.NewReader(nil)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	defer dec.Close()
 
 	for _, sr := range []io.ReadSeeker{
@@ -263,46 +263,46 @@ func TestReaderAt(t *testing.T) {
 		sr := sr
 		t.Run(fmt.Sprintf("%T", sr), func(t *testing.T) {
 			r, err := NewReader(sr, dec)
-			assert.NoError(t, err)
-			defer func() { assert.NoError(t, r.Close()) }()
+			require.NoError(t, err)
+			defer func() { require.NoError(t, r.Close()) }()
 
 			oldOffset, err := r.Seek(0, io.SeekCurrent)
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			assert.Equal(t, int64(0), oldOffset)
 
 			tmp1 := make([]byte, 3)
 			k1, err := r.ReadAt(tmp1, 3)
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			assert.Equal(t, 3, k1)
 			assert.Equal(t, []byte("tte"), tmp1)
 
 			// If ReadAt is reading from an input source with a seek offset,
 			// ReadAt should not affect nor be affected by the underlying seek offset.
 			newOffset, err := r.Seek(0, io.SeekCurrent)
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			assert.Equal(t, newOffset, oldOffset)
 
 			tmp2 := make([]byte, 100)
 			k2, err := r.ReadAt(tmp2, 3)
-			assert.Error(t, err, io.EOF)
+			require.ErrorIs(t, err, io.EOF)
 
-			tmp_last := make([]byte, 1)
-			k_last, err := r.ReadAt(tmp_last, 8)
-			assert.Equal(t, 1, k_last)
-			assert.Equal(t, []byte("2"), tmp_last)
-			assert.NoError(t, err)
+			tmpLast := make([]byte, 1)
+			kLast, err := r.ReadAt(tmpLast, 8)
+			assert.Equal(t, 1, kLast)
+			assert.Equal(t, []byte("2"), tmpLast)
+			require.NoError(t, err)
 
-			tmp_oob := make([]byte, 1)
-			_, err = r.ReadAt(tmp_oob, 9)
-			assert.Error(t, err, io.EOF)
+			tmpOOB := make([]byte, 1)
+			_, err = r.ReadAt(tmpOOB, 9)
+			require.ErrorIs(t, err, io.EOF)
 
 			assert.Equal(t, 6, k2)
 			assert.Equal(t, []byte("ttest2"), tmp2[:k2])
 
 			sectionReader := io.NewSectionReader(r, 3, 4)
 			tmp3, err := io.ReadAll(sectionReader)
-			assert.NoError(t, err)
-			assert.Equal(t, 4, len(tmp3))
+			require.NoError(t, err)
+			assert.Len(t, tmp3, 4)
 			assert.Equal(t, []byte("ttes"), tmp3)
 		})
 	}
@@ -310,7 +310,7 @@ func TestReaderAt(t *testing.T) {
 
 func TestReaderEdgesParallel(t *testing.T) {
 	dec, err := zstd.NewReader(nil)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	source := []byte(sourceString)
 	for i, b := range [][]byte{checksum, noChecksum} {
@@ -319,7 +319,7 @@ func TestReaderEdgesParallel(t *testing.T) {
 
 		sr := &seekableBufferReaderAt{buf: b}
 		r, err := NewReader(sr, dec)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 
 		for n := int64(-1); n <= int64(len(source)); n++ {
 			for m := int64(0); m <= int64(len(source)); m++ {
@@ -338,29 +338,28 @@ func TestReaderEdgesParallel(t *testing.T) {
 					}
 
 					if m == 0 {
-						assert.NoError(t, err)
+						require.NoError(t, err)
 						assert.Equal(t, 0, k)
 						assert.Equal(t, make([]byte, m), tmp)
 						return
 					}
 
 					if n >= int64(len(source)) {
-						assert.Equal(t, err, io.EOF,
+						require.ErrorIsf(t, err, io.EOF,
 							"%d: should return EOF at %d, len(source): %d, len(tmp): %d, k: %d",
 							i, n, len(source), m, k)
 						assert.Equal(t, 0, k, "should not read anything at the end")
 						return
 					}
 					if n+m <= int64(len(source)) {
-						assert.NoError(t, err,
+						require.NoErrorf(t, err,
 							"%d: should NOT return Err at %d, len(source): %d, len(tmp): %d, k: %d",
 							i, n, len(source), m, k)
 					} else {
-						assert.Equal(t, err, io.EOF,
+						require.ErrorIsf(t, err, io.EOF,
 							"%d: should return EOF at %d, len(source): %d, len(tmp): %d, k: %d",
 							i, n, len(source), m, k)
 					}
-
 					assert.Equal(t, source[n:n+int64(k)], tmp[:k])
 				})
 			}
@@ -392,36 +391,36 @@ func (s *fakeReadEnvironment) ReadSkipFrame(skippableFrameOffset int64) ([]byte,
 func TestReadEnvironment(t *testing.T) {
 	t.Parallel()
 	dec, err := zstd.NewReader(nil)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	defer dec.Close()
 
 	r, err := NewReader(nil, dec, WithREnvironment(&fakeReadEnvironment{}))
-	assert.NoError(t, err)
-	defer func() { assert.NoError(t, r.Close()) }()
+	require.NoError(t, err)
+	defer func() { require.NoError(t, r.Close()) }()
 
 	bytes1 := []byte("test")
 	bytes2 := []byte("test2")
 
 	tmp := make([]byte, 4096)
 	n, err := r.Read(tmp)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, len(bytes1), n)
 	assert.Equal(t, bytes1, tmp[:n])
 
 	m, err := r.Read(tmp)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, len(bytes2), m)
 	assert.Equal(t, bytes2, tmp[:m])
 
 	_, err = r.Read(tmp)
-	assert.Equal(t, err, io.EOF)
+	require.ErrorIs(t, err, io.EOF)
 }
 
 func TestNoReaderAt(t *testing.T) {
 	t.Parallel()
 
 	dec, err := zstd.NewReader(nil)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	defer dec.Close()
 
 	for _, sr := range []io.ReadSeeker{
@@ -431,47 +430,47 @@ func TestNoReaderAt(t *testing.T) {
 		sr := sr
 		t.Run(fmt.Sprintf("%T", sr), func(t *testing.T) {
 			r, err := NewReader(sr, dec)
-			assert.NoError(t, err)
-			defer func() { assert.NoError(t, r.Close()) }()
+			require.NoError(t, err)
+			defer func() { require.NoError(t, r.Close()) }()
 
 			tmp := make([]byte, 3)
 			n, err := r.ReadAt(tmp, 5)
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			assert.Equal(t, 3, n)
 			assert.Equal(t, tmp[:n], []byte("est"))
 
 			// If ReadAt is reading from an input source with a seek offset,
 			// ReadAt should not affect nor be affected by the underlying seek offset.
 			m, err := r.Seek(0, io.SeekCurrent)
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			assert.Equal(t, int64(0), m)
 
 			tmp = make([]byte, 4096)
 			n, err = r.Read(tmp)
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			assert.Equal(t, 4, n)
 			assert.Equal(t, tmp[:n], []byte("test"))
 
 			m, err = r.Seek(1, io.SeekCurrent)
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			assert.Equal(t, int64(5), m)
 
 			n, err = r.Read(tmp)
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			assert.Equal(t, 4, n)
 			assert.Equal(t, tmp[:n], []byte("est2"))
 
 			_, err = r.Seek(-1, io.SeekStart)
-			assert.ErrorContains(t, err, "offset before the start of the file")
+			require.ErrorContains(t, err, "offset before the start of the file")
 
 			_, err = r.Seek(0, 9999)
 			assert.Errorf(t, err, "unknown whence: %d", 9999)
 
 			_, err = r.Seek(999, io.SeekStart)
-			assert.NoError(t, err)
+			require.NoError(t, err)
 
 			_, err = r.Read(tmp)
-			assert.ErrorIs(t, err, io.EOF)
+			require.ErrorIs(t, err, io.EOF)
 		})
 	}
 }
@@ -480,45 +479,45 @@ func TestEmptyWriteRead(t *testing.T) {
 	t.Parallel()
 
 	enc, err := zstd.NewWriter(nil, zstd.WithEncoderLevel(zstd.SpeedFastest))
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	var b bytes.Buffer
 	bw := io.Writer(&b)
 	w, err := NewWriter(bw, enc)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	bytes1 := []byte("")
 	bytesWritten1, err := w.Write(bytes1)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, 0, bytesWritten1)
 
 	err = w.Close()
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	dec1, err := zstd.NewReader(nil)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	// test seekable decompression
 	compressed := b.Bytes()
 
 	sr := &seekableBufferReaderAt{buf: compressed}
 	r, err := NewReader(sr, dec1)
-	assert.NoError(t, err)
-	defer func() { assert.NoError(t, r.Close()) }()
+	require.NoError(t, err)
+	defer func() { require.NoError(t, r.Close()) }()
 
 	tmp1 := make([]byte, 1)
 	n, err := r.Read(tmp1)
-	assert.Equal(t, err, io.EOF)
+	require.ErrorIs(t, err, io.EOF)
 	assert.Equal(t, 0, n)
 
 	// test native decompression
 	dec2, err := zstd.NewReader(bytes.NewReader(compressed))
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	defer dec2.Close()
 
 	tmp2 := make([]byte, 1)
 	n, err = dec2.Read(tmp2)
-	assert.Equal(t, err, io.EOF)
+	require.ErrorIs(t, err, io.EOF)
 	assert.Equal(t, 0, n)
 }
 
@@ -534,7 +533,7 @@ func TestSeekTableParsing(t *testing.T) {
 		1 << 7,
 		0xb1, 0xea, 0x92, 0x8f,
 	})
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	// No checksum.
 	err = stf.UnmarshalBinary([]byte{
@@ -542,16 +541,16 @@ func TestSeekTableParsing(t *testing.T) {
 		0x00,
 		0xb1, 0xea, 0x92, 0x8f,
 	})
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	// Unused bits.
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	err = stf.UnmarshalBinary([]byte{
 		0x00, 0x00, 0x00, 0x00,
 		(1 << 7) + 0x01 + 0x2,
 		0xb1, 0xea, 0x92, 0x8f,
 	})
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	// Reserved bits.
 	err = stf.UnmarshalBinary([]byte{
@@ -559,19 +558,19 @@ func TestSeekTableParsing(t *testing.T) {
 		0x84,
 		0xb1, 0xea, 0x92, 0x8f,
 	})
-	assert.ErrorContains(t, err, "footer reserved bits")
+	require.ErrorContains(t, err, "footer reserved bits")
 	err = stf.UnmarshalBinary([]byte{
 		0x00, 0x00, 0x00, 0x00,
 		0x80 + 0x40,
 		0xb1, 0xea, 0x92, 0x8f,
 	})
-	assert.ErrorContains(t, err, "footer reserved bits")
+	require.ErrorContains(t, err, "footer reserved bits")
 
 	// Size.
 	err = stf.UnmarshalBinary([]byte{
 		0xb1, 0xea, 0x92, 0x8f,
 	})
-	assert.ErrorContains(t, err, "footer length mismatch")
+	require.ErrorContains(t, err, "footer length mismatch")
 
 	// Magic.
 	err = stf.UnmarshalBinary([]byte{
@@ -579,5 +578,5 @@ func TestSeekTableParsing(t *testing.T) {
 		0x80,
 		0xea, 0x92, 0x8f, 0xb1,
 	})
-	assert.ErrorContains(t, err, "footer magic mismatch")
+	require.ErrorContains(t, err, "footer magic mismatch")
 }

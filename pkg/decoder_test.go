@@ -5,18 +5,19 @@ import (
 
 	"github.com/klauspost/compress/zstd"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestDecoder(t *testing.T) {
 	t.Parallel()
 
 	dec, err := zstd.NewReader(nil)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	defer dec.Close()
 
 	d, err := NewDecoder(checksum[17+18:], dec)
-	assert.NoError(t, err)
-	defer func() { assert.NoError(t, d.Close()) }()
+	require.NoError(t, err)
+	defer func() { require.NoError(t, d.Close()) }()
 
 	assert.Equal(t, int64(len(sourceString)), d.Size())
 	assert.Equal(t, int64(2), d.NumFrames())
@@ -25,17 +26,17 @@ func TestDecoder(t *testing.T) {
 
 	bytes1 := []byte("test")
 	for _, off := range []uint64{0, 1, 3} {
-		index_off_0 := d.GetIndexByDecompOffset(off)
-		index_id_0 := d.GetIndexByID(0)
-		assert.Equal(t, index_off_0, index_id_0)
-		assert.NotEqual(t, index_off_0, nil)
-		assert.Equal(t, int64(0), index_off_0.ID)
-		assert.Equal(t, uint32(len(bytes1)), index_off_0.DecompSize)
-		assert.NotEqual(t, uint32(0), index_off_0.Checksum)
+		indexOff0 := d.GetIndexByDecompOffset(off)
+		indexID0 := d.GetIndexByID(0)
+		assert.Equal(t, indexOff0, indexID0)
+		assert.NotNil(t, indexOff0)
+		assert.Equal(t, int64(0), indexOff0.ID)
+		assert.Equal(t, uint32(len(bytes1)), indexOff0.DecompSize)
+		assert.NotEqual(t, uint32(0), indexOff0.Checksum)
 
 		decomp, err := dec.DecodeAll(
-			checksum[index_off_0.CompOffset:index_off_0.CompOffset+uint64(index_off_0.CompSize)], nil)
-		assert.NoError(t, err)
+			checksum[indexOff0.CompOffset:indexOff0.CompOffset+uint64(indexOff0.CompSize)], nil)
+		require.NoError(t, err)
 		assert.Equal(t, decomp, bytes1)
 	}
 
@@ -43,17 +44,17 @@ func TestDecoder(t *testing.T) {
 
 	bytes2 := []byte("test2")
 	for _, off := range []uint64{4, 5, 8} {
-		index_off_1 := d.GetIndexByDecompOffset(off)
-		index_id_1 := d.GetIndexByID(1)
-		assert.Equal(t, index_off_1, index_id_1)
-		assert.NotEqual(t, index_off_1, nil)
-		assert.Equal(t, int64(1), index_off_1.ID)
-		assert.Equal(t, uint32(len(bytes2)), index_off_1.DecompSize)
-		assert.NotEqual(t, uint32(0), index_off_1.Checksum)
+		indexOff1 := d.GetIndexByDecompOffset(off)
+		indexID1 := d.GetIndexByID(1)
+		assert.Equal(t, indexOff1, indexID1)
+		assert.NotNil(t, indexOff1)
+		assert.Equal(t, int64(1), indexOff1.ID)
+		assert.Equal(t, uint32(len(bytes2)), indexOff1.DecompSize)
+		assert.NotEqual(t, uint32(0), indexOff1.Checksum)
 
 		decomp, err := dec.DecodeAll(
-			checksum[index_off_1.CompOffset:index_off_1.CompOffset+uint64(index_off_1.CompSize)], nil)
-		assert.NoError(t, err)
+			checksum[indexOff1.CompOffset:indexOff1.CompOffset+uint64(indexOff1.CompSize)], nil)
+		require.NoError(t, err)
 		assert.Equal(t, decomp, bytes2)
 	}
 
