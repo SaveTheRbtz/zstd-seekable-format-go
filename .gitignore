@@ -1,5 +1,2 @@
 .idea
-bazel-*
 go.work
-
-dist/

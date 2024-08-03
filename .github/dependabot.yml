@@ -5,6 +5,8 @@ updates:
     schedule:
       interval: "weekly"
   - package-ecosystem: "gomod"
-    directory: "/"
+    directories:
+      - "/pkg"
+      - "/cmd/zstdseek"
     schedule:
       interval: "weekly"
