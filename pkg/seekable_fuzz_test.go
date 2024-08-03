@@ -6,22 +6,24 @@ package seekable
 import (
 	"bufio"
 	"bytes"
+	"errors"
 	"io"
 	"math/rand"
 	"testing"
 
 	"github.com/klauspost/compress/zstd"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func FuzzRoundTrip(f *testing.F) {
 	dec, err := zstd.NewReader(nil)
-	assert.NoError(f, err)
+	require.NoError(f, err)
 	defer dec.Close()
 
 	enc, err := zstd.NewWriter(nil, zstd.WithEncoderLevel(zstd.SpeedDefault))
-	assert.NoError(f, err)
-	defer func() { assert.NoError(f, enc.Close()) }()
+	require.NoError(f, err)
+	defer func() { require.NoError(f, enc.Close()) }()
 
 	f.Add(int64(1), uint8(0), int16(1), int8(io.SeekStart))
 	f.Add(int64(10), uint8(1), int16(2), int8(io.SeekEnd))
@@ -32,7 +34,7 @@ func FuzzRoundTrip(f *testing.F) {
 		bufWriter := bufio.NewWriter(&b)
 
 		w, err := NewWriter(bufWriter, enc)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 
 		total := int16(0)
 		rng := rand.New(rand.NewSource(seed))
@@ -43,20 +45,20 @@ func FuzzRoundTrip(f *testing.F) {
 			rndBuf := make([]byte, sz)
 
 			_, err := rng.Read(rndBuf)
-			assert.NoError(t, err)
+			require.NoError(t, err)
 
 			_, err = w.Write(rndBuf)
-			assert.NoError(t, err)
+			require.NoError(t, err)
 		}
 		err = w.Close()
-		assert.NoError(t, err)
+		require.NoError(t, err)
 
 		err = bufWriter.Flush()
-		assert.NoError(t, err)
+		require.NoError(t, err)
 
 		r, err := NewReader(bytes.NewReader(b.Bytes()), dec)
-		assert.NoError(t, err)
-		defer func() { assert.NoError(t, r.Close()) }()
+		require.NoError(t, err)
+		defer func() { require.NoError(t, r.Close()) }()
 
 		off := rng.Int63n(1+4*int64(total)) - 2*int64(total)
 		i, err := r.Seek(off, int(whence))
@@ -70,7 +72,7 @@ func FuzzRoundTrip(f *testing.F) {
 		buf1 := make([]byte, l)
 
 		n, err := r.Read(buf1)
-		if err != nil && err != io.EOF {
+		if err != nil && !errors.Is(err, io.EOF) {
 			return
 		}
 
@@ -78,8 +80,8 @@ func FuzzRoundTrip(f *testing.F) {
 		m, err := r.ReadAt(buf2, i)
 		// t.Logf("off: %d, l: %d, whence: %d, i: %d, n: %d, m: %d", off, l, whence, i, n, m)
 
-		if err != io.EOF {
-			assert.NoError(t, err)
+		if !errors.Is(err, io.EOF) {
+			require.NoError(t, err)
 		}
 
 		assert.Equal(t, m, n)

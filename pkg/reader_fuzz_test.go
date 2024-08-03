@@ -4,16 +4,18 @@
 package seekable
 
 import (
+	"errors"
 	"io"
 	"testing"
 
 	"github.com/klauspost/compress/zstd"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func FuzzReader(f *testing.F) {
 	dec, err := zstd.NewReader(nil, zstd.WithDecoderMaxMemory(1<<24))
-	assert.NoError(f, err)
+	require.NoError(f, err)
 	defer dec.Close()
 
 	f.Add(noChecksum, int64(0), uint8(1), io.SeekStart)
@@ -26,7 +28,7 @@ func FuzzReader(f *testing.F) {
 		if err != nil {
 			return
 		}
-		defer func() { assert.NoError(t, r.Close()) }()
+		defer func() { require.NoError(t, r.Close()) }()
 
 		i, err := r.Seek(off, whence)
 		if err != nil {
@@ -35,7 +37,7 @@ func FuzzReader(f *testing.F) {
 
 		buf1 := make([]byte, l)
 		n, err := r.Read(buf1)
-		if err != nil && err != io.EOF {
+		if err != nil && !errors.Is(err, io.EOF) {
 			return
 		}
 
@@ -43,8 +45,8 @@ func FuzzReader(f *testing.F) {
 		m, err := r.ReadAt(buf2, i)
 		// t.Logf("off: %d, l: %d, whence: %d, i: %d, n: %d, m: %d", off, l, whence, i, n, m)
 
-		if err != io.EOF {
-			assert.NoError(t, err)
+		if !errors.Is(err, io.EOF) {
+			require.NoError(t, err)
 		}
 
 		assert.Equal(t, m, n)
@@ -55,13 +57,13 @@ func FuzzReader(f *testing.F) {
 func FuzzReaderConst(f *testing.F) {
 	f.Add(int64(0), uint8(1), int8(io.SeekStart))
 	dec, err := zstd.NewReader(nil)
-	assert.NoError(f, err)
+	require.NoError(f, err)
 	defer dec.Close()
 
 	sr := &seekableBufferReaderAt{buf: checksum}
 	r, err := NewReader(sr, dec)
-	assert.NoError(f, err)
-	defer func() { assert.NoError(f, r.Close()) }()
+	require.NoError(f, err)
+	defer func() { require.NoError(f, r.Close()) }()
 
 	f.Fuzz(func(t *testing.T, off int64, l uint8, whence int8) {
 		i, err := r.Seek(off, int(whence))
@@ -71,7 +73,7 @@ func FuzzReaderConst(f *testing.F) {
 
 		buf1 := make([]byte, l)
 		n, err := r.Read(buf1)
-		if err != nil && err != io.EOF {
+		if err != nil && !errors.Is(err, io.EOF) {
 			return
 		}
 
@@ -79,8 +81,8 @@ func FuzzReaderConst(f *testing.F) {
 		m, err := r.ReadAt(buf2, i)
 		// t.Logf("off: %d, l: %d, whence: %d, i: %d, n: %d, m: %d", off, l, whence, i, n, m)
 
-		if err != io.EOF {
-			assert.NoError(t, err)
+		if !errors.Is(err, io.EOF) {
+			require.NoError(t, err)
 		}
 
 		assert.Equal(t, m, n)

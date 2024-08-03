@@ -23,7 +23,7 @@ func TestCreateSkippableFrame(t *testing.T) {
 	t.Parallel()
 
 	dec, err := zstd.NewReader(nil)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	for i, tab := range []bytesErr{
 		{
@@ -51,7 +51,7 @@ func TestCreateSkippableFrame(t *testing.T) {
 			if tab.expectedErr == nil && err == nil {
 				assert.Equal(t, tab.expectedBytes, actualBytes, "createSkippableFrame output does not match expected")
 				decodedeBytes, err := dec.DecodeAll(actualBytes, nil)
-				assert.NoError(t, err)
+				require.NoError(t, err)
 				assert.Equal(t, []byte(nil), decodedeBytes)
 			}
 		})
@@ -62,7 +62,7 @@ func TestIntercompat(t *testing.T) {
 	t.Parallel()
 
 	dec, err := zstd.NewReader(nil)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	for _, fn := range []string{
 		// t2sz README.md -l 22 -s 1024 -o intercompat-t2sz.zst
@@ -81,25 +81,25 @@ func TestIntercompat(t *testing.T) {
 			defer f.Close()
 
 			r, err := NewReader(f, dec)
-			assert.NoError(t, err)
-			defer func() { assert.NoError(t, r.Close()) }()
+			require.NoError(t, err)
+			defer func() { require.NoError(t, r.Close()) }()
 
 			buf := make([]byte, 4000)
 			n, err := r.Read(buf)
-			assert.NoError(t, err)
-			assert.Equal(t, n, 1024)
+			require.NoError(t, err)
+			assert.Equal(t, 1024, n)
 			assert.Equal(t, []byte("  [![License]"), buf[:13])
 
 			all, err := io.ReadAll(r)
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			assert.Greater(t, len(all), 1024)
 
 			i, err := r.Seek(-47, io.SeekEnd)
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			assert.Greater(t, i, int64(1024))
 
 			n, err = r.ReadAt(buf, i)
-			assert.ErrorIs(t, err, io.EOF)
+			require.ErrorIs(t, err, io.EOF)
 			assert.Equal(t, 47, n)
 			assert.Equal(t, []byte("[license]: https://opensource.org/licenses/MIT\n"), buf[:n])
 		})
