@@ -4,7 +4,7 @@ go 1.22
 
 require (
 	github.com/cespare/xxhash/v2 v2.3.0
-	github.com/google/btree v1.1.2
+	github.com/google/btree v1.1.3
 	github.com/klauspost/compress v1.17.9
 	github.com/stretchr/testify v1.9.0
 	go.uber.org/atomic v1.11.0
