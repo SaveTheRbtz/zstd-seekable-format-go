@@ -6,9 +6,9 @@ require (
 	github.com/SaveTheRbtz/fastcdc-go v0.3.0
 	github.com/SaveTheRbtz/zstd-seekable-format-go/pkg v0.7.2
 	github.com/klauspost/compress v1.17.9
-	github.com/schollz/progressbar/v3 v3.14.6
+	github.com/schollz/progressbar/v3 v3.15.0
 	go.uber.org/zap v1.27.0
-	golang.org/x/term v0.23.0
+	golang.org/x/term v0.24.0
 )
 
 require (
@@ -18,5 +18,5 @@ require (
 	github.com/rivo/uniseg v0.4.7 // indirect
 	go.uber.org/atomic v1.11.0 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
-	golang.org/x/sys v0.23.0 // indirect
+	golang.org/x/sys v0.25.0 // indirect
 )
