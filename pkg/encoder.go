@@ -25,32 +25,40 @@ func NewEncoder(encoder ZSTDEncoder, opts ...wOption) (Encoder, error) {
 	return sw.(*writerImpl), err
 }
 
-func (s *writerImpl) Encode(src []byte) ([]byte, error) {
+func (s *writerImpl) encodeOne(src []byte) ([]byte, seekTableEntry, error) {
 	if int64(len(src)) > maxChunkSize {
-		return nil, fmt.Errorf("chunk size too big for seekable format: %d > %d",
-			len(src), maxChunkSize)
+		return nil, seekTableEntry{},
+			fmt.Errorf("chunk size too big for seekable format: %d > %d",
+				len(src), maxChunkSize)
 	}
 
 	if len(src) == 0 {
-		return nil, nil
+		return nil, seekTableEntry{}, nil
 	}
 
 	dst := s.enc.EncodeAll(src, nil)
 
 	if int64(len(dst)) > maxChunkSize {
-		return nil, fmt.Errorf("result size too big for seekable format: %d > %d",
-			len(src), maxChunkSize)
+		return nil, seekTableEntry{},
+			fmt.Errorf("result size too big for seekable format: %d > %d",
+				len(src), maxChunkSize)
 	}
 
-	entry := seekTableEntry{
+	return dst, seekTableEntry{
 		CompressedSize:   uint32(len(dst)),
 		DecompressedSize: uint32(len(src)),
 		Checksum:         uint32((xxhash.Sum64(src) << 32) >> 32),
+	}, nil
+}
+
+func (s *writerImpl) Encode(src []byte) ([]byte, error) {
+	dst, entry, err := s.encodeOne(src)
+	if err != nil {
+		return nil, err
 	}
 
 	s.logger.Debug("appending frame", zap.Object("frame", &entry))
 	s.frameEntries = append(s.frameEntries, entry)
-
 	return dst, nil
 }
 

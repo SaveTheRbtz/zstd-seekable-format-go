@@ -1,10 +1,13 @@
 package seekable
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"runtime"
 	"sync"
+
+	"golang.org/x/sync/errgroup"
 
 	"go.uber.org/multierr"
 	"go.uber.org/zap"
@@ -75,7 +78,7 @@ type ConcurrentWriter interface {
 	Writer
 
 	// WriteMany writes many frames concurrently
-	WriteMany(frames FrameSource, options ...WriteManyOption) error
+	WriteMany(frameSource FrameSource, options ...WriteManyOption) error
 }
 
 // ZSTDEncoder is the compressor.  Tested with github.com/klauspost/compress/zstd.
@@ -132,27 +135,101 @@ func (s *writerImpl) Close() (err error) {
 	return
 }
 
-func (s *writerImpl) WriteMany(frames FrameSource, options ...WriteManyOption) error {
+type encodeResult struct {
+	buf   []byte
+	entry seekTableEntry
+}
+
+func (s *writerImpl) writeManyEncoder(ctx context.Context, ch chan<- encodeResult, frame []byte) func() error {
+	return func() error {
+		dst, entry, err := s.encodeOne(frame)
+		if err != nil {
+			return err
+		}
+
+		select {
+		case <-ctx.Done():
+		// Fulfill our promise
+		case ch <- encodeResult{dst, entry}:
+			close(ch)
+		}
+
+		return nil
+	}
+}
+
+func (s *writerImpl) writeManyReader(ctx context.Context, frameSource FrameSource, g *errgroup.Group, queue chan<- chan encodeResult) func() error {
+	return func() error {
+		for {
+			frame, err := frameSource()
+			if err != nil {
+				return err
+			}
+			if frame == nil {
+				close(queue)
+				return nil
+			}
+
+			// Put a channel on the queue as a sort of promise.
+			// This is a nice trick to keep our results ordered, even when compression
+			// completes out-of-order.
+			ch := make(chan encodeResult)
+			select {
+			case <-ctx.Done():
+				return nil
+			case queue <- ch:
+			}
+
+			g.Go(s.writeManyEncoder(ctx, ch, frame))
+		}
+	}
+}
+
+func (s *writerImpl) writeManyWriter(ctx context.Context, queue <-chan chan encodeResult) func() error {
+	return func() error {
+		for {
+			var ch <-chan encodeResult
+			select {
+			case <-ctx.Done():
+				return nil
+			case ch = <-queue:
+			}
+			if ch == nil {
+				return nil
+			}
+
+			// Wait for the block to be complete
+			var result encodeResult
+			select {
+			case <-ctx.Done():
+				return nil
+			case result = <-ch:
+			}
+
+			n, err := s.env.WriteFrame(result.buf)
+			if err != nil {
+				return err
+			}
+			if n != len(result.buf) {
+				return fmt.Errorf("partial write: %d out of %d", n, len(result.buf))
+			}
+			s.frameEntries = append(s.frameEntries, result.entry)
+		}
+	}
+}
+
+func (s *writerImpl) WriteMany(frameSource FrameSource, options ...WriteManyOption) error {
 	opts := writeManyOptions{concurrency: runtime.GOMAXPROCS(0)}
 	for _, o := range options {
 		o(&opts)
 	}
 
-	// Non-concurrent implementation for now
-	for {
-		frame, err := frames()
-		if err != nil {
-			return err
-		}
-		if frame == nil {
-			return nil
-		}
-
-		_, err = s.Write(frame)
-		if err != nil {
-			return err
-		}
-	}
+	g, ctx := errgroup.WithContext(context.Background())
+	g.SetLimit(opts.concurrency + 2) // reader and writer
+	queue := make(chan chan encodeResult, opts.concurrency)
+	g.Go(s.writeManyReader(ctx, frameSource, g, queue))
+	g.Go(s.writeManyWriter(ctx, queue))
+	return g.Wait()
 }
 
 func (s *writerImpl) writeSeekTable() error {
