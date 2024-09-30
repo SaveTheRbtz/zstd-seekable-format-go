@@ -185,6 +185,23 @@ func TestWriteEnvironment(t *testing.T) {
 	assert.Equal(t, concat, readBuf[:n])
 }
 
+func makeRepeatingFrameSource(frame []byte, count int) FrameSource {
+	idx := 0
+	return func() ([]byte, error) {
+		if idx >= count {
+			return nil, nil
+		}
+		idx++
+		return frame, nil
+	}
+}
+
+type nullWriter struct{}
+
+func (nullWriter) Write(p []byte) (n int, err error) {
+	return len(p), nil
+}
+
 func BenchmarkWrite(b *testing.B) {
 	enc, err := zstd.NewWriter(nil, zstd.WithEncoderLevel(zstd.SpeedFastest))
 	require.NoError(b, err)
@@ -194,20 +211,26 @@ func BenchmarkWrite(b *testing.B) {
 		writeBuf := make([]byte, sz)
 		_, err := rand.Read(writeBuf)
 		require.NoError(b, err)
-		var buf bytes.Buffer
-		bw := io.Writer(&buf)
-		w, err := NewWriter(bw, enc)
+
+		w, err := NewWriter(nullWriter{}, enc)
 		require.NoError(b, err)
 
 		b.Run(fmt.Sprintf("%d", sz), func(b *testing.B) {
 			b.SetBytes(sz)
 			b.ResetTimer()
 
-			// TODO: Limit memory consumption.
 			for i := 0; i < b.N; i++ {
 				_, _ = w.Write(writeBuf)
 			}
 		})
+		b.Run(fmt.Sprintf("Parallel-%d", sz), func(b *testing.B) {
+			b.SetBytes(sz)
+			b.ResetTimer()
+
+			err = w.WriteMany(makeRepeatingFrameSource(writeBuf, b.N))
+			require.NoError(b, err)
+		})
+
 		err = w.Close()
 		require.NoError(b, err)
 	}
