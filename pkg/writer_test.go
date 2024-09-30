@@ -80,13 +80,13 @@ func makeTestFrame(t *testing.T, idx int) []byte {
 	return b.Bytes()
 }
 
-func makeTestFrameSource(t *testing.T, count int) FrameSource {
+func makeTestFrameSource(t *testing.T, frames [][]byte) FrameSource {
 	idx := 0
 	return func() ([]byte, error) {
-		if idx >= count {
+		if idx >= len(frames) {
 			return nil, nil
 		}
-		ret := makeTestFrame(t, idx)
+		ret := frames[idx]
 		idx++
 		return ret, nil
 	}
@@ -97,7 +97,16 @@ func TestConcurrentWriter(t *testing.T) {
 
 	enc, err := zstd.NewWriter(nil, zstd.WithEncoderLevel(zstd.SpeedFastest))
 	require.NoError(t, err)
+
+	// Setup test data
+	const frameCount = 20
+	var frames [][]byte
 	var concat []byte
+	for i := 0; i < frameCount; i++ {
+		frame := makeTestFrame(t, i)
+		frames = append(frames, frame)
+		concat = append(concat, frame...)
+	}
 
 	// Write concurrently
 	var b bytes.Buffer
@@ -105,9 +114,13 @@ func TestConcurrentWriter(t *testing.T) {
 	concurrentWriter, err := NewWriter(bw, enc)
 	require.NoError(t, err)
 
-	frameCount := 20
-	err = concurrentWriter.WriteMany(makeTestFrameSource(t, frameCount), WithConcurrency(5))
+	var totalWritten int
+	err = concurrentWriter.WriteMany(makeTestFrameSource(t, frames), WithConcurrency(5),
+		WithWriteCallback(func(size uint32) {
+			totalWritten += int(size)
+		}))
 	require.NoError(t, err)
+	require.Equal(t, len(concat), totalWritten)
 
 	// Write one at a time
 	var nb bytes.Buffer
@@ -116,10 +129,8 @@ func TestConcurrentWriter(t *testing.T) {
 	require.NoError(t, err)
 
 	for i := 0; i < frameCount; i++ {
-		frame := makeTestFrame(t, i)
-		concat = append(concat, frame...)
 		require.NoError(t, err)
-		_, err = oneWriter.Write(frame)
+		_, err = oneWriter.Write(frames[i])
 		require.NoError(t, err)
 	}
 

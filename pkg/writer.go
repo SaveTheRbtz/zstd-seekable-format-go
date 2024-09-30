@@ -58,7 +58,8 @@ type Writer interface {
 }
 
 type writeManyOptions struct {
-	concurrency int
+	concurrency   int
+	writeCallback func(uint32)
 }
 
 type WriteManyOption func(options *writeManyOptions)
@@ -66,6 +67,12 @@ type WriteManyOption func(options *writeManyOptions)
 func WithConcurrency(concurrency int) WriteManyOption {
 	return func(options *writeManyOptions) {
 		options.concurrency = concurrency
+	}
+}
+
+func WithWriteCallback(cb func(size uint32)) WriteManyOption {
+	return func(options *writeManyOptions) {
+		options.writeCallback = cb
 	}
 }
 
@@ -185,7 +192,7 @@ func (s *writerImpl) writeManyReader(ctx context.Context, frameSource FrameSourc
 	}
 }
 
-func (s *writerImpl) writeManyWriter(ctx context.Context, queue <-chan chan encodeResult) func() error {
+func (s *writerImpl) writeManyWriter(ctx context.Context, callback func(uint32), queue <-chan chan encodeResult) func() error {
 	return func() error {
 		for {
 			var ch <-chan encodeResult
@@ -214,6 +221,10 @@ func (s *writerImpl) writeManyWriter(ctx context.Context, queue <-chan chan enco
 				return fmt.Errorf("partial write: %d out of %d", n, len(result.buf))
 			}
 			s.frameEntries = append(s.frameEntries, result.entry)
+
+			if callback != nil {
+				callback(result.entry.DecompressedSize)
+			}
 		}
 	}
 }
@@ -226,9 +237,10 @@ func (s *writerImpl) WriteMany(frameSource FrameSource, options ...WriteManyOpti
 
 	g, ctx := errgroup.WithContext(context.Background())
 	g.SetLimit(opts.concurrency + 2) // reader and writer
-	queue := make(chan chan encodeResult, opts.concurrency)
+	// Add extra room in the queue, so we can keep throughput high even if blocks finish out of order
+	queue := make(chan chan encodeResult, opts.concurrency*2)
 	g.Go(s.writeManyReader(ctx, frameSource, g, queue))
-	g.Go(s.writeManyWriter(ctx, queue))
+	g.Go(s.writeManyWriter(ctx, opts.writeCallback, queue))
 	return g.Wait()
 }
 
