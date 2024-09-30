@@ -3,6 +3,7 @@ package seekable
 import (
 	"fmt"
 	"io"
+	"runtime"
 	"sync"
 
 	"go.uber.org/multierr"
@@ -53,6 +54,30 @@ type Writer interface {
 	Close() (err error)
 }
 
+type writeManyOptions struct {
+	concurrency int
+}
+
+type WriteManyOption func(options *writeManyOptions)
+
+func WithConcurrency(concurrency int) WriteManyOption {
+	return func(options *writeManyOptions) {
+		options.concurrency = concurrency
+	}
+}
+
+// FrameSource returns one frame of data at a time.
+// When there are no more frames, returns nil.
+type FrameSource func() ([]byte, error)
+
+// ConcurrentWriter allows writing many frames concurrently
+type ConcurrentWriter interface {
+	Writer
+
+	// WriteMany writes many frames concurrently
+	WriteMany(frames FrameSource, options ...WriteManyOption) error
+}
+
 // ZSTDEncoder is the compressor.  Tested with github.com/klauspost/compress/zstd.
 type ZSTDEncoder interface {
 	EncodeAll(src, dst []byte) []byte
@@ -60,7 +85,7 @@ type ZSTDEncoder interface {
 
 // NewWriter wraps the passed io.Writer and Encoder into and indexed ZSTD stream.
 // Resulting stream then can be randomly accessed through the Reader and Decoder interfaces.
-func NewWriter(w io.Writer, encoder ZSTDEncoder, opts ...wOption) (Writer, error) {
+func NewWriter(w io.Writer, encoder ZSTDEncoder, opts ...wOption) (ConcurrentWriter, error) {
 	sw := writerImpl{
 		once: &sync.Once{},
 		enc:  encoder,
@@ -105,6 +130,29 @@ func (s *writerImpl) Close() (err error) {
 		err = multierr.Append(err, s.writeSeekTable())
 	})
 	return
+}
+
+func (s *writerImpl) WriteMany(frames FrameSource, options ...WriteManyOption) error {
+	opts := writeManyOptions{concurrency: runtime.GOMAXPROCS(0)}
+	for _, o := range options {
+		o(&opts)
+	}
+
+	// Non-concurrent implementation for now
+	for {
+		frame, err := frames()
+		if err != nil {
+			return err
+		}
+		if frame == nil {
+			return nil
+		}
+
+		_, err = s.Write(frame)
+		if err != nil {
+			return err
+		}
+	}
 }
 
 func (s *writerImpl) writeSeekTable() error {

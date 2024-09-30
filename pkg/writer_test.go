@@ -70,6 +70,74 @@ func TestWriter(t *testing.T) {
 	assert.Equal(t, concat, readBuf[:n])
 }
 
+func makeTestFrame(t *testing.T, idx int) []byte {
+	var b bytes.Buffer
+	for i := 0; i < 100; i++ {
+		s := fmt.Sprintf("test%d", idx+i)
+		_, err := b.WriteString(s)
+		require.NoError(t, err)
+	}
+	return b.Bytes()
+}
+
+func makeTestFrameSource(t *testing.T, count int) FrameSource {
+	idx := 0
+	return func() ([]byte, error) {
+		if idx >= count {
+			return nil, nil
+		}
+		ret := makeTestFrame(t, idx)
+		idx++
+		return ret, nil
+	}
+}
+
+func TestConcurrentWriter(t *testing.T) {
+	t.Parallel()
+
+	enc, err := zstd.NewWriter(nil, zstd.WithEncoderLevel(zstd.SpeedFastest))
+	require.NoError(t, err)
+	var concat []byte
+
+	// Write concurrently
+	var b bytes.Buffer
+	bw := io.Writer(&b)
+	concurrentWriter, err := NewWriter(bw, enc)
+	require.NoError(t, err)
+
+	frameCount := 20
+	err = concurrentWriter.WriteMany(makeTestFrameSource(t, frameCount), WithConcurrency(5))
+	require.NoError(t, err)
+
+	// Write one at a time
+	var nb bytes.Buffer
+	nbw := io.Writer(&nb)
+	oneWriter, err := NewWriter(nbw, enc)
+	require.NoError(t, err)
+
+	for i := 0; i < frameCount; i++ {
+		frame := makeTestFrame(t, i)
+		concat = append(concat, frame...)
+		require.NoError(t, err)
+		_, err = oneWriter.Write(frame)
+		require.NoError(t, err)
+	}
+
+	// Output should be the same
+	assert.Equal(t, b.Bytes(), nb.Bytes())
+
+	concurrentImpl := concurrentWriter.(*writerImpl)
+	oneImpl := oneWriter.(*writerImpl)
+	assert.Equal(t, concurrentImpl.frameEntries, oneImpl.frameEntries)
+
+	// test decompression
+	dec, err := zstd.NewReader(nil)
+	require.NoError(t, err)
+	decoded, err := dec.DecodeAll(b.Bytes(), nil)
+	require.NoError(t, err)
+	assert.Equal(t, concat, decoded)
+}
+
 type fakeWriteEnvironment struct {
 	bw io.Writer
 }
