@@ -156,21 +156,24 @@ func main() {
 		logger.Fatal("failed to create chunker", zap.Error(err))
 	}
 
-	for {
+	frameSource := func() ([]byte, error) {
 		chunk, err := chunker.Next()
 		if err != nil {
 			if errors.Is(err, io.EOF) {
-				break
+				return nil, nil
 			}
-			logger.Fatal("failed to read", zap.Error(err))
+			return nil, err
 		}
-		n, err := w.Write(chunk.Data)
-		if err != nil {
-			logger.Fatal("failed to write data", zap.Error(err))
-		}
-
-		_ = bar.Add(n)
+		return chunk.Data, nil
 	}
+
+	err = w.WriteMany(frameSource, seekable.WithWriteCallback(func(size uint32) {
+		_ = bar.Add(int(size))
+	}))
+	if err != nil {
+		logger.Fatal("failed to write data", zap.Error(err))
+	}
+
 	_ = bar.Finish()
 	input.Close()
 	w.Close()
