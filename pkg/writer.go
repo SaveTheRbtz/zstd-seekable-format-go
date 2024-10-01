@@ -151,7 +151,7 @@ func (s *writerImpl) writeManyEncoder(ctx context.Context, ch chan<- encodeResul
 	return func() error {
 		dst, entry, err := s.encodeOne(frame)
 		if err != nil {
-			return err
+			return fmt.Errorf("failed to encode frame: %w", err)
 		}
 
 		select {
@@ -170,7 +170,7 @@ func (s *writerImpl) writeManyProducer(ctx context.Context, frameSource FrameSou
 		for {
 			frame, err := frameSource()
 			if err != nil {
-				return err
+				return fmt.Errorf("frame source failed: %w", err)
 			}
 			if frame == nil {
 				close(queue)
@@ -215,7 +215,7 @@ func (s *writerImpl) writeManyConsumer(ctx context.Context, callback func(uint32
 
 			n, err := s.env.WriteFrame(result.buf)
 			if err != nil {
-				return err
+				return fmt.Errorf("failed to write compressed data: %w", err)
 			}
 			if n != len(result.buf) {
 				return fmt.Errorf("partial write: %d out of %d", n, len(result.buf))
