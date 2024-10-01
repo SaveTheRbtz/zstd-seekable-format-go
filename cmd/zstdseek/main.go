@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"crypto/sha512"
 	"errors"
 	"flag"
@@ -26,6 +27,8 @@ type readCloser struct {
 }
 
 func main() {
+	ctx := context.Background()
+
 	var (
 		inputFlag, chunkingFlag, outputFlag string
 		qualityFlag                         int
@@ -167,7 +170,7 @@ func main() {
 		return chunk.Data, nil
 	}
 
-	err = w.WriteMany(frameSource, seekable.WithWriteCallback(func(size uint32) {
+	err = w.WriteMany(ctx, frameSource, seekable.WithWriteCallback(func(size uint32) {
 		_ = bar.Add(int(size))
 	}))
 	if err != nil {

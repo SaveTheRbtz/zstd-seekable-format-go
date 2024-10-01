@@ -85,7 +85,7 @@ type ConcurrentWriter interface {
 	Writer
 
 	// WriteMany writes many frames concurrently
-	WriteMany(frameSource FrameSource, options ...WriteManyOption) error
+	WriteMany(ctx context.Context, frameSource FrameSource, options ...WriteManyOption) error
 }
 
 // ZSTDEncoder is the compressor.  Tested with github.com/klauspost/compress/zstd.
@@ -229,18 +229,18 @@ func (s *writerImpl) writeManyConsumer(ctx context.Context, callback func(uint32
 	}
 }
 
-func (s *writerImpl) WriteMany(frameSource FrameSource, options ...WriteManyOption) error {
+func (s *writerImpl) WriteMany(ctx context.Context, frameSource FrameSource, options ...WriteManyOption) error {
 	opts := writeManyOptions{concurrency: runtime.GOMAXPROCS(0)}
 	for _, o := range options {
 		o(&opts)
 	}
 
-	g, ctx := errgroup.WithContext(context.Background())
+	g, gCtx := errgroup.WithContext(ctx)
 	g.SetLimit(opts.concurrency + 2) // reader and writer
 	// Add extra room in the queue, so we can keep throughput high even if blocks finish out of order
 	queue := make(chan chan encodeResult, opts.concurrency*2)
-	g.Go(s.writeManyProducer(ctx, frameSource, g, queue))
-	g.Go(s.writeManyConsumer(ctx, opts.writeCallback, queue))
+	g.Go(s.writeManyProducer(gCtx, frameSource, g, queue))
+	g.Go(s.writeManyConsumer(gCtx, opts.writeCallback, queue))
 	return g.Wait()
 }
 

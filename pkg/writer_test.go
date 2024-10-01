@@ -2,6 +2,7 @@ package seekable
 
 import (
 	"bytes"
+	"context"
 	"crypto/rand"
 	"encoding/binary"
 	"fmt"
@@ -95,6 +96,8 @@ func makeTestFrameSource(t *testing.T, frames [][]byte) FrameSource {
 func TestConcurrentWriter(t *testing.T) {
 	t.Parallel()
 
+	ctx := context.Background()
+
 	enc, err := zstd.NewWriter(nil, zstd.WithEncoderLevel(zstd.SpeedFastest))
 	require.NoError(t, err)
 
@@ -115,7 +118,7 @@ func TestConcurrentWriter(t *testing.T) {
 	require.NoError(t, err)
 
 	var totalWritten int
-	err = concurrentWriter.WriteMany(makeTestFrameSource(t, frames), WithConcurrency(5),
+	err = concurrentWriter.WriteMany(ctx, makeTestFrameSource(t, frames), WithConcurrency(5),
 		WithWriteCallback(func(size uint32) {
 			totalWritten += int(size)
 		}))
@@ -214,6 +217,8 @@ func (nullWriter) Write(p []byte) (n int, err error) {
 }
 
 func BenchmarkWrite(b *testing.B) {
+	ctx := context.Background()
+
 	enc, err := zstd.NewWriter(nil, zstd.WithEncoderLevel(zstd.SpeedFastest))
 	require.NoError(b, err)
 
@@ -238,7 +243,7 @@ func BenchmarkWrite(b *testing.B) {
 			b.SetBytes(sz)
 			b.ResetTimer()
 
-			err = w.WriteMany(makeRepeatingFrameSource(writeBuf, b.N))
+			err = w.WriteMany(ctx, makeRepeatingFrameSource(writeBuf, b.N))
 			require.NoError(b, err)
 		})
 
