@@ -62,17 +62,22 @@ type writeManyOptions struct {
 	writeCallback func(uint32)
 }
 
-type WriteManyOption func(options *writeManyOptions)
+type WriteManyOption func(options *writeManyOptions) error
 
 func WithConcurrency(concurrency int) WriteManyOption {
-	return func(options *writeManyOptions) {
+	return func(options *writeManyOptions) error {
+		if concurrency < 1 {
+			return fmt.Errorf("concurrency must be positive: %d", concurrency)
+		}
 		options.concurrency = concurrency
+		return nil
 	}
 }
 
 func WithWriteCallback(cb func(size uint32)) WriteManyOption {
-	return func(options *writeManyOptions) {
+	return func(options *writeManyOptions) error {
 		options.writeCallback = cb
+		return nil
 	}
 }
 
@@ -232,7 +237,9 @@ func (s *writerImpl) writeManyConsumer(ctx context.Context, callback func(uint32
 func (s *writerImpl) WriteMany(ctx context.Context, frameSource FrameSource, options ...WriteManyOption) error {
 	opts := writeManyOptions{concurrency: runtime.GOMAXPROCS(0)}
 	for _, o := range options {
-		o(&opts)
+		if err := o(&opts); err != nil {
+			return err // no wrap, these should be user-comprehensible
+		}
 	}
 
 	g, gCtx := errgroup.WithContext(ctx)
