@@ -165,7 +165,7 @@ func (s *writerImpl) writeManyEncoder(ctx context.Context, ch chan<- encodeResul
 	}
 }
 
-func (s *writerImpl) writeManyReader(ctx context.Context, frameSource FrameSource, g *errgroup.Group, queue chan<- chan encodeResult) func() error {
+func (s *writerImpl) writeManyProducer(ctx context.Context, frameSource FrameSource, g *errgroup.Group, queue chan<- chan encodeResult) func() error {
 	return func() error {
 		for {
 			frame, err := frameSource()
@@ -192,7 +192,7 @@ func (s *writerImpl) writeManyReader(ctx context.Context, frameSource FrameSourc
 	}
 }
 
-func (s *writerImpl) writeManyWriter(ctx context.Context, callback func(uint32), queue <-chan chan encodeResult) func() error {
+func (s *writerImpl) writeManyConsumer(ctx context.Context, callback func(uint32), queue <-chan chan encodeResult) func() error {
 	return func() error {
 		for {
 			var ch <-chan encodeResult
@@ -239,8 +239,8 @@ func (s *writerImpl) WriteMany(frameSource FrameSource, options ...WriteManyOpti
 	g.SetLimit(opts.concurrency + 2) // reader and writer
 	// Add extra room in the queue, so we can keep throughput high even if blocks finish out of order
 	queue := make(chan chan encodeResult, opts.concurrency*2)
-	g.Go(s.writeManyReader(ctx, frameSource, g, queue))
-	g.Go(s.writeManyWriter(ctx, opts.writeCallback, queue))
+	g.Go(s.writeManyProducer(ctx, frameSource, g, queue))
+	g.Go(s.writeManyConsumer(ctx, opts.writeCallback, queue))
 	return g.Wait()
 }
 
