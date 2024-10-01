@@ -5,6 +5,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"io"
 	"testing"
@@ -81,7 +82,7 @@ func makeTestFrame(t *testing.T, idx int) []byte {
 	return b.Bytes()
 }
 
-func makeTestFrameSource(t *testing.T, frames [][]byte) FrameSource {
+func makeTestFrameSource(frames [][]byte) FrameSource {
 	idx := 0
 	return func() ([]byte, error) {
 		if idx >= len(frames) {
@@ -118,7 +119,7 @@ func TestConcurrentWriter(t *testing.T) {
 	require.NoError(t, err)
 
 	var totalWritten int
-	err = concurrentWriter.WriteMany(ctx, makeTestFrameSource(t, frames), WithConcurrency(5),
+	err = concurrentWriter.WriteMany(ctx, makeTestFrameSource(frames), WithConcurrency(5),
 		WithWriteCallback(func(size uint32) {
 			totalWritten += int(size)
 		}))
@@ -150,6 +151,58 @@ func TestConcurrentWriter(t *testing.T) {
 	decoded, err := dec.DecodeAll(b.Bytes(), nil)
 	require.NoError(t, err)
 	assert.Equal(t, concat, decoded)
+}
+
+type failingWriteEnvironment struct {
+	n   int
+	err error
+}
+
+func (e failingWriteEnvironment) WriteFrame(p []byte) (n int, err error) {
+	return e.n, e.err
+}
+
+func (e failingWriteEnvironment) WriteSeekTable(p []byte) (n int, err error) {
+	return e.n, e.err
+}
+
+func TestConcurrentWriterErrors(t *testing.T) {
+	t.Parallel()
+
+	manyFrames := [][]byte{}
+	for i := 0; i < 100; i++ {
+		manyFrames = append(manyFrames, []byte(fmt.Sprintf("test%d", i)))
+	}
+
+	ctx := context.Background()
+	enc, err := zstd.NewWriter(nil, zstd.WithEncoderLevel(zstd.SpeedFastest))
+	require.NoError(t, err)
+	w, err := NewWriter(nil, enc)
+	require.NoError(t, err)
+
+	frameSource := makeTestFrameSource([][]byte{})
+	err = w.WriteMany(ctx, frameSource, WithConcurrency(0))
+	assert.ErrorContains(t, err, "concurrency must be positive")
+
+	frameSource = func() ([]byte, error) {
+		return nil, errors.New("test error")
+	}
+	err = w.WriteMany(ctx, frameSource)
+	assert.ErrorContains(t, err, "frame source failed: test error")
+
+	var b bytes.Buffer
+	w, err = NewWriter(&b, enc,
+		WithWEnvironment(failingWriteEnvironment{0, errors.New("test error")}))
+	require.NoError(t, err)
+	frameSource = makeTestFrameSource(manyFrames) // enough that we have to wait on ctx
+	err = w.WriteMany(ctx, frameSource, WithConcurrency(1))
+	assert.ErrorContains(t, err, "failed to write compressed data")
+
+	w, err = NewWriter(&b, enc,
+		WithWEnvironment(failingWriteEnvironment{1, nil}))
+	require.NoError(t, err)
+	err = w.WriteMany(ctx, frameSource, WithConcurrency(1))
+	assert.ErrorContains(t, err, "partial write")
 }
 
 type fakeWriteEnvironment struct {
