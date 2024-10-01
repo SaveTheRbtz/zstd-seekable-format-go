@@ -167,7 +167,8 @@ func main() {
 			}
 			return nil, err
 		}
-		return chunk.Data, nil
+		// Chunker invalidates the data after calling Next, so we need to clone it
+		return bytes.Clone(chunk.Data), nil
 	}
 
 	err = w.WriteMany(ctx, frameSource, seekable.WithWriteCallback(func(size uint32) {
