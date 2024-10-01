@@ -161,7 +161,7 @@ func (s *writerImpl) writeManyProducer(ctx context.Context, frameSource FrameSou
 			// Put a channel on the queue as a sort of promise.
 			// This is a nice trick to keep our results ordered, even when compression
 			// completes out-of-order.
-			ch := make(chan encodeResult)
+			ch := make(chan encodeResult, 1)
 			select {
 			case <-ctx.Done():
 				return nil
