@@ -57,30 +57,6 @@ type Writer interface {
 	Close() (err error)
 }
 
-type writeManyOptions struct {
-	concurrency   int
-	writeCallback func(uint32)
-}
-
-type WriteManyOption func(options *writeManyOptions) error
-
-func WithConcurrency(concurrency int) WriteManyOption {
-	return func(options *writeManyOptions) error {
-		if concurrency < 1 {
-			return fmt.Errorf("concurrency must be positive: %d", concurrency)
-		}
-		options.concurrency = concurrency
-		return nil
-	}
-}
-
-func WithWriteCallback(cb func(size uint32)) WriteManyOption {
-	return func(options *writeManyOptions) error {
-		options.writeCallback = cb
-		return nil
-	}
-}
-
 // FrameSource returns one frame of data at a time.
 // When there are no more frames, returns nil.
 type FrameSource func() ([]byte, error)
