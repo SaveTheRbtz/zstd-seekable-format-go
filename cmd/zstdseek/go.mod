@@ -8,7 +8,7 @@ require (
 	github.com/klauspost/compress v1.17.10
 	github.com/schollz/progressbar/v3 v3.15.0
 	go.uber.org/zap v1.27.0
-	golang.org/x/term v0.24.0
+	golang.org/x/term v0.25.0
 )
 
 require (
@@ -18,5 +18,5 @@ require (
 	github.com/rivo/uniseg v0.4.7 // indirect
 	go.uber.org/atomic v1.11.0 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
-	golang.org/x/sys v0.25.0 // indirect
+	golang.org/x/sys v0.26.0 // indirect
 )
