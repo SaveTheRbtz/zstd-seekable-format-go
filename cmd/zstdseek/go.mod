@@ -6,7 +6,7 @@ require (
 	github.com/SaveTheRbtz/fastcdc-go v0.3.0
 	github.com/SaveTheRbtz/zstd-seekable-format-go/pkg v0.7.3
 	github.com/klauspost/compress v1.17.10
-	github.com/schollz/progressbar/v3 v3.16.1
+	github.com/schollz/progressbar/v3 v3.17.0
 	go.uber.org/zap v1.27.0
 	golang.org/x/term v0.25.0
 )
