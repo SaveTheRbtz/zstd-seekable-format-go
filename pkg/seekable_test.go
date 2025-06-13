@@ -50,9 +50,9 @@ func TestCreateSkippableFrame(t *testing.T) {
 			assert.Equal(t, tab.expectedErr, err, "createSkippableFrame err does not match expected")
 			if tab.expectedErr == nil && err == nil {
 				assert.Equal(t, tab.expectedBytes, actualBytes, "createSkippableFrame output does not match expected")
-				decodedeBytes, err := dec.DecodeAll(actualBytes, nil)
+				decodedBytes, err := dec.DecodeAll(actualBytes, nil)
 				require.NoError(t, err)
-				assert.Equal(t, []byte(nil), decodedeBytes)
+				assert.Equal(t, []byte(nil), decodedBytes)
 			}
 		})
 	}
