@@ -233,6 +233,12 @@ func (s *writerImpl) writeSeekTable() error {
 		return err
 	}
 
-	_, err = s.env.WriteSeekTable(seekTableBytes)
-	return err
+	n, err := s.env.WriteSeekTable(seekTableBytes)
+	if err != nil {
+		return err
+	}
+	if n != len(seekTableBytes) {
+		return fmt.Errorf("partial write: %d out of %d", n, len(seekTableBytes))
+	}
+	return nil
 }

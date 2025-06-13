@@ -252,6 +252,26 @@ func TestWriteEnvironment(t *testing.T) {
 	assert.Equal(t, concat, readBuf[:n])
 }
 
+func TestCloseErrors(t *testing.T) {
+	t.Parallel()
+
+	enc, err := zstd.NewWriter(nil, zstd.WithEncoderLevel(zstd.SpeedFastest))
+	require.NoError(t, err)
+
+	// environment returns error on WriteSeekTable
+	w, err := NewWriter(nil, enc,
+		WithWEnvironment(failingWriteEnvironment{0, errors.New("test error")}))
+	require.NoError(t, err)
+	err = w.Close()
+	assert.ErrorContains(t, err, "test error")
+
+	// environment reports partial write
+	w, err = NewWriter(nil, enc, WithWEnvironment(failingWriteEnvironment{1, nil}))
+	require.NoError(t, err)
+	err = w.Close()
+	assert.ErrorContains(t, err, "partial write")
+}
+
 func makeRepeatingFrameSource(frame []byte, count int) FrameSource {
 	idx := 0
 	return func() ([]byte, error) {
