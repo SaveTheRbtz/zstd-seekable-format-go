@@ -580,3 +580,64 @@ func TestSeekTableParsing(t *testing.T) {
 	})
 	require.ErrorContains(t, err, "footer magic mismatch")
 }
+
+func TestReadRaw(t *testing.T) {
+	t.Parallel()
+
+	dec, err := zstd.NewReader(nil)
+	require.NoError(t, err)
+	defer dec.Close()
+
+	for _, b := range [][]byte{checksum, noChecksum} {
+		br := &seekableBufferReaderAt{buf: b}
+		r, err := NewReader(br, dec)
+		require.NoError(t, err)
+
+		sr := r.(*readerImpl)
+		assert.Equal(t, int64(9), sr.endOffset)
+		assert.Equal(t, 2, sr.index.Len())
+		assert.Equal(t, int64(0), sr.offset)
+
+		bytes1 := []byte("test")
+		bytes2 := []byte("test2")
+		frame1End := 17
+		frame2Start := 17
+		frame2End := 35
+
+		// Read frame 1 using uncompressed offsets
+		tmp, err := r.ReadRaw(0, int64(len(bytes1)))
+		require.NoError(t, err)
+		assert.Equal(t, frame1End, len(tmp))
+		assert.Equal(t, b[:frame1End], tmp)
+
+		offset1, _ := sr.cachedFrame.get()
+		assert.Equal(t, uint64(0), offset1)
+
+		// Read frame 2 using uncompressed offsets
+		tmp, err = r.ReadRaw(int64(len(bytes1)), int64(len(bytes2)))
+		require.NoError(t, err)
+		assert.Equal(t, frame2End-frame2Start, len(tmp))
+		assert.Equal(t, b[frame2Start:frame2End], tmp)
+
+		// Read frames 1 and 2 using uncompressed offsets
+		tmp, err = r.ReadRaw(0, int64(len(bytes1)+len(bytes2)))
+		require.NoError(t, err)
+		assert.Equal(t, frame2End, len(tmp))
+		assert.Equal(t, b[:frame2End], tmp)
+
+		// read out of range
+		_, err = r.ReadRaw(int64(len(bytes2)), int64(20))
+		require.Error(t, err)
+
+		err = r.Close()
+		require.NoError(t, err)
+
+		// read after close
+		_, err = r.ReadRaw(0, int64(len(bytes1)))
+		require.ErrorContains(t, err, "reader is closed")
+
+		// double close
+		err = r.Close()
+		require.NoError(t, err)
+	}
+}
