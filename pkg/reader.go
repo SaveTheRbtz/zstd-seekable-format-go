@@ -161,6 +161,9 @@ func NewReader(rs io.ReadSeeker, decoder ZSTDDecoder, opts ...rOption) (Reader, 
 	}
 
 	if sr.env == nil {
+		if rs == nil {
+			return nil, fmt.Errorf("nil ReadSeeker and no custom environment supplied")
+		}
 		sr.env = &readSeekerEnvImpl{
 			rs: rs,
 		}

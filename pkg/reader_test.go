@@ -580,3 +580,14 @@ func TestSeekTableParsing(t *testing.T) {
 	})
 	require.ErrorContains(t, err, "footer magic mismatch")
 }
+func TestNilReaderNoEnvironment(t *testing.T) {
+	t.Parallel()
+
+	dec, err := zstd.NewReader(nil)
+	require.NoError(t, err)
+	defer dec.Close()
+
+	r, err := NewReader(nil, dec)
+	require.Error(t, err)
+	assert.Nil(t, r)
+}
