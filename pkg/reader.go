@@ -136,6 +136,9 @@ type Reader interface {
 	// the underlying reader supports io.ReaderAt interface.
 	ReadAt(p []byte, off int64) (n int, err error)
 
+	// Read and return compressed bytes between uncompressed offsets
+	ReadRaw(start, end int64) ([]byte, error)
+
 	// Close implements io.Closer interface free up any resources.
 	Close() error
 }
@@ -307,6 +310,40 @@ func (r *readerImpl) Seek(offset int64, whence int) (int64, error) {
 
 	r.offset = newOffset
 	return r.offset, nil
+}
+
+func (r *readerImpl) ReadRaw(startOffset, endOffset int64) ([]byte, error) {
+	if r.closed.Load() {
+		return nil, fmt.Errorf("reader is closed")
+	}
+
+	if startOffset >= r.endOffset {
+		return nil, io.EOF
+	}
+	if startOffset < 0 {
+		return nil, fmt.Errorf("offset before the start of the file: %d", startOffset)
+	}
+
+	dst := make([]byte, 0)
+	var index *env.FrameOffsetEntry
+	for off := startOffset; off < endOffset; off = int64(index.DecompOffset) + int64(index.DecompSize) {
+		index = r.GetIndexByDecompOffset(uint64(off))
+		if index == nil {
+			return nil, fmt.Errorf("failed to get index by offset: %d", off)
+		}
+		if off < int64(index.DecompOffset) || off > int64(index.DecompOffset)+int64(index.DecompSize) {
+			return nil, fmt.Errorf("offset outside of index bounds: %d: min: %d, max: %d",
+				off, int64(index.DecompOffset), int64(index.DecompOffset)+int64(index.DecompSize))
+		}
+		b, err := r.env.GetFrameByIndex(*index)
+		if err != nil {
+			return nil, fmt.Errorf("failed to read compressed frame: %d", off)
+		}
+
+		dst = append(dst, b...)
+	}
+
+	return dst, nil
 }
 
 func (r *readerImpl) indexFooter() (*btree.BTreeG[*env.FrameOffsetEntry], *env.FrameOffsetEntry, error) {
