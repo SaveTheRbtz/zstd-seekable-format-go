@@ -41,7 +41,7 @@ func (s *writerImpl) encodeOne(src []byte) ([]byte, seekTableEntry, error) {
 	if int64(len(dst)) > maxChunkSize {
 		return nil, seekTableEntry{},
 			fmt.Errorf("result size too big for seekable format: %d > %d",
-				len(src), maxChunkSize)
+				len(dst), maxChunkSize)
 	}
 
 	return dst, seekTableEntry{
