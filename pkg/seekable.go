@@ -136,7 +136,7 @@ func (f *seekTableFooter) UnmarshalBinary(p []byte) error {
 		return fmt.Errorf("footer length mismatch %d vs %d", len(p), seekTableFooterOffset)
 	}
 	// Check that reserved bits are set to 0.
-	var reservedBits uint8 = (p[4] << 1) >> 3
+	reservedBits := (p[4] << 1) >> 3
 	if reservedBits != 0 {
 		return fmt.Errorf("footer reserved bits %d != 0", reservedBits)
 	}
