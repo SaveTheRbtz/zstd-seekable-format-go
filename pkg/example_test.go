@@ -16,13 +16,17 @@ func Example() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	defer os.Remove(f.Name())
+	defer func() {
+		_ = os.Remove(f.Name())
+	}()
 
 	enc, err := zstd.NewWriter(nil, zstd.WithEncoderLevel(zstd.SpeedFastest))
 	if err != nil {
 		log.Fatal(err)
 	}
-	defer enc.Close()
+	defer func() {
+		_ = enc.Close()
+	}()
 
 	w, err := seekable.NewWriter(f, enc)
 	if err != nil {
@@ -53,7 +57,9 @@ func Example() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	defer r.Close()
+	defer func() {
+		_ = r.Close()
+	}()
 
 	ello := make([]byte, 4)
 	// ReaderAt
