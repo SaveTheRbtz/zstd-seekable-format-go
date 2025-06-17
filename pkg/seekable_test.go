@@ -78,7 +78,7 @@ func TestIntercompat(t *testing.T) {
 
 			f, err := os.Open(fmt.Sprintf("./testdata/%s", fn))
 			require.NoError(t, err)
-			defer f.Close()
+			defer func() { require.NoError(t, f.Close()) }()
 
 			r, err := NewReader(f, dec)
 			require.NoError(t, err)
