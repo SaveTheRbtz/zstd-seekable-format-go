@@ -575,14 +575,20 @@ func TestZeroSizedFrameIgnored(t *testing.T) {
 	w, err := NewWriter(&b, enc)
 	require.NoError(t, err)
 
+	var n int
 	// Write two real frames with an empty frame in between.
 	_, err = w.Write([]byte("foo"))
 	require.NoError(t, err)
-	_, err = w.Write([]byte{})
+	n, err = w.Write([]byte{})
 	require.NoError(t, err)
+	assert.Equal(t, 0, n, "should not write anything for empty frame")
 	_, err = w.Write([]byte("bar"))
 	require.NoError(t, err)
 	require.NoError(t, w.Close())
+	_, err = w.Write([]byte{})
+	require.NoError(t, err)
+	_, err = w.Write([]byte{})
+	require.NoError(t, err)
 
 	dec, err := zstd.NewReader(nil)
 	require.NoError(t, err)
@@ -598,11 +604,16 @@ func TestZeroSizedFrameIgnored(t *testing.T) {
 
 	idx := rr.GetIndexByID(1)
 	require.NotNil(t, idx)
-	buf := make([]byte, 3)
-	n, err := r.ReadAt(buf, int64(idx.DecompOffset))
+
+	expected := []byte("bar")
+	buf := make([]byte, len(expected))
+	n, err = r.ReadAt(buf, int64(idx.DecompOffset))
 	require.NoError(t, err)
-	assert.Equal(t, 3, n)
-	assert.Equal(t, []byte("bar"), buf)
+	assert.Equal(t, len(expected), n)
+	assert.Equal(t, expected, buf)
+
+	idx = rr.GetIndexByID(2)
+	require.Nil(t, idx)
 }
 
 func TestSeekTableParsing(t *testing.T) {
