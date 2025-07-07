@@ -15,7 +15,7 @@ func FuzzCorruptSeekTable(f *testing.F) {
 	require.NoError(f, err)
 	defer dec.Close()
 
-	base := checksum[len(checksum)-41:]
+	base := noChecksum[35:]
 
 	f.Add(base, uint8(0), int64(0))
 	f.Add(base, uint8(1), int64(-1))
@@ -58,5 +58,18 @@ func FuzzCorruptSeekTable(f *testing.F) {
 		_ = d.NumFrames()
 		_ = d.GetIndexByDecompOffset(uint64(off))
 		_ = d.GetIndexByID(off)
+
+		stream := append(append([]byte(nil), noChecksum[:35]...), mutated...)
+		sr := &seekableBufferReaderAt{buf: stream}
+		r, err := NewReader(sr, dec)
+		if err != nil {
+			return
+		}
+		defer func() { require.NoError(t, r.Close()) }()
+
+		buf := make([]byte, mode%101)
+		_, _ = r.ReadAt(buf, off)
+		_, _ = r.Read(buf)
+		_, _ = r.Seek(off, int(mode%3))
 	})
 }
