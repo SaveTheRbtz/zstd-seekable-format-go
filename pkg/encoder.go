@@ -52,6 +52,10 @@ func (s *writerImpl) encodeOne(src []byte) ([]byte, seekTableEntry, error) {
 }
 
 func (s *writerImpl) Encode(src []byte) ([]byte, error) {
+	if len(src) == 0 {
+		return []byte{}, nil
+	}
+
 	dst, entry, err := s.encodeOne(src)
 	if err != nil {
 		return nil, err
