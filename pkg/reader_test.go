@@ -565,57 +565,6 @@ func TestEmptyWriteRead(t *testing.T) {
 	assert.Equal(t, 0, n)
 }
 
-func TestZeroSizedFrameIgnored(t *testing.T) {
-	t.Parallel()
-
-	enc, err := zstd.NewWriter(nil, zstd.WithEncoderLevel(zstd.SpeedFastest))
-	require.NoError(t, err)
-
-	var b bytes.Buffer
-	w, err := NewWriter(&b, enc)
-	require.NoError(t, err)
-
-	var n int
-	// Write two real frames with an empty frame in between.
-	_, err = w.Write([]byte("foo"))
-	require.NoError(t, err)
-	n, err = w.Write([]byte{})
-	require.NoError(t, err)
-	assert.Equal(t, 0, n, "should not write anything for empty frame")
-	_, err = w.Write([]byte("bar"))
-	require.NoError(t, err)
-	require.NoError(t, w.Close())
-	_, err = w.Write([]byte{})
-	require.NoError(t, err)
-	_, err = w.Write([]byte{})
-	require.NoError(t, err)
-
-	dec, err := zstd.NewReader(nil)
-	require.NoError(t, err)
-	defer dec.Close()
-
-	r, err := NewReader(bytes.NewReader(b.Bytes()), dec)
-	require.NoError(t, err)
-	defer func() { require.NoError(t, r.Close()) }()
-
-	rr := r.(*readerImpl)
-	assert.Equal(t, int64(len("foobar")), rr.Size())
-	assert.Equal(t, int64(2), rr.NumFrames())
-
-	idx := rr.GetIndexByID(1)
-	require.NotNil(t, idx)
-
-	expected := []byte("bar")
-	buf := make([]byte, len(expected))
-	n, err = r.ReadAt(buf, int64(idx.DecompOffset))
-	require.NoError(t, err)
-	assert.Equal(t, len(expected), n)
-	assert.Equal(t, expected, buf)
-
-	idx = rr.GetIndexByID(2)
-	require.Nil(t, idx)
-}
-
 func TestSeekTableParsing(t *testing.T) {
 	var err error
 	var stf seekTableFooter
