@@ -41,6 +41,7 @@ func (f *cachedFrame) get() (uint64, []byte) {
 // readSeekerEnvImpl is the environment implementation for the io.ReadSeeker.
 type readSeekerEnvImpl struct {
 	rs io.ReadSeeker
+	mu sync.Mutex
 }
 
 func (rs *readSeekerEnvImpl) GetFrameByIndex(index env.FrameOffsetEntry) (p []byte, err error) {
@@ -54,6 +55,9 @@ func (rs *readSeekerEnvImpl) GetFrameByIndex(index env.FrameOffsetEntry) (p []by
 			err = nil
 		}
 	default:
+		rs.mu.Lock()
+		defer rs.mu.Unlock()
+
 		_, err = v.Seek(off, io.SeekStart)
 		if err != nil {
 			return nil, err
@@ -65,6 +69,11 @@ func (rs *readSeekerEnvImpl) GetFrameByIndex(index env.FrameOffsetEntry) (p []by
 }
 
 func (rs *readSeekerEnvImpl) ReadFooter() ([]byte, error) {
+	if _, ok := rs.rs.(io.ReaderAt); !ok {
+		rs.mu.Lock()
+		defer rs.mu.Unlock()
+	}
+
 	n, err := rs.rs.Seek(-seekTableFooterOffset, io.SeekEnd)
 	if err != nil {
 		return nil, fmt.Errorf("failed to seek to: %d: %w", -seekTableFooterOffset, err)
@@ -80,6 +89,11 @@ func (rs *readSeekerEnvImpl) ReadFooter() ([]byte, error) {
 }
 
 func (rs *readSeekerEnvImpl) ReadSkipFrame(skippableFrameOffset int64) ([]byte, error) {
+	if _, ok := rs.rs.(io.ReaderAt); !ok {
+		rs.mu.Lock()
+		defer rs.mu.Unlock()
+	}
+
 	n, err := rs.rs.Seek(-skippableFrameOffset, io.SeekEnd)
 	if err != nil {
 		return nil, fmt.Errorf("failed to seek to: %d: %w", -skippableFrameOffset, err)
