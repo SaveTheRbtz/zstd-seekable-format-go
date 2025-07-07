@@ -252,6 +252,102 @@ func TestWriteEnvironment(t *testing.T) {
 	assert.Equal(t, concat, readBuf[:n])
 }
 
+func TestZeroWrite(t *testing.T) {
+	t.Parallel()
+
+	enc, err := zstd.NewWriter(nil, zstd.WithEncoderLevel(zstd.SpeedFastest))
+	require.NoError(t, err)
+
+	var b bytes.Buffer
+	w, err := NewWriter(&b, enc)
+	require.NoError(t, err)
+
+	frames := [][]byte{
+		{}, {},
+		[]byte("foo"),
+		{}, {}, {},
+		[]byte("bar"),
+		{}, {},
+		[]byte("baz"),
+		{},
+	}
+
+	var expected []byte
+	for _, f := range frames {
+		n, err := w.Write(f)
+		require.NoError(t, err)
+		assert.Equal(t, len(f), n)
+		if len(f) > 0 {
+			expected = append(expected, f...)
+		}
+	}
+
+	sw := w.(*writerImpl)
+	require.Len(t, sw.frameEntries, len(frames))
+	for i, f := range frames {
+		entry := sw.frameEntries[i]
+		if len(f) == 0 {
+			assert.Equal(t, uint32(0), entry.CompressedSize)
+			assert.Equal(t, uint32(0), entry.DecompressedSize)
+		} else {
+			assert.Equal(t, uint32(len(f)), entry.DecompressedSize)
+		}
+	}
+
+	err = w.Close()
+	require.NoError(t, err)
+
+	dec, err := zstd.NewReader(nil)
+	require.NoError(t, err)
+
+	decoded, err := dec.DecodeAll(b.Bytes(), nil)
+	require.NoError(t, err)
+	assert.Equal(t, expected, decoded)
+
+	r, err := NewReader(bytes.NewReader(b.Bytes()), dec)
+	require.NoError(t, err)
+	defer func() { require.NoError(t, r.Close()) }()
+
+	// ReadAt variations
+	for off := int64(0); off <= int64(len(expected)); off++ {
+		for sz := 0; sz <= len(expected); sz++ {
+			buf := make([]byte, sz)
+			n, err := r.ReadAt(buf, off)
+			if off >= int64(len(expected)) {
+				if sz == 0 {
+					require.NoError(t, err)
+					assert.Equal(t, 0, n)
+				} else {
+					assert.Equal(t, 0, n)
+					assert.ErrorIs(t, err, io.EOF)
+				}
+				continue
+			}
+			if off+int64(sz) <= int64(len(expected)) {
+				require.NoError(t, err)
+			} else {
+				require.ErrorIs(t, err, io.EOF)
+			}
+			assert.Equal(t, expected[off:off+int64(n)], buf[:n])
+		}
+	}
+
+	// Sequential reads using Seek/Read
+	for start := int64(0); start <= int64(len(expected)); start++ {
+		_, err := r.Seek(start, io.SeekStart)
+		require.NoError(t, err)
+		buf := make([]byte, len(expected)-int(start))
+		n, err := r.Read(buf)
+		if start >= int64(len(expected)) {
+			assert.Equal(t, 0, n)
+			assert.ErrorIs(t, err, io.EOF)
+			continue
+		}
+		require.NoError(t, err)
+		assert.Equal(t, expected[start:start+int64(n)], buf[:n])
+	}
+}
+
 func TestCloseErrors(t *testing.T) {
 	t.Parallel()
 
