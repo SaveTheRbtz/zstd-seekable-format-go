@@ -2,9 +2,11 @@ package seekable
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"io"
 	"strconv"
+	"sync"
 	"testing"
 
 	"github.com/klauspost/compress/zstd"
@@ -475,6 +477,48 @@ func TestNoReaderAt(t *testing.T) {
 	}
 }
 
+func TestNoReaderAtConcurrent(t *testing.T) {
+	t.Parallel()
+
+	dec, err := zstd.NewReader(nil)
+	require.NoError(t, err)
+	defer dec.Close()
+
+	sr := &seekableBufferReader{seekableBufferReaderAt{buf: checksum}}
+	r, err := NewReader(sr, dec)
+	require.NoError(t, err)
+	defer func() { require.NoError(t, r.Close()) }()
+
+	const workers = 100
+	expect := []byte(sourceString)
+	errCh := make(chan error, workers)
+	var wg sync.WaitGroup
+
+	for i := 0; i < workers; i++ {
+		i := i
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			off := int64(i % len(expect))
+			buf := make([]byte, len(expect)-int(off))
+			n, err := r.ReadAt(buf, off)
+			if err != nil && !errors.Is(err, io.EOF) {
+				errCh <- err
+				return
+			}
+			if !bytes.Equal(buf[:n], expect[off:int(off)+n]) {
+				errCh <- fmt.Errorf("unexpected data at %d", off)
+			}
+		}()
+	}
+
+	wg.Wait()
+	close(errCh)
+	for e := range errCh {
+		require.NoError(t, e)
+	}
+}
+
 func TestEmptyWriteRead(t *testing.T) {
 	t.Parallel()
 
@@ -580,6 +624,7 @@ func TestSeekTableParsing(t *testing.T) {
 	})
 	require.ErrorContains(t, err, "footer magic mismatch")
 }
+
 func TestNilReaderNoEnvironment(t *testing.T) {
 	t.Parallel()
 
