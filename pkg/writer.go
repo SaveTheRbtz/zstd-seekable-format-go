@@ -157,6 +157,10 @@ func (s *writerImpl) writeManyProducer(ctx context.Context, frameSource FrameSou
 				close(queue)
 				return nil
 			}
+			if len(frame) == 0 {
+				// Skip empty frames entirely.
+				continue
+			}
 
 			// Put a channel on the queue as a sort of promise.
 			// This is a nice trick to keep our results ordered, even when compression
