@@ -489,7 +489,7 @@ func TestNoReaderAtConcurrent(t *testing.T) {
 	require.NoError(t, err)
 	defer func() { require.NoError(t, r.Close()) }()
 
-	const workers = 8
+	const workers = 100
 	expect := []byte(sourceString)
 	errCh := make(chan error, workers)
 	var wg sync.WaitGroup
@@ -624,6 +624,7 @@ func TestSeekTableParsing(t *testing.T) {
 	})
 	require.ErrorContains(t, err, "footer magic mismatch")
 }
+
 func TestNilReaderNoEnvironment(t *testing.T) {
 	t.Parallel()
 
