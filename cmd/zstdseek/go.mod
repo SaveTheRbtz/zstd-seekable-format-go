@@ -4,7 +4,7 @@ go 1.24.4
 
 require (
 	github.com/SaveTheRbtz/fastcdc-go v0.3.0
-	github.com/SaveTheRbtz/zstd-seekable-format-go/pkg v0.7.3
+	github.com/SaveTheRbtz/zstd-seekable-format-go/pkg v0.8.0
 	github.com/klauspost/compress v1.18.0
 	github.com/schollz/progressbar/v3 v3.18.0
 	go.uber.org/zap v1.27.0
