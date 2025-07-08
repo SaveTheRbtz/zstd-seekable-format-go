@@ -341,15 +341,15 @@ func TestWriterCloseSemantics(t *testing.T) {
 
 	// double close should return an error
 	err = w.Close()
-	assert.ErrorContains(t, err, "closed")
+	assert.ErrorIs(t, err, errWriterClosed)
 
 	// write after close should return an error
 	_, err = w.Write([]byte("bar"))
-	assert.ErrorContains(t, err, "closed")
+	assert.ErrorIs(t, err, errWriterClosed)
 
 	// write many after close should return an error
 	err = w.WriteMany(context.Background(), makeTestFrameSource([][]byte{[]byte("baz")}))
-	assert.ErrorContains(t, err, "closed")
+	assert.ErrorIs(t, err, errWriterClosed)
 }
 
 func makeRepeatingFrameSource(frame []byte, count int) FrameSource {

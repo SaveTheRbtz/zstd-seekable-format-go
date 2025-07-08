@@ -2,6 +2,7 @@ package seekable
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"runtime"
@@ -12,6 +13,8 @@ import (
 
 	"github.com/SaveTheRbtz/zstd-seekable-format-go/pkg/env"
 )
+
+var errWriterClosed = errors.New("writer is closed")
 
 // writerEnvImpl is the environment implementation of for the underlying WriteCloser.
 type writerEnvImpl struct {
@@ -101,7 +104,7 @@ func (s *writerImpl) Write(src []byte) (int, error) {
 	defer s.mu.Unlock()
 
 	if s.env == nil {
-		return 0, fmt.Errorf("writer is closed")
+		return 0, errWriterClosed
 	}
 
 	dst, err := s.Encode(src)
@@ -125,7 +128,7 @@ func (s *writerImpl) Close() error {
 	defer s.mu.Unlock()
 
 	if s.env == nil {
-		return fmt.Errorf("writer is closed")
+		return errWriterClosed
 	}
 
 	err := s.writeSeekTable()
@@ -229,7 +232,7 @@ func (s *writerImpl) WriteMany(ctx context.Context, frameSource FrameSource, opt
 	defer s.mu.Unlock()
 
 	if s.env == nil {
-		return fmt.Errorf("writer is closed")
+		return errWriterClosed
 	}
 
 	opts := writeManyOptions{concurrency: runtime.GOMAXPROCS(0)}
