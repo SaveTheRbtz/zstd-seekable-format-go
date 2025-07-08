@@ -324,6 +324,34 @@ func TestCloseErrors(t *testing.T) {
 	assert.ErrorContains(t, err, "partial write")
 }
 
+func TestWriterCloseSemantics(t *testing.T) {
+	t.Parallel()
+
+	enc, err := zstd.NewWriter(nil, zstd.WithEncoderLevel(zstd.SpeedFastest))
+	require.NoError(t, err)
+
+	var b bytes.Buffer
+	w, err := NewWriter(&b, enc)
+	require.NoError(t, err)
+
+	_, err = w.Write([]byte("foo"))
+	require.NoError(t, err)
+
+	require.NoError(t, w.Close())
+
+	// double close should return an error
+	err = w.Close()
+	assert.ErrorContains(t, err, "closed")
+
+	// write after close should return an error
+	_, err = w.Write([]byte("bar"))
+	assert.ErrorContains(t, err, "closed")
+
+	// write many after close should return an error
+	err = w.WriteMany(context.Background(), makeTestFrameSource([][]byte{[]byte("baz")}))
+	assert.ErrorContains(t, err, "closed")
+}
+
 func makeRepeatingFrameSource(frame []byte, count int) FrameSource {
 	idx := 0
 	return func() ([]byte, error) {

@@ -7,10 +7,8 @@ import (
 	"runtime"
 	"sync"
 
-	"golang.org/x/sync/errgroup"
-
-	"go.uber.org/multierr"
 	"go.uber.org/zap"
+	"golang.org/x/sync/errgroup"
 
 	"github.com/SaveTheRbtz/zstd-seekable-format-go/pkg/env"
 )
@@ -35,7 +33,7 @@ type writerImpl struct {
 	logger *zap.Logger
 	env    env.WEnvironment
 
-	once *sync.Once
+	mu sync.Mutex
 }
 
 var (
@@ -78,8 +76,7 @@ type ZSTDEncoder interface {
 // Resulting stream then can be randomly accessed through the Reader and Decoder interfaces.
 func NewWriter(w io.Writer, encoder ZSTDEncoder, opts ...wOption) (ConcurrentWriter, error) {
 	sw := writerImpl{
-		once: &sync.Once{},
-		enc:  encoder,
+		enc: encoder,
 	}
 
 	sw.logger = zap.NewNop()
@@ -100,6 +97,13 @@ func NewWriter(w io.Writer, encoder ZSTDEncoder, opts ...wOption) (ConcurrentWri
 }
 
 func (s *writerImpl) Write(src []byte) (int, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if s.env == nil {
+		return 0, fmt.Errorf("writer is closed")
+	}
+
 	dst, err := s.Encode(src)
 	if err != nil {
 		return 0, err
@@ -116,11 +120,17 @@ func (s *writerImpl) Write(src []byte) (int, error) {
 	return len(src), nil
 }
 
-func (s *writerImpl) Close() (err error) {
-	s.once.Do(func() {
-		err = multierr.Append(err, s.writeSeekTable())
-	})
-	return
+func (s *writerImpl) Close() error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if s.env == nil {
+		return fmt.Errorf("writer is closed")
+	}
+
+	err := s.writeSeekTable()
+	s.env = nil
+	return err
 }
 
 type encodeResult struct {
@@ -215,6 +225,13 @@ func (s *writerImpl) writeManyConsumer(ctx context.Context, callback func(uint32
 }
 
 func (s *writerImpl) WriteMany(ctx context.Context, frameSource FrameSource, options ...WriteManyOption) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if s.env == nil {
+		return fmt.Errorf("writer is closed")
+	}
+
 	opts := writeManyOptions{concurrency: runtime.GOMAXPROCS(0)}
 	for _, o := range options {
 		if err := o(&opts); err != nil {
