@@ -16,7 +16,7 @@ jobs:
         dir: ['pkg', 'cmd/zstdseek']
     steps:
       - uses: dcarbone/install-jq-action@v3.2.0
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Setup Go ${{ matrix.go-version }}
         uses: actions/setup-go@v5
         with:
