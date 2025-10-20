@@ -5,7 +5,7 @@ go 1.24.4
 require (
 	github.com/cespare/xxhash/v2 v2.3.0
 	github.com/google/btree v1.1.3
-	github.com/klauspost/compress v1.18.0
+	github.com/klauspost/compress v1.18.1
 	github.com/stretchr/testify v1.10.0
 	go.uber.org/atomic v1.11.0
 	go.uber.org/zap v1.27.0
