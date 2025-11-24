@@ -7,7 +7,7 @@ require (
 	github.com/SaveTheRbtz/zstd-seekable-format-go/pkg v0.8.0
 	github.com/klauspost/compress v1.18.0
 	github.com/schollz/progressbar/v3 v3.18.0
-	go.uber.org/zap v1.27.0
+	go.uber.org/zap v1.27.1
 	golang.org/x/term v0.33.0
 )
 
