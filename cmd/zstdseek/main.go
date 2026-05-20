@@ -47,16 +47,12 @@ func main() {
 	flag.Parse()
 
 	var err error
-	var zapConfig zap.Config
+	var zapLogger *zap.Logger
 	if verboseFlag {
-		zapConfig = zap.NewDevelopmentConfig()
+		zapLogger, err = zap.NewDevelopment()
 	} else {
-		zapConfig = zap.NewProductionConfig()
+		zapLogger, err = zap.NewProduction()
 	}
-	zapConfig.DisableCaller = true
-	zapConfig.DisableStacktrace = true
-
-	zapLogger, err := zapConfig.Build()
 	if err != nil {
 		log.Fatal("failed to initialize logger", err)
 	}
