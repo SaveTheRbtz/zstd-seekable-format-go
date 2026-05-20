@@ -2,9 +2,9 @@ package seekable
 
 import (
 	"fmt"
+	"log/slog"
 
 	"github.com/cespare/xxhash/v2"
-	"go.uber.org/zap"
 )
 
 // Encoder is a byte-oriented API that is useful where wrapping io.Writer is not desirable.
@@ -61,7 +61,7 @@ func (s *writerImpl) Encode(src []byte) ([]byte, error) {
 		return nil, err
 	}
 
-	s.logger.Debug("appending frame", zap.Object("frame", &entry))
+	s.logger.Debug("appending frame", slog.Any("frame", &entry))
 	s.frameEntries = append(s.frameEntries, entry)
 	return dst, nil
 }
