@@ -2,15 +2,17 @@ package seekable
 
 import (
 	"fmt"
-
-	"go.uber.org/zap"
+	"log/slog"
 
 	"github.com/SaveTheRbtz/zstd-seekable-format-go/pkg/env"
 )
 
 type wOption func(*writerImpl) error
 
-func WithWLogger(l *zap.Logger) wOption {
+func WithWLogger(l *slog.Logger) wOption {
+	if l == nil {
+		l = discardLogger
+	}
 	return func(w *writerImpl) error { w.logger = l; return nil }
 }
 

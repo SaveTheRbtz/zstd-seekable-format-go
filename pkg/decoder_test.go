@@ -35,7 +35,8 @@ func TestDecoder(t *testing.T) {
 		assert.NotEqual(t, uint32(0), indexOff0.Checksum)
 
 		decomp, err := dec.DecodeAll(
-			checksum[indexOff0.CompOffset:indexOff0.CompOffset+uint64(indexOff0.CompSize)], nil)
+			checksum[indexOff0.CompOffset:indexOff0.CompOffset+uint64(indexOff0.CompSize)], nil,
+		)
 		require.NoError(t, err)
 		assert.Equal(t, decomp, bytes1)
 	}
@@ -53,7 +54,8 @@ func TestDecoder(t *testing.T) {
 		assert.NotEqual(t, uint32(0), indexOff1.Checksum)
 
 		decomp, err := dec.DecodeAll(
-			checksum[indexOff1.CompOffset:indexOff1.CompOffset+uint64(indexOff1.CompSize)], nil)
+			checksum[indexOff1.CompOffset:indexOff1.CompOffset+uint64(indexOff1.CompSize)], nil,
+		)
 		require.NoError(t, err)
 		assert.Equal(t, decomp, bytes2)
 	}

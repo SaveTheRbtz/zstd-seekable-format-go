@@ -3,9 +3,8 @@ package seekable
 import (
 	"encoding/binary"
 	"fmt"
+	"log/slog"
 	"math"
-
-	"go.uber.org/zap/zapcore"
 )
 
 const (
@@ -83,9 +82,13 @@ type seekTableDescriptor struct {
 	ChecksumFlag bool
 }
 
-func (d *seekTableDescriptor) MarshalLogObject(enc zapcore.ObjectEncoder) error {
-	enc.AddBool("ChecksumFlag", d.ChecksumFlag)
-	return nil
+func (d *seekTableDescriptor) LogValue() slog.Value {
+	if d == nil {
+		return slog.Value{}
+	}
+	return slog.GroupValue(
+		slog.Bool("ChecksumFlag", d.ChecksumFlag),
+	)
 }
 
 /*
@@ -122,13 +125,15 @@ func (f *seekTableFooter) MarshalBinary() ([]byte, error) {
 	return dst, nil
 }
 
-func (f *seekTableFooter) MarshalLogObject(enc zapcore.ObjectEncoder) error {
-	enc.AddUint32("NumberOfFrames", f.NumberOfFrames)
-	if err := enc.AddObject("SeekTableDescriptor", &f.SeekTableDescriptor); err != nil {
-		return err
+func (f *seekTableFooter) LogValue() slog.Value {
+	if f == nil {
+		return slog.Value{}
 	}
-	enc.AddUint32("SeekableMagicNumber", f.SeekableMagicNumber)
-	return nil
+	return slog.GroupValue(
+		slog.Uint64("NumberOfFrames", uint64(f.NumberOfFrames)),
+		slog.Any("SeekTableDescriptor", &f.SeekTableDescriptor),
+		slog.Uint64("SeekableMagicNumber", uint64(f.SeekableMagicNumber)),
+	)
 }
 
 func (f *seekTableFooter) UnmarshalBinary(p []byte) error {
@@ -182,11 +187,15 @@ func (e *seekTableEntry) MarshalBinary() ([]byte, error) {
 	return dst, nil
 }
 
-func (e *seekTableEntry) MarshalLogObject(enc zapcore.ObjectEncoder) error {
-	enc.AddUint32("CompressedSize", e.CompressedSize)
-	enc.AddUint32("DecompressedSize", e.DecompressedSize)
-	enc.AddUint32("Checksum", e.Checksum)
-	return nil
+func (e *seekTableEntry) LogValue() slog.Value {
+	if e == nil {
+		return slog.Value{}
+	}
+	return slog.GroupValue(
+		slog.Uint64("CompressedSize", uint64(e.CompressedSize)),
+		slog.Uint64("DecompressedSize", uint64(e.DecompressedSize)),
+		slog.Uint64("Checksum", uint64(e.Checksum)),
+	)
 }
 
 func (e *seekTableEntry) UnmarshalBinary(p []byte) error {

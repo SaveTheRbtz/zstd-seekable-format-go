@@ -1,14 +1,17 @@
 package seekable
 
 import (
-	"go.uber.org/zap"
+	"log/slog"
 
 	"github.com/SaveTheRbtz/zstd-seekable-format-go/pkg/env"
 )
 
 type rOption func(*readerImpl) error
 
-func WithRLogger(l *zap.Logger) rOption {
+func WithRLogger(l *slog.Logger) rOption {
+	if l == nil {
+		l = discardLogger
+	}
 	return func(r *readerImpl) error { r.logger = l; return nil }
 }
 

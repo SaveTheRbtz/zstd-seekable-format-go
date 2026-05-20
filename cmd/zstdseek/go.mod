@@ -8,6 +8,7 @@ require (
 	github.com/klauspost/compress v1.18.6
 	github.com/schollz/progressbar/v3 v3.18.0
 	go.uber.org/zap v1.27.1
+	go.uber.org/zap/exp v0.3.0
 	golang.org/x/term v0.33.0
 )
 

@@ -5,10 +5,10 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"runtime"
 	"sync"
 
-	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
 
 	"github.com/SaveTheRbtz/zstd-seekable-format-go/pkg/env"
@@ -33,7 +33,7 @@ type writerImpl struct {
 	enc          ZSTDEncoder
 	frameEntries []seekTableEntry
 
-	logger *zap.Logger
+	logger *slog.Logger
 	env    env.WEnvironment
 
 	mu sync.Mutex
@@ -82,7 +82,7 @@ func NewWriter(w io.Writer, encoder ZSTDEncoder, opts ...wOption) (ConcurrentWri
 		enc: encoder,
 	}
 
-	sw.logger = zap.NewNop()
+	sw.logger = discardLogger
 	for _, o := range opts {
 		err := o(&sw)
 		if err != nil {

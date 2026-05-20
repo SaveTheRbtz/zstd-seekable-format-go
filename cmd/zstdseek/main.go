@@ -8,6 +8,7 @@ import (
 	"flag"
 	"io"
 	"log"
+	"log/slog"
 	"os"
 	"strconv"
 	"strings"
@@ -16,6 +17,7 @@ import (
 	"github.com/klauspost/compress/zstd"
 	"github.com/schollz/progressbar/v3"
 	"go.uber.org/zap"
+	"go.uber.org/zap/exp/zapslog"
 	"golang.org/x/term"
 
 	seekable "github.com/SaveTheRbtz/zstd-seekable-format-go/pkg"
@@ -57,6 +59,9 @@ func main() {
 	defer func() {
 		_ = logger.Sync()
 	}()
+
+	slogLogger := slog.New(zapslog.NewHandler(logger.Core(), zapslog.AddStacktraceAt(slog.Level(1000))))
+	seekableLogger := slogLogger.WithGroup("seekable")
 
 	if inputFlag == "" || outputFlag == "" {
 		logger.Fatal("both input and output files need to be defined")
@@ -139,7 +144,7 @@ func main() {
 		logger.Fatal("failed to create zstd encoder", zap.Error(err))
 	}
 
-	w, err := seekable.NewWriter(output, enc, seekable.WithWLogger(logger))
+	w, err := seekable.NewWriter(output, enc, seekable.WithWLogger(seekableLogger.WithGroup("writer")))
 	if err != nil {
 		logger.Fatal("failed to create compressed writer", zap.Error(err))
 	}
@@ -197,7 +202,7 @@ func main() {
 		}
 		defer dec.Close()
 
-		reader, err := seekable.NewReader(verify, dec, seekable.WithRLogger(logger))
+		reader, err := seekable.NewReader(verify, dec, seekable.WithRLogger(seekableLogger.WithGroup("reader")))
 		if err != nil {
 			logger.Fatal("failed to create new seekable reader", zap.Error(err))
 		}
