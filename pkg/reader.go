@@ -8,10 +8,10 @@ import (
 	"log/slog"
 	"math"
 	"sync"
+	"sync/atomic"
 
 	"github.com/cespare/xxhash/v2"
 	"github.com/google/btree"
-	"go.uber.org/atomic"
 
 	"github.com/SaveTheRbtz/zstd-seekable-format-go/pkg/env"
 )
