@@ -6,7 +6,6 @@ import (
 	"crypto/sha512"
 	"errors"
 	"flag"
-	"fmt"
 	"io"
 	"log"
 	"log/slog"
@@ -48,12 +47,16 @@ func main() {
 	flag.Parse()
 
 	var err error
-	var zapLogger *zap.Logger
+	var zapConfig zap.Config
 	if verboseFlag {
-		zapLogger, err = zap.NewDevelopment()
+		zapConfig = zap.NewDevelopmentConfig()
 	} else {
-		zapLogger, err = zap.NewProduction()
+		zapConfig = zap.NewProductionConfig()
 	}
+	zapConfig.DisableCaller = true
+	zapConfig.DisableStacktrace = true
+
+	zapLogger, err := zapConfig.Build()
 	if err != nil {
 		log.Fatal("failed to initialize logger", err)
 	}
@@ -61,18 +64,14 @@ func main() {
 		_ = zapLogger.Sync()
 	}()
 
-	logger := slog.New(zapslog.NewHandler(zapLogger.Core(), zapslog.WithCaller(verboseFlag)))
-	fatal := func(msg string, attrs ...slog.Attr) {
-		logger.LogAttrs(ctx, slog.LevelError, msg, attrs...)
-		_ = zapLogger.Sync()
-		os.Exit(1)
-	}
+	slogLogger := slog.New(zapslog.NewHandler(zapLogger.Core(), zapslog.AddStacktraceAt(slog.Level(1000))))
+	seekableLogger := slogLogger.WithGroup("seekable")
 
 	if inputFlag == "" || outputFlag == "" {
-		fatal("both input and output files need to be defined")
+		zapLogger.Fatal("both input and output files need to be defined")
 	}
 	if verifyFlag && outputFlag == "-" {
-		fatal("verify can't be used with stdout output")
+		zapLogger.Fatal("verify can't be used with stdout output")
 	}
 
 	bar := progressbar.DefaultSilent(0, "")
@@ -80,7 +79,7 @@ func main() {
 	inputFile := os.Stdin
 	if inputFlag != "-" {
 		if inputFile, err = os.Open(inputFlag); err != nil {
-			fatal("failed to open input", slog.Any("err", err))
+			zapLogger.Fatal("failed to open input", zap.Error(err))
 		}
 
 		if term.IsTerminal(int(os.Stdout.Fd())) {
@@ -112,7 +111,7 @@ func main() {
 
 			m, err := io.CopyBuffer(expected, pr, make([]byte, 128<<10))
 			if err != nil {
-				fatal("failed to compute expected csum", slog.Int64("processed", m), slog.Any("err", err))
+				zapLogger.Fatal("failed to compute expected csum", zap.Int64("processed", m), zap.Error(err))
 			}
 		}()
 	}
@@ -121,19 +120,19 @@ func main() {
 	if outputFlag != "-" {
 		output, err = os.OpenFile(outputFlag, os.O_TRUNC|os.O_WRONLY|os.O_CREATE, 0o644)
 		if err != nil {
-			fatal("failed to open output", slog.Any("err", err))
+			zapLogger.Fatal("failed to open output", zap.Error(err))
 		}
 		defer output.Close()
 	}
 
 	chunkParams := strings.Split(chunkingFlag, ":")
 	if len(chunkParams) != 3 {
-		fatal("failed parse chunker params. len() != 3", slog.Int("actual", len(chunkParams)))
+		zapLogger.Fatal("failed parse chunker params. len() != 3", zap.Int("actual", len(chunkParams)))
 	}
 	mustConv := func(s string) int {
 		n, err := strconv.Atoi(s)
 		if err != nil {
-			fatal("failed to parse int", slog.String("string", s), slog.Any("err", err))
+			zapLogger.Fatal("failed to parse int", zap.String("string", s), zap.Error(err))
 		}
 		return n
 	}
@@ -146,17 +145,17 @@ func main() {
 	}
 	enc, err := zstd.NewWriter(nil, zstdOpts...)
 	if err != nil {
-		fatal("failed to create zstd encoder", slog.Any("err", err))
+		zapLogger.Fatal("failed to create zstd encoder", zap.Error(err))
 	}
 
-	w, err := seekable.NewWriter(output, enc, seekable.WithWLogger(logger))
+	w, err := seekable.NewWriter(output, enc, seekable.WithWLogger(seekableLogger.WithGroup("writer")))
 	if err != nil {
-		fatal("failed to create compressed writer", slog.Any("err", err))
+		zapLogger.Fatal("failed to create compressed writer", zap.Error(err))
 	}
 	defer w.Close()
 
 	// convert average chunk size to a number of bits
-	logger.Debug("setting chunker params", slog.Int("min", minChunkSize), slog.Int("max", maxChunkSize))
+	zapLogger.Debug("setting chunker params", zap.Int("min", minChunkSize), zap.Int("max", maxChunkSize))
 	chunker, err := fastcdc.NewChunker(
 		input,
 		fastcdc.Options{
@@ -166,7 +165,7 @@ func main() {
 		},
 	)
 	if err != nil {
-		fatal("failed to create chunker", slog.Any("err", err))
+		zapLogger.Fatal("failed to create chunker", zap.Error(err))
 	}
 
 	frameSource := func() ([]byte, error) {
@@ -185,7 +184,7 @@ func main() {
 		_ = bar.Add(int(size))
 	}))
 	if err != nil {
-		fatal("failed to write data", slog.Any("err", err))
+		zapLogger.Fatal("failed to write data", zap.Error(err))
 	}
 
 	_ = bar.Finish()
@@ -193,38 +192,37 @@ func main() {
 	w.Close()
 
 	if verifyFlag {
-		logger.Info("verifying checksum")
+		zapLogger.Info("verifying checksum")
 
 		verify, err := os.Open(outputFlag)
 		if err != nil {
-			fatal("failed to open file for verification", slog.Any("err", err))
+			zapLogger.Fatal("failed to open file for verification", zap.Error(err))
 		}
 		defer verify.Close()
 
 		dec, err := zstd.NewReader(nil)
 		if err != nil {
-			fatal("failed to create zstd decompressor", slog.Any("err", err))
+			zapLogger.Fatal("failed to create zstd decompressor", zap.Error(err))
 		}
 		defer dec.Close()
 
-		reader, err := seekable.NewReader(verify, dec, seekable.WithRLogger(logger))
+		reader, err := seekable.NewReader(verify, dec, seekable.WithRLogger(seekableLogger.WithGroup("reader")))
 		if err != nil {
-			fatal("failed to create new seekable reader", slog.Any("err", err))
+			zapLogger.Fatal("failed to create new seekable reader", zap.Error(err))
 		}
 
 		actual := sha512.New512_256()
 		m, err := io.CopyBuffer(actual, reader, make([]byte, 128<<10))
 		if err != nil {
-			fatal("failed to compute actual csum", slog.Int64("processed", m), slog.Any("err", err))
+			zapLogger.Fatal("failed to compute actual csum", zap.Int64("processed", m), zap.Error(err))
 		}
 		<-origDone
 
 		if !bytes.Equal(actual.Sum(nil), expected.Sum(nil)) {
-			fatal("checksum verification failed",
-				slog.String("actual", fmt.Sprintf("%x", actual.Sum(nil))),
-				slog.String("expected", fmt.Sprintf("%x", expected.Sum(nil))))
+			zapLogger.Fatal("checksum verification failed",
+				zap.Binary("actual", actual.Sum(nil)), zap.Binary("expected", expected.Sum(nil)))
 		} else {
-			logger.Info("checksum verification succeeded", slog.String("actual", fmt.Sprintf("%x", actual.Sum(nil))))
+			zapLogger.Info("checksum verification succeeded", zap.Binary("actual", actual.Sum(nil)))
 		}
 	}
 }
