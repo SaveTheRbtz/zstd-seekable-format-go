@@ -9,13 +9,10 @@ import (
 type rOption func(*readerImpl) error
 
 func WithRLogger(l *slog.Logger) rOption {
-	return func(r *readerImpl) error {
-		if l == nil {
-			l = discardLogger
-		}
-		r.logger = l
-		return nil
+	if l == nil {
+		l = discardLogger
 	}
+	return func(r *readerImpl) error { r.logger = l; return nil }
 }
 
 func WithREnvironment(e env.REnvironment) rOption {

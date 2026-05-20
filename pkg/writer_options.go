@@ -10,13 +10,10 @@ import (
 type wOption func(*writerImpl) error
 
 func WithWLogger(l *slog.Logger) wOption {
-	return func(w *writerImpl) error {
-		if l == nil {
-			l = discardLogger
-		}
-		w.logger = l
-		return nil
+	if l == nil {
+		l = discardLogger
 	}
+	return func(w *writerImpl) error { w.logger = l; return nil }
 }
 
 func WithWEnvironment(e env.WEnvironment) wOption {
