@@ -102,7 +102,7 @@ if !bytes.Equal(all, []byte("Hello World!")) {
 [doc]: https://pkg.go.dev/github.com/SaveTheRbtz/zstd-seekable-format-go/pkg
 [ci-img]: https://github.com/SaveTheRbtz/zstd-seekable-format-go/actions/workflows/go.yml/badge.svg
 [ci]: https://github.com/SaveTheRbtz/zstd-seekable-format-go/actions/workflows/go.yml
-[report-img]: https://goreportcard.com/badge/SaveTheRbtz/zstd-seekable-format-go/pkg
-[report]: https://goreportcard.com/report/SaveTheRbtz/zstd-seekable-format-go/pkg
+[report-img]: https://goreportcard.com/badge/github.com/SaveTheRbtz/zstd-seekable-format-go/pkg
+[report]: https://goreportcard.com/report/github.com/SaveTheRbtz/zstd-seekable-format-go/pkg
 [license-img]: https://img.shields.io/badge/License-MIT-blue.svg
 [license]: https://opensource.org/licenses/MIT
