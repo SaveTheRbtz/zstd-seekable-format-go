@@ -15,3 +15,5 @@ jobs:
       - uses: actions/checkout@v6
       - name: typos
         uses: crate-ci/typos@v1.47.0
+        with:
+          files: . .github
