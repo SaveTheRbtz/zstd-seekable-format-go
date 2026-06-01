@@ -130,6 +130,7 @@ func (s *writerImpl) Close() error {
 	}
 
 	err := s.writeSeekTable()
+	s.frameEntries = nil
 	s.env = nil
 	return err
 }
