@@ -31,7 +31,11 @@ func exampleSeekableStream() []byte {
 	if err != nil {
 		log.Fatal(err)
 	}
-	defer enc.Close()
+	defer func() {
+		if err := enc.Close(); err != nil {
+			log.Fatal(err)
+		}
+	}()
 
 	w, err := seekable.NewWriter(&buf, enc)
 	if err != nil {
@@ -106,7 +110,11 @@ func ExampleNewSeekTable() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	defer enc.Close()
+	defer func() {
+		if err := enc.Close(); err != nil {
+			log.Fatal(err)
+		}
+	}()
 
 	e, err := seekable.NewEncoder(enc)
 	if err != nil {
@@ -147,7 +155,11 @@ func ExampleConcurrentWriter_WriteMany() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	defer enc.Close()
+	defer func() {
+		if err := enc.Close(); err != nil {
+			log.Fatal(err)
+		}
+	}()
 
 	w, err := seekable.NewWriter(&buf, enc)
 	if err != nil {
