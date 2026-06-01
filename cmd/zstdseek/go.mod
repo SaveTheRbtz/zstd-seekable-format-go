@@ -2,8 +2,6 @@ module github.com/SaveTheRbtz/zstd-seekable-format-go/cmd/zstdseek
 
 go 1.25.0
 
-toolchain go1.26.3
-
 require (
 	github.com/SaveTheRbtz/fastcdc-go v0.3.0
 	github.com/SaveTheRbtz/zstd-seekable-format-go/pkg v0.9.0

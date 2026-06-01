@@ -2,8 +2,6 @@ module github.com/SaveTheRbtz/zstd-seekable-format-go/pkg
 
 go 1.25.0
 
-toolchain go1.26.3
-
 require (
 	github.com/cespare/xxhash/v2 v2.3.0
 	github.com/klauspost/compress v1.18.6
