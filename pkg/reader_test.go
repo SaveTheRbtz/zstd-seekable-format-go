@@ -166,13 +166,61 @@ func TestReader(t *testing.T) {
 		err = r.Close()
 		require.NoError(t, err)
 
-		// read after close
-		_, err = r.Read(tmp)
-		require.ErrorContains(t, err, "reader is closed")
-
 		// double close
 		err = r.Close()
 		require.NoError(t, err)
+	}
+}
+
+func TestReaderPostCloseContract(t *testing.T) {
+	t.Parallel()
+
+	dec, err := zstd.NewReader(nil)
+	require.NoError(t, err)
+	defer dec.Close()
+
+	r, err := NewReader(&seekableBufferReaderAt{buf: checksum}, dec)
+	require.NoError(t, err)
+
+	err = r.Close()
+	require.NoError(t, err)
+
+	for _, tc := range []struct {
+		name string
+		call func() error
+	}{
+		{
+			name: "Read",
+			call: func() error {
+				_, err := r.Read(make([]byte, 1))
+				return err
+			},
+		},
+		{
+			name: "ReadAt",
+			call: func() error {
+				_, err := r.ReadAt(make([]byte, 1), 0)
+				return err
+			},
+		},
+		{
+			name: "ReadAtEmpty",
+			call: func() error {
+				_, err := r.ReadAt(nil, 0)
+				return err
+			},
+		},
+		{
+			name: "Seek",
+			call: func() error {
+				_, err := r.Seek(0, io.SeekStart)
+				return err
+			},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			require.ErrorIs(t, tc.call(), errReaderClosed)
+		})
 	}
 }
 

@@ -115,6 +115,8 @@ type readerImpl struct {
 	cachedFrame cachedFrame
 }
 
+var errReaderClosed = errors.New("reader is closed")
+
 var (
 	_ Reader      = (*readerImpl)(nil)
 	_ io.Seeker   = (*readerImpl)(nil)
@@ -174,6 +176,10 @@ func NewReader(rs io.ReadSeeker, decoder ZSTDDecoder, opts ...rOption) (Reader, 
 }
 
 func (r *readerImpl) ReadAt(p []byte, off int64) (n int, err error) {
+	if r.closed.Load() {
+		return 0, errReaderClosed
+	}
+
 	for m := 0; n < len(p) && err == nil; n += m {
 		_, m, err = r.read(p[n:], off+int64(n))
 	}
@@ -193,7 +199,7 @@ func (r *readerImpl) Read(p []byte) (n int, err error) {
 }
 
 func (r *readerImpl) Close() error {
-	if r.closed.CompareAndSwap(false, true) {
+	if !r.closed.Swap(true) {
 		r.cachedFrame.replace(math.MaxUint64, nil)
 		r.seekTable = seekTable{}
 	}
@@ -202,7 +208,7 @@ func (r *readerImpl) Close() error {
 
 func (r *readerImpl) read(dst []byte, off int64) (int64, int, error) {
 	if r.closed.Load() {
-		return 0, 0, fmt.Errorf("reader is closed")
+		return 0, 0, errReaderClosed
 	}
 
 	if off < 0 {
@@ -278,6 +284,10 @@ func (r *readerImpl) read(dst []byte, off int64) (int64, int, error) {
 }
 
 func (r *readerImpl) Seek(offset int64, whence int) (int64, error) {
+	if r.closed.Load() {
+		return 0, errReaderClosed
+	}
+
 	newOffset := r.offset
 	switch whence {
 	case io.SeekCurrent:
