@@ -6,7 +6,7 @@ import (
 	"github.com/SaveTheRbtz/zstd-seekable-format-go/pkg/env"
 )
 
-var benchmarkChunkIndexSizes = []struct {
+var decoderBenchmarkSizes = []struct {
 	name string
 	size int
 }{
@@ -24,7 +24,7 @@ var (
 func benchmarkSeekTable(b testing.TB, size int) []byte {
 	b.Helper()
 
-	const entrySize = 12
+	entrySize := int(seekTableEntrySize(true))
 	seekTable := make([]byte, size*entrySize+seekTableFooterOffset)
 	entry := seekTableEntry{CompressedSize: 1, DecompressedSize: 1}
 	for i := 0; i < size; i++ {
@@ -47,7 +47,7 @@ func benchmarkSeekTable(b testing.TB, size int) []byte {
 	return frame
 }
 
-func benchmarkDecoder(b *testing.B, size int) *decoderImpl {
+func benchmarkDecoder(b *testing.B, size int) Decoder {
 	b.Helper()
 
 	seekTable := benchmarkSeekTable(b, size)
@@ -55,11 +55,11 @@ func benchmarkDecoder(b *testing.B, size int) *decoderImpl {
 	if err != nil {
 		b.Fatal(err)
 	}
-	return d.(*decoderImpl)
+	return d
 }
 
 func BenchmarkDecoderIndexBuild(b *testing.B) {
-	for _, benchmarkSize := range benchmarkChunkIndexSizes {
+	for _, benchmarkSize := range decoderBenchmarkSizes {
 		b.Run(benchmarkSize.name, func(b *testing.B) {
 			seekTable := benchmarkSeekTable(b, benchmarkSize.size)
 
@@ -80,7 +80,7 @@ func BenchmarkDecoderIndexBuild(b *testing.B) {
 }
 
 func BenchmarkDecoderGetIndexByDecompOffset(b *testing.B) {
-	for _, benchmarkSize := range benchmarkChunkIndexSizes {
+	for _, benchmarkSize := range decoderBenchmarkSizes {
 		b.Run(benchmarkSize.name, func(b *testing.B) {
 			d := benchmarkDecoder(b, benchmarkSize.size)
 			defer func() {
@@ -145,7 +145,7 @@ func BenchmarkDecoderGetIndexByDecompOffset(b *testing.B) {
 }
 
 func BenchmarkDecoderGetIndexByID(b *testing.B) {
-	for _, benchmarkSize := range benchmarkChunkIndexSizes {
+	for _, benchmarkSize := range decoderBenchmarkSizes {
 		b.Run(benchmarkSize.name, func(b *testing.B) {
 			d := benchmarkDecoder(b, benchmarkSize.size)
 			defer func() {

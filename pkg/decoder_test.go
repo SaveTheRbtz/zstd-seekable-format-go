@@ -22,45 +22,34 @@ func TestDecoder(t *testing.T) {
 	assert.Equal(t, int64(len(sourceString)), d.Size())
 	assert.Equal(t, int64(2), d.NumFrames())
 
-	// First frame.
+	for _, tc := range []struct {
+		name    string
+		id      int64
+		offsets []uint64
+		data    []byte
+	}{
+		{name: "FirstFrame", id: 0, offsets: []uint64{0, 1, 3}, data: []byte("test")},
+		{name: "SecondFrame", id: 1, offsets: []uint64{4, 5, 8}, data: []byte("test2")},
+	} {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			for _, off := range tc.offsets {
+				indexByOffset := d.GetIndexByDecompOffset(off)
+				indexByID := d.GetIndexByID(tc.id)
+				assert.Equal(t, indexByID, indexByOffset)
+				require.NotNil(t, indexByOffset)
+				assert.Equal(t, tc.id, indexByOffset.ID)
+				assert.Equal(t, uint32(len(tc.data)), indexByOffset.DecompSize)
+				assert.NotEqual(t, uint32(0), indexByOffset.Checksum)
 
-	bytes1 := []byte("test")
-	for _, off := range []uint64{0, 1, 3} {
-		indexOff0 := d.GetIndexByDecompOffset(off)
-		indexID0 := d.GetIndexByID(0)
-		assert.Equal(t, indexOff0, indexID0)
-		assert.NotNil(t, indexOff0)
-		assert.Equal(t, int64(0), indexOff0.ID)
-		assert.Equal(t, uint32(len(bytes1)), indexOff0.DecompSize)
-		assert.NotEqual(t, uint32(0), indexOff0.Checksum)
-
-		decomp, err := dec.DecodeAll(
-			checksum[indexOff0.CompOffset:indexOff0.CompOffset+uint64(indexOff0.CompSize)], nil,
-		)
-		require.NoError(t, err)
-		assert.Equal(t, decomp, bytes1)
+				decomp, err := dec.DecodeAll(
+					checksum[indexByOffset.CompOffset:indexByOffset.CompOffset+uint64(indexByOffset.CompSize)], nil,
+				)
+				require.NoError(t, err)
+				assert.Equal(t, tc.data, decomp)
+			}
+		})
 	}
-
-	// Second frame.
-
-	bytes2 := []byte("test2")
-	for _, off := range []uint64{4, 5, 8} {
-		indexOff1 := d.GetIndexByDecompOffset(off)
-		indexID1 := d.GetIndexByID(1)
-		assert.Equal(t, indexOff1, indexID1)
-		assert.NotNil(t, indexOff1)
-		assert.Equal(t, int64(1), indexOff1.ID)
-		assert.Equal(t, uint32(len(bytes2)), indexOff1.DecompSize)
-		assert.NotEqual(t, uint32(0), indexOff1.Checksum)
-
-		decomp, err := dec.DecodeAll(
-			checksum[indexOff1.CompOffset:indexOff1.CompOffset+uint64(indexOff1.CompSize)], nil,
-		)
-		require.NoError(t, err)
-		assert.Equal(t, decomp, bytes2)
-	}
-
-	// Out of bounds.
 
 	for _, off := range []uint64{9, 99} {
 		assert.Nil(t, d.GetIndexByDecompOffset(off))
@@ -114,46 +103,44 @@ func TestDecoderZeroSizeEntries(t *testing.T) {
 	assert.Equal(t, int64(7), d.Size())
 	assert.Equal(t, int64(5), d.NumFrames())
 
-	indexID0 := d.GetIndexByID(0)
-	require.NotNil(t, indexID0)
-	assert.Equal(t, int64(0), indexID0.ID)
-	assert.Equal(t, uint64(0), indexID0.DecompOffset)
-	assert.Equal(t, uint32(0), indexID0.DecompSize)
-
-	indexID2 := d.GetIndexByID(2)
-	require.NotNil(t, indexID2)
-	assert.Equal(t, int64(2), indexID2.ID)
-	assert.Equal(t, uint64(3), indexID2.DecompOffset)
-	assert.Equal(t, uint32(0), indexID2.DecompSize)
-
-	indexID4 := d.GetIndexByID(4)
-	require.NotNil(t, indexID4)
-	assert.Equal(t, int64(4), indexID4.ID)
-	assert.Equal(t, uint64(7), indexID4.DecompOffset)
-	assert.Equal(t, uint32(0), indexID4.DecompSize)
-
-	indexID1 := d.GetIndexByID(1)
-	require.NotNil(t, indexID1)
-	assert.Equal(t, int64(1), indexID1.ID)
-	assert.Equal(t, uint64(0), indexID1.DecompOffset)
-	assert.Equal(t, uint32(3), indexID1.DecompSize)
-
-	indexID3 := d.GetIndexByID(3)
-	require.NotNil(t, indexID3)
-	assert.Equal(t, int64(3), indexID3.ID)
-	assert.Equal(t, uint64(3), indexID3.DecompOffset)
-	assert.Equal(t, uint32(4), indexID3.DecompSize)
-
-	for _, off := range []uint64{0, 1, 2} {
-		index := d.GetIndexByDecompOffset(off)
-		require.NotNil(t, index)
-		assert.Equal(t, int64(1), index.ID)
+	for _, tc := range []struct {
+		name         string
+		id           int64
+		decompOffset uint64
+		decompSize   uint32
+	}{
+		{name: "LeadingZero", id: 0, decompOffset: 0, decompSize: 0},
+		{name: "FirstNonZero", id: 1, decompOffset: 0, decompSize: 3},
+		{name: "MiddleZero", id: 2, decompOffset: 3, decompSize: 0},
+		{name: "SecondNonZero", id: 3, decompOffset: 3, decompSize: 4},
+		{name: "TrailingZero", id: 4, decompOffset: 7, decompSize: 0},
+	} {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			index := d.GetIndexByID(tc.id)
+			require.NotNil(t, index)
+			assert.Equal(t, tc.id, index.ID)
+			assert.Equal(t, tc.decompOffset, index.DecompOffset)
+			assert.Equal(t, tc.decompSize, index.DecompSize)
+		})
 	}
 
-	for _, off := range []uint64{3, 4, 6} {
-		index := d.GetIndexByDecompOffset(off)
-		require.NotNil(t, index)
-		assert.Equal(t, int64(3), index.ID)
+	for _, tc := range []struct {
+		name    string
+		offsets []uint64
+		id      int64
+	}{
+		{name: "FirstNonZero", offsets: []uint64{0, 1, 2}, id: 1},
+		{name: "SecondNonZero", offsets: []uint64{3, 4, 6}, id: 3},
+	} {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			for _, off := range tc.offsets {
+				index := d.GetIndexByDecompOffset(off)
+				require.NotNil(t, index)
+				assert.Equal(t, tc.id, index.ID)
+			}
+		})
 	}
 
 	assert.Nil(t, d.GetIndexByDecompOffset(7))
@@ -162,7 +149,7 @@ func TestDecoderZeroSizeEntries(t *testing.T) {
 func mustCreateSeekTableFrame(t testing.TB, entries []seekTableEntry, numberOfFrames uint32) []byte {
 	t.Helper()
 
-	const entrySize = 12
+	entrySize := int(seekTableEntrySize(true))
 	seekTable := make([]byte, len(entries)*entrySize+seekTableFooterOffset)
 	for i, entry := range entries {
 		entry.marshalBinaryInline(seekTable[i*entrySize : (i+1)*entrySize])

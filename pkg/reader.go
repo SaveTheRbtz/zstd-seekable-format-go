@@ -211,6 +211,22 @@ func (r *readerImpl) Close() error {
 	return nil
 }
 
+func (r *readerImpl) Size() int64 {
+	return r.index.size
+}
+
+func (r *readerImpl) NumFrames() int64 {
+	return r.index.numFrames()
+}
+
+func (r *readerImpl) GetIndexByDecompOffset(off uint64) (found *env.FrameOffsetEntry) {
+	return r.index.byDecompOffset(off)
+}
+
+func (r *readerImpl) GetIndexByID(id int64) (found *env.FrameOffsetEntry) {
+	return r.index.byID(id)
+}
+
 func (r *readerImpl) read(dst []byte, off int64) (int64, int, error) {
 	if r.closed.Load() {
 		return 0, 0, fmt.Errorf("reader is closed")
