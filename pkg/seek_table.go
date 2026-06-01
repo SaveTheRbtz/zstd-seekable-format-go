@@ -37,6 +37,11 @@ func (t SeekTable) NumFrames() int64 {
 	return int64(len(t.entries))
 }
 
+// HasChecksums reports whether entries in the seek table include checksum fields.
+func (t SeekTable) HasChecksums() bool {
+	return t.checksums
+}
+
 // EntryByDecompressedOffset returns the frame containing off in the decompressed stream.
 // It returns false if off is greater than or equal to Size().
 func (t SeekTable) EntryByDecompressedOffset(off uint64) (FrameOffsetEntry, bool) {

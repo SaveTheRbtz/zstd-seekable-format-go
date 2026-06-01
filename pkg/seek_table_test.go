@@ -20,6 +20,7 @@ func TestNewSeekTable(t *testing.T) {
 
 	assert.Equal(t, uint64(len(sourceString)), table.Size())
 	assert.Equal(t, int64(2), table.NumFrames())
+	assert.True(t, table.HasChecksums())
 
 	for id, tc := range []struct {
 		name    string
@@ -57,4 +58,8 @@ func TestNewSeekTable(t *testing.T) {
 		_, ok := table.EntryByID(id)
 		assert.False(t, ok)
 	}
+
+	noChecksumTable, err := NewSeekTable(noChecksum[17+18:])
+	require.NoError(t, err)
+	assert.False(t, noChecksumTable.HasChecksums())
 }
