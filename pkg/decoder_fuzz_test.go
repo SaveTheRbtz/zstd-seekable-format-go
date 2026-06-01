@@ -48,7 +48,7 @@ func FuzzCorruptSeekTable(f *testing.F) {
 			}
 		}
 
-		d, err := NewDecoder(mutated, dec)
+		d, err := NewDecoder(mutated)
 		if err != nil {
 			return
 		}

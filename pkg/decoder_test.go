@@ -15,7 +15,7 @@ func TestDecoder(t *testing.T) {
 	require.NoError(t, err)
 	defer dec.Close()
 
-	d, err := NewDecoder(checksum[17+18:], dec)
+	d, err := NewDecoder(checksum[17+18:])
 	require.NoError(t, err)
 	defer func() { require.NoError(t, d.Close()) }()
 
@@ -71,6 +71,17 @@ func TestDecoder(t *testing.T) {
 	}
 }
 
+func TestDecoderIsMetadataOnly(t *testing.T) {
+	t.Parallel()
+
+	d, err := NewDecoder(checksum[17+18:])
+	require.NoError(t, err)
+	defer func() { require.NoError(t, d.Close()) }()
+
+	_, ok := d.(Reader)
+	assert.False(t, ok)
+}
+
 func TestDecoderRejectsSeekTableEntryCountMismatch(t *testing.T) {
 	t.Parallel()
 
@@ -79,7 +90,7 @@ func TestDecoderRejectsSeekTableEntryCountMismatch(t *testing.T) {
 		{CompressedSize: 1, DecompressedSize: 1},
 	}, 1)
 
-	d, err := NewDecoder(seekTable, nil)
+	d, err := NewDecoder(seekTable)
 	require.ErrorContains(t, err, "seek table entry count mismatch")
 	assert.Nil(t, d)
 }
@@ -96,7 +107,7 @@ func TestDecoderZeroSizeEntries(t *testing.T) {
 	}
 	seekTable := mustCreateSeekTableFrame(t, entries, uint32(len(entries)))
 
-	d, err := NewDecoder(seekTable, nil)
+	d, err := NewDecoder(seekTable)
 	require.NoError(t, err)
 	defer func() { require.NoError(t, d.Close()) }()
 

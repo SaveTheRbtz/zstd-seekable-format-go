@@ -22,69 +22,93 @@ type Decoder interface {
 	// NumFrames returns number of frames in the compressed stream.
 	NumFrames() int64
 
-	// Close closes the decoder feeing up any resources.
+	// Close closes the decoder freeing up any resources.
 	Close() error
 }
+
+type decoderImpl struct {
+	index frameIndex
+}
+
+var _ Decoder = (*decoderImpl)(nil)
 
 // NewDecoder creates a byte-oriented Decode interface from a given seektable index.
 // This index can either be produced by either Writer's WriteSeekTable or Encoder's EndStream.
 // Decoder can be used concurrently.
-func NewDecoder(seekTable []byte, decoder ZSTDDecoder, opts ...rOption) (Decoder, error) {
-	opts = append(opts, WithREnvironment(&decoderEnv{seekTable: seekTable}))
-
-	sr, err := NewReader(nil, decoder, opts...)
+func NewDecoder(seekTable []byte) (Decoder, error) {
+	table, err := parseSeekTable(seekTable)
 	if err != nil {
 		return nil, err
 	}
 
-	// Release seekTable reference to not leak memory.
-	sr.(*readerImpl).env = nil
-
-	return sr.(*readerImpl), err
-}
-
-type decoderEnv struct {
-	seekTable []byte
-}
-
-func (d *decoderEnv) GetFrameByIndex(index env.FrameOffsetEntry) (p []byte, err error) {
-	panic("should not be used")
-}
-
-func (d *decoderEnv) ReadFooter() ([]byte, error) {
-	return d.seekTable, nil
-}
-
-func (d *decoderEnv) ReadSkipFrame(skippableFrameOffset int64) ([]byte, error) {
-	return d.seekTable, nil
+	return &decoderImpl{
+		index: table.frameIndex,
+	}, nil
 }
 
 func (r *readerImpl) Size() int64 {
-	return r.endOffset
+	return r.index.size
 }
 
 func (r *readerImpl) NumFrames() int64 {
-	return r.numFrames
+	return r.index.numFrames()
+}
+
+func (d *decoderImpl) Size() int64 {
+	return d.index.size
+}
+
+func (d *decoderImpl) NumFrames() int64 {
+	return d.index.numFrames()
+}
+
+func (d *decoderImpl) Close() error {
+	return nil
 }
 
 func (r *readerImpl) GetIndexByDecompOffset(off uint64) (found *env.FrameOffsetEntry) {
-	if off >= uint64(r.endOffset) {
-		return nil
-	}
-
-	i := sort.Search(len(r.index), func(i int) bool {
-		return r.index[i].DecompOffset+uint64(r.index[i].DecompSize) > off
-	})
-	if i == len(r.index) || r.index[i].DecompOffset > off {
-		return nil
-	}
-	return &r.index[i]
+	return r.index.byDecompOffset(off)
 }
 
 func (r *readerImpl) GetIndexByID(id int64) (found *env.FrameOffsetEntry) {
-	if id < 0 || id >= int64(len(r.index)) {
+	return r.index.byID(id)
+}
+
+func (d *decoderImpl) GetIndexByDecompOffset(off uint64) (found *env.FrameOffsetEntry) {
+	return d.index.byDecompOffset(off)
+}
+
+func (d *decoderImpl) GetIndexByID(id int64) (found *env.FrameOffsetEntry) {
+	return d.index.byID(id)
+}
+
+type frameIndex struct {
+	entries []env.FrameOffsetEntry
+	size    int64
+}
+
+func (i frameIndex) numFrames() int64 {
+	return int64(len(i.entries))
+}
+
+func (i frameIndex) byDecompOffset(off uint64) (found *env.FrameOffsetEntry) {
+	if off >= uint64(i.size) {
 		return nil
 	}
 
-	return &r.index[int(id)]
+	n := sort.Search(len(i.entries), func(n int) bool {
+		return i.entries[n].DecompOffset+uint64(i.entries[n].DecompSize) > off
+	})
+	if n == len(i.entries) || i.entries[n].DecompOffset > off {
+		return nil
+	}
+	return &i.entries[n]
+}
+
+func (i frameIndex) byID(id int64) (found *env.FrameOffsetEntry) {
+	if id < 0 || id >= int64(len(i.entries)) {
+		return nil
+	}
+
+	return &i.entries[int(id)]
 }

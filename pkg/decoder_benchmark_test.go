@@ -47,15 +47,15 @@ func benchmarkSeekTable(b testing.TB, size int) []byte {
 	return frame
 }
 
-func benchmarkReader(b *testing.B, size int) *readerImpl {
+func benchmarkDecoder(b *testing.B, size int) *decoderImpl {
 	b.Helper()
 
 	seekTable := benchmarkSeekTable(b, size)
-	d, err := NewDecoder(seekTable, nil)
+	d, err := NewDecoder(seekTable)
 	if err != nil {
 		b.Fatal(err)
 	}
-	return d.(*readerImpl)
+	return d.(*decoderImpl)
 }
 
 func BenchmarkDecoderIndexBuild(b *testing.B) {
@@ -66,7 +66,7 @@ func BenchmarkDecoderIndexBuild(b *testing.B) {
 			b.ReportAllocs()
 			b.ResetTimer()
 			for i := 0; i < b.N; i++ {
-				d, err := NewDecoder(seekTable, nil)
+				d, err := NewDecoder(seekTable)
 				if err != nil {
 					b.Fatal(err)
 				}
@@ -82,9 +82,9 @@ func BenchmarkDecoderIndexBuild(b *testing.B) {
 func BenchmarkDecoderGetIndexByDecompOffset(b *testing.B) {
 	for _, benchmarkSize := range benchmarkChunkIndexSizes {
 		b.Run(benchmarkSize.name, func(b *testing.B) {
-			r := benchmarkReader(b, benchmarkSize.size)
+			d := benchmarkDecoder(b, benchmarkSize.size)
 			defer func() {
-				if err := r.Close(); err != nil {
+				if err := d.Close(); err != nil {
 					b.Fatal(err)
 				}
 			}()
@@ -104,7 +104,7 @@ func BenchmarkDecoderGetIndexByDecompOffset(b *testing.B) {
 					b.ReportAllocs()
 					b.ResetTimer()
 					for i := 0; i < b.N; i++ {
-						benchmarkEntrySink = r.GetIndexByDecompOffset(tc.off)
+						benchmarkEntrySink = d.GetIndexByDecompOffset(tc.off)
 					}
 				})
 			}
@@ -116,7 +116,7 @@ func BenchmarkDecoderGetIndexByDecompOffset(b *testing.B) {
 				b.ReportAllocs()
 				b.ResetTimer()
 				for i := 0; i < b.N; i++ {
-					index := r.GetIndexByDecompOffset(uint64(i) & mask)
+					index := d.GetIndexByDecompOffset(uint64(i) & mask)
 					if index != nil {
 						ids += index.ID
 					}
@@ -133,7 +133,7 @@ func BenchmarkDecoderGetIndexByDecompOffset(b *testing.B) {
 				b.ResetTimer()
 				for i := 0; i < b.N; i++ {
 					x = x*6364136223846793005 + 1
-					index := r.GetIndexByDecompOffset(x & mask)
+					index := d.GetIndexByDecompOffset(x & mask)
 					if index != nil {
 						ids += index.ID
 					}
@@ -147,9 +147,9 @@ func BenchmarkDecoderGetIndexByDecompOffset(b *testing.B) {
 func BenchmarkDecoderGetIndexByID(b *testing.B) {
 	for _, benchmarkSize := range benchmarkChunkIndexSizes {
 		b.Run(benchmarkSize.name, func(b *testing.B) {
-			r := benchmarkReader(b, benchmarkSize.size)
+			d := benchmarkDecoder(b, benchmarkSize.size)
 			defer func() {
-				if err := r.Close(); err != nil {
+				if err := d.Close(); err != nil {
 					b.Fatal(err)
 				}
 			}()
@@ -170,7 +170,7 @@ func BenchmarkDecoderGetIndexByID(b *testing.B) {
 					b.ReportAllocs()
 					b.ResetTimer()
 					for i := 0; i < b.N; i++ {
-						benchmarkEntrySink = r.GetIndexByID(tc.id)
+						benchmarkEntrySink = d.GetIndexByID(tc.id)
 					}
 				})
 			}
@@ -182,7 +182,7 @@ func BenchmarkDecoderGetIndexByID(b *testing.B) {
 				b.ReportAllocs()
 				b.ResetTimer()
 				for i := 0; i < b.N; i++ {
-					index := r.GetIndexByID(int64(i) & mask)
+					index := d.GetIndexByID(int64(i) & mask)
 					if index != nil {
 						ids += index.ID
 					}
@@ -199,7 +199,7 @@ func BenchmarkDecoderGetIndexByID(b *testing.B) {
 				b.ResetTimer()
 				for i := 0; i < b.N; i++ {
 					x = x*6364136223846793005 + 1
-					index := r.GetIndexByID(int64(x & mask))
+					index := d.GetIndexByID(int64(x & mask))
 					if index != nil {
 						ids += index.ID
 					}

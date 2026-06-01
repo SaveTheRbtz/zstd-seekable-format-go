@@ -38,7 +38,7 @@ func TestEncoder(t *testing.T) {
 	assert.Equal(t, sourceString, string(decompressed))
 
 	// Seekable Decoder.
-	d, err := NewDecoder(footer, dec)
+	d, err := NewDecoder(footer)
 	require.NoError(t, err)
 
 	assert.Equal(t, int64(len(sourceString)), d.Size())
