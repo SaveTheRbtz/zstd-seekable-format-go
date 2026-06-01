@@ -2,8 +2,6 @@ package seekable
 
 import (
 	"testing"
-
-	"github.com/SaveTheRbtz/zstd-seekable-format-go/pkg/env"
 )
 
 var seekTableBenchmarkSizes = []struct {
@@ -17,7 +15,8 @@ var seekTableBenchmarkSizes = []struct {
 
 var (
 	benchmarkSeekTableSink *seekTable
-	benchmarkEntrySink     *env.FrameOffsetEntry
+	benchmarkEntrySink     FrameOffsetEntry
+	benchmarkBoolSink      bool
 	benchmarkIntSink       int64
 )
 
@@ -76,7 +75,7 @@ func BenchmarkSeekTableIndexBuild(b *testing.B) {
 	}
 }
 
-func BenchmarkSeekTableGetIndexByDecompOffset(b *testing.B) {
+func BenchmarkSeekTableEntryByDecompressedOffset(b *testing.B) {
 	for _, benchmarkSize := range seekTableBenchmarkSizes {
 		b.Run(benchmarkSize.name, func(b *testing.B) {
 			table := benchmarkParsedSeekTable(b, benchmarkSize.size)
@@ -96,7 +95,7 @@ func BenchmarkSeekTableGetIndexByDecompOffset(b *testing.B) {
 					b.ReportAllocs()
 					b.ResetTimer()
 					for i := 0; i < b.N; i++ {
-						benchmarkEntrySink = table.GetIndexByDecompOffset(tc.off)
+						benchmarkEntrySink, benchmarkBoolSink = table.EntryByDecompressedOffset(tc.off)
 					}
 				})
 			}
@@ -108,8 +107,8 @@ func BenchmarkSeekTableGetIndexByDecompOffset(b *testing.B) {
 				b.ReportAllocs()
 				b.ResetTimer()
 				for i := 0; i < b.N; i++ {
-					index := table.GetIndexByDecompOffset(uint64(i) & mask)
-					if index != nil {
+					index, ok := table.EntryByDecompressedOffset(uint64(i) & mask)
+					if ok {
 						ids += index.ID
 					}
 				}
@@ -125,8 +124,8 @@ func BenchmarkSeekTableGetIndexByDecompOffset(b *testing.B) {
 				b.ResetTimer()
 				for i := 0; i < b.N; i++ {
 					x = x*6364136223846793005 + 1
-					index := table.GetIndexByDecompOffset(x & mask)
-					if index != nil {
+					index, ok := table.EntryByDecompressedOffset(x & mask)
+					if ok {
 						ids += index.ID
 					}
 				}
@@ -136,7 +135,7 @@ func BenchmarkSeekTableGetIndexByDecompOffset(b *testing.B) {
 	}
 }
 
-func BenchmarkSeekTableGetIndexByID(b *testing.B) {
+func BenchmarkSeekTableEntryByID(b *testing.B) {
 	for _, benchmarkSize := range seekTableBenchmarkSizes {
 		b.Run(benchmarkSize.name, func(b *testing.B) {
 			table := benchmarkParsedSeekTable(b, benchmarkSize.size)
@@ -157,7 +156,7 @@ func BenchmarkSeekTableGetIndexByID(b *testing.B) {
 					b.ReportAllocs()
 					b.ResetTimer()
 					for i := 0; i < b.N; i++ {
-						benchmarkEntrySink = table.GetIndexByID(tc.id)
+						benchmarkEntrySink, benchmarkBoolSink = table.EntryByID(tc.id)
 					}
 				})
 			}
@@ -169,8 +168,8 @@ func BenchmarkSeekTableGetIndexByID(b *testing.B) {
 				b.ReportAllocs()
 				b.ResetTimer()
 				for i := 0; i < b.N; i++ {
-					index := table.GetIndexByID(int64(i) & mask)
-					if index != nil {
+					index, ok := table.EntryByID(int64(i) & mask)
+					if ok {
 						ids += index.ID
 					}
 				}
@@ -186,8 +185,8 @@ func BenchmarkSeekTableGetIndexByID(b *testing.B) {
 				b.ResetTimer()
 				for i := 0; i < b.N; i++ {
 					x = x*6364136223846793005 + 1
-					index := table.GetIndexByID(int64(x & mask))
-					if index != nil {
+					index, ok := table.EntryByID(int64(x & mask))
+					if ok {
 						ids += index.ID
 					}
 				}

@@ -290,8 +290,8 @@ func TestZeroSizedFrameIgnored(t *testing.T) {
 	assert.Equal(t, int64(len("foobar")), rr.Size())
 	assert.Equal(t, int64(2), rr.NumFrames())
 
-	idx := rr.GetIndexByID(1)
-	require.NotNil(t, idx)
+	idx, ok := rr.EntryByID(1)
+	require.True(t, ok)
 
 	expected := []byte("bar")
 	buf := make([]byte, len(expected))
@@ -300,8 +300,8 @@ func TestZeroSizedFrameIgnored(t *testing.T) {
 	assert.Equal(t, len(expected), n)
 	assert.Equal(t, expected, buf)
 
-	idx = rr.GetIndexByID(2)
-	require.Nil(t, idx)
+	_, ok = rr.EntryByID(2)
+	require.False(t, ok)
 }
 
 func TestCloseErrors(t *testing.T) {

@@ -12,8 +12,6 @@ import (
 	"github.com/klauspost/compress/zstd"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-
-	"github.com/SaveTheRbtz/zstd-seekable-format-go/pkg/env"
 )
 
 const sourceString = "testtest2"
@@ -199,7 +197,7 @@ func TestGetFrameByIndexShortReaderAt(t *testing.T) {
 
 	r := &readSeekerEnvImpl{rs: bytes.NewReader([]byte{0})}
 
-	_, err := r.GetFrameByIndex(env.FrameOffsetEntry{CompSize: 2})
+	_, err := r.GetFrameByIndex(FrameOffsetEntry{CompSize: 2})
 	require.ErrorIs(t, err, io.ErrUnexpectedEOF)
 }
 
@@ -221,7 +219,7 @@ func TestGetFrameByIndexPreservesReaderAtError(t *testing.T) {
 		err:    expectedErr,
 	}}
 
-	_, err := r.GetFrameByIndex(env.FrameOffsetEntry{CompSize: 2})
+	_, err := r.GetFrameByIndex(FrameOffsetEntry{CompSize: 2})
 	require.ErrorIs(t, err, expectedErr)
 }
 
@@ -402,7 +400,7 @@ func TestReaderEdgesParallel(t *testing.T) {
 
 type fakeReadEnvironment struct{}
 
-func (s *fakeReadEnvironment) GetFrameByIndex(index env.FrameOffsetEntry) ([]byte, error) {
+func (s *fakeReadEnvironment) GetFrameByIndex(index FrameOffsetEntry) ([]byte, error) {
 	switch index.ID {
 	case 0:
 		return checksum[:17], nil

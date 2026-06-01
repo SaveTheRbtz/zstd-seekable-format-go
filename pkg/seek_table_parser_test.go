@@ -52,8 +52,8 @@ func TestParseSeekTableZeroSizeEntries(t *testing.T) {
 	} {
 		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
-			index := table.byID(tc.id)
-			require.NotNil(t, index)
+			index, ok := table.entryByID(tc.id)
+			require.True(t, ok)
 			assert.Equal(t, tc.id, index.ID)
 			assert.Equal(t, tc.decompOffset, index.DecompOffset)
 			assert.Equal(t, tc.decompSize, index.DecompSize)
@@ -71,14 +71,15 @@ func TestParseSeekTableZeroSizeEntries(t *testing.T) {
 		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			for _, off := range tc.offsets {
-				index := table.byDecompOffset(off)
-				require.NotNil(t, index)
+				index, ok := table.entryByDecompressedOffset(off)
+				require.True(t, ok)
 				assert.Equal(t, tc.id, index.ID)
 			}
 		})
 	}
 
-	assert.Nil(t, table.byDecompOffset(7))
+	_, ok := table.entryByDecompressedOffset(7)
+	assert.False(t, ok)
 }
 
 func TestSeekTableFooterParsing(t *testing.T) {

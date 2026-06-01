@@ -3,13 +3,11 @@ package seekable
 import (
 	"encoding/binary"
 	"fmt"
-
-	"github.com/SaveTheRbtz/zstd-seekable-format-go/pkg/env"
 )
 
 const skippableFrameHeaderSize = frameSizeFieldSize + skippableMagicNumberFieldSize
 
-func readSeekTable(renv env.REnvironment) (seekTable, error) {
+func readSeekTable(renv REnvironment) (seekTable, error) {
 	footerBuf, err := renv.ReadFooter()
 	if err != nil {
 		return seekTable{}, fmt.Errorf("failed to read footer: %w", err)
@@ -126,7 +124,7 @@ func parseSeekTableEntries(p []byte, entrySize uint64, numberOfFrames uint32) (f
 			parsedEntries, numberOfFrames)
 	}
 
-	entries := make([]env.FrameOffsetEntry, 0, int(parsedEntries))
+	entries := make([]FrameOffsetEntry, 0, int(parsedEntries))
 	entry := seekTableEntry{}
 	var compOffset, decompOffset uint64
 
@@ -138,7 +136,7 @@ func parseSeekTableEntries(p []byte, entrySize uint64, numberOfFrames uint32) (f
 				p[indexOffset:indexOffset+entrySize], indexOffset, err)
 		}
 
-		entries = append(entries, env.FrameOffsetEntry{
+		entries = append(entries, FrameOffsetEntry{
 			ID:           i,
 			CompOffset:   compOffset,
 			DecompOffset: decompOffset,

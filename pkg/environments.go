@@ -1,7 +1,7 @@
-package env
+package seekable
 
 // WEnvironment can be used to inject a custom file writer that is different from normal WriteCloser.
-// This is useful when, for example there is a custom chunking code.
+// This is useful when, for example there is custom chunking code.
 type WEnvironment interface {
 	// WriteFrame is called each time frame is encoded and needs to be written upstream.
 	WriteFrame(p []byte) (n int, err error)
@@ -10,7 +10,7 @@ type WEnvironment interface {
 }
 
 // REnvironment can be used to inject a custom file reader that is different from normal ReadSeeker.
-// This is useful when, for example there is a custom chunking code.
+// This is useful when, for example there is custom chunking code.
 type REnvironment interface {
 	// GetFrameByIndex returns the compressed frame by its index.
 	GetFrameByIndex(index FrameOffsetEntry) ([]byte, error)

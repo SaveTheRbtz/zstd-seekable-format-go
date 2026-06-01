@@ -33,10 +33,11 @@ func TestNewSeekTable(t *testing.T) {
 		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			for _, off := range tc.offsets {
-				indexByOffset := table.GetIndexByDecompOffset(off)
-				indexByID := table.GetIndexByID(tc.id)
+				indexByOffset, ok := table.EntryByDecompressedOffset(off)
+				require.True(t, ok)
+				indexByID, ok := table.EntryByID(tc.id)
+				require.True(t, ok)
 				assert.Equal(t, indexByID, indexByOffset)
-				require.NotNil(t, indexByOffset)
 				assert.Equal(t, tc.id, indexByOffset.ID)
 				assert.Equal(t, uint32(len(tc.data)), indexByOffset.DecompSize)
 				assert.NotEqual(t, uint32(0), indexByOffset.Checksum)
@@ -51,11 +52,13 @@ func TestNewSeekTable(t *testing.T) {
 	}
 
 	for _, off := range []uint64{9, 99} {
-		assert.Nil(t, table.GetIndexByDecompOffset(off))
+		_, ok := table.EntryByDecompressedOffset(off)
+		assert.False(t, ok)
 	}
 
 	for _, id := range []int64{-1, 2, 99} {
-		assert.Nil(t, table.GetIndexByID(id))
+		_, ok := table.EntryByID(id)
+		assert.False(t, ok)
 	}
 }
 

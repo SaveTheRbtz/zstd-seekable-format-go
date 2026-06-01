@@ -10,8 +10,6 @@ import (
 	"sync"
 
 	"golang.org/x/sync/errgroup"
-
-	"github.com/SaveTheRbtz/zstd-seekable-format-go/pkg/env"
 )
 
 var errWriterClosed = errors.New("writer is closed")
@@ -34,7 +32,7 @@ type writerImpl struct {
 	frameEntries []seekTableEntry
 
 	logger *slog.Logger
-	env    env.WEnvironment
+	env    WEnvironment
 
 	mu sync.Mutex
 }

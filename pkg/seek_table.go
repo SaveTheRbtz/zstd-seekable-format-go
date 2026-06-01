@@ -1,7 +1,5 @@
 package seekable
 
-import "github.com/SaveTheRbtz/zstd-seekable-format-go/pkg/env"
-
 type seekTable struct {
 	frameIndex
 	checksums bool
@@ -27,14 +25,14 @@ func (t seekTable) NumFrames() int64 {
 	return t.numFrames()
 }
 
-// GetIndexByDecompOffset returns FrameOffsetEntry for an offset in the decompressed stream.
-// Will return nil if offset is greater or equal than Size().
-func (t seekTable) GetIndexByDecompOffset(off uint64) (found *env.FrameOffsetEntry) {
-	return t.byDecompOffset(off)
+// EntryByDecompressedOffset returns the frame containing off in the decompressed stream.
+// It returns false if off is greater than or equal to Size().
+func (t seekTable) EntryByDecompressedOffset(off uint64) (FrameOffsetEntry, bool) {
+	return t.entryByDecompressedOffset(off)
 }
 
-// GetIndexByID returns FrameOffsetEntry for a given frame id.
-// Will return nil if offset is greater or equal than NumFrames() or less than 0.
-func (t seekTable) GetIndexByID(id int64) (found *env.FrameOffsetEntry) {
-	return t.byID(id)
+// EntryByID returns the frame with id.
+// It returns false if id is greater than or equal to NumFrames() or less than 0.
+func (t seekTable) EntryByID(id int64) (FrameOffsetEntry, bool) {
+	return t.entryByID(id)
 }

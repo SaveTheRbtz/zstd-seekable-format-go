@@ -55,8 +55,8 @@ func FuzzCorruptSeekTable(f *testing.F) {
 
 		_ = table.Size()
 		_ = table.NumFrames()
-		_ = table.GetIndexByDecompOffset(uint64(off))
-		_ = table.GetIndexByID(off)
+		_, _ = table.EntryByDecompressedOffset(uint64(off))
+		_, _ = table.EntryByID(off)
 
 		stream := append(append([]byte(nil), noChecksum[:35]...), mutated...)
 		sr := &seekableBufferReaderAt{buf: stream}

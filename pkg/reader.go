@@ -10,8 +10,6 @@ import (
 	"sync/atomic"
 
 	"github.com/cespare/xxhash/v2"
-
-	"github.com/SaveTheRbtz/zstd-seekable-format-go/pkg/env"
 )
 
 type cachedFrame struct {
@@ -42,7 +40,7 @@ type readSeekerEnvImpl struct {
 	mu sync.Mutex
 }
 
-func (rs *readSeekerEnvImpl) GetFrameByIndex(index env.FrameOffsetEntry) ([]byte, error) {
+func (rs *readSeekerEnvImpl) GetFrameByIndex(index FrameOffsetEntry) ([]byte, error) {
 	p := make([]byte, index.CompSize)
 	off := int64(index.CompOffset)
 
@@ -107,7 +105,7 @@ type readerImpl struct {
 	offset int64
 
 	logger *slog.Logger
-	env    env.REnvironment
+	env    REnvironment
 
 	closed atomic.Bool
 
@@ -124,13 +122,13 @@ var (
 )
 
 type Reader interface {
-	// GetIndexByDecompOffset returns FrameOffsetEntry for an offset in the decompressed stream.
-	// Will return nil if offset is greater or equal than Size().
-	GetIndexByDecompOffset(off uint64) *env.FrameOffsetEntry
+	// EntryByDecompressedOffset returns the frame containing off in the decompressed stream.
+	// It returns false if off is greater than or equal to Size().
+	EntryByDecompressedOffset(off uint64) (FrameOffsetEntry, bool)
 
-	// GetIndexByID returns FrameOffsetEntry for a given frame id.
-	// Will return nil if offset is greater or equal than NumFrames() or less than 0.
-	GetIndexByID(id int64) *env.FrameOffsetEntry
+	// EntryByID returns the frame with id.
+	// It returns false if id is greater than or equal to NumFrames() or less than 0.
+	EntryByID(id int64) (FrameOffsetEntry, bool)
 
 	// Size returns the size of the uncompressed stream.
 	Size() int64
@@ -235,8 +233,8 @@ func (r *readerImpl) read(dst []byte, off int64) (int64, int, error) {
 		return 0, 0, fmt.Errorf("offset before the start of the file: %d", off)
 	}
 
-	index := r.GetIndexByDecompOffset(uint64(off))
-	if index == nil {
+	index, ok := r.EntryByDecompressedOffset(uint64(off))
+	if !ok {
 		return 0, 0, fmt.Errorf("failed to get index by offset: %d", off)
 	}
 	if off < int64(index.DecompOffset) || off > int64(index.DecompOffset)+int64(index.DecompSize) {
@@ -257,7 +255,7 @@ func (r *readerImpl) read(dst []byte, off int64) (int64, int, error) {
 				index.CompSize, maxDecoderFrameSize)
 		}
 
-		src, err := r.env.GetFrameByIndex(*index)
+		src, err := r.env.GetFrameByIndex(index)
 		if err != nil {
 			return 0, 0, fmt.Errorf("failed to read compressed data at: %d, %w", index.CompOffset, err)
 		}
