@@ -14,7 +14,7 @@ var seekTableBenchmarkSizes = []struct {
 }
 
 var (
-	benchmarkSeekTableSink *seekTable
+	benchmarkSeekTableSink SeekTable
 	benchmarkEntrySink     FrameOffsetEntry
 	benchmarkBoolSink      bool
 	benchmarkIntSink       int64
@@ -46,7 +46,7 @@ func benchmarkSeekTable(b testing.TB, frameCount int) []byte {
 	return frame
 }
 
-func benchmarkParsedSeekTable(b *testing.B, frameCount int) *seekTable {
+func benchmarkParsedSeekTable(b *testing.B, frameCount int) SeekTable {
 	b.Helper()
 
 	seekTable := benchmarkSeekTable(b, frameCount)

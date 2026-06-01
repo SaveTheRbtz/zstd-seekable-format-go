@@ -7,10 +7,31 @@ type seekTable struct {
 	checksums bool
 }
 
-// NewSeekTable parses a seek table into random-access metadata.
-// The seek table can be the skippable frame written by Writer.Close or returned by Encoder.EndStream.
-// Lookup methods can be used concurrently.
-func NewSeekTable(buf []byte) (*seekTable, error) {
+// SeekTable provides random-access metadata parsed from a Zstandard seek-table skippable frame.
+//
+// Use NewSeekTable to construct a SeekTable from bytes written by Writer.Close
+// or returned by Encoder.EndStream. Lookup methods can be used concurrently.
+type SeekTable interface {
+	// Size returns the size of the decompressed stream.
+	Size() uint64
+
+	// NumFrames returns the number of frames in the seek table.
+	NumFrames() int64
+
+	// EntryByDecompressedOffset returns the frame containing off in the decompressed stream.
+	// It returns false if off is greater than or equal to Size().
+	EntryByDecompressedOffset(off uint64) (FrameOffsetEntry, bool)
+
+	// EntryByID returns the frame with id.
+	// It returns false if id is greater than or equal to NumFrames() or less than 0.
+	EntryByID(id int64) (FrameOffsetEntry, bool)
+}
+
+var _ SeekTable = (*seekTable)(nil)
+
+// NewSeekTable parses the seek-table skippable frame written by Writer.Close
+// or returned by Encoder.EndStream.
+func NewSeekTable(buf []byte) (SeekTable, error) {
 	table, err := parseSeekTableFrame(buf)
 	if err != nil {
 		return nil, err
@@ -32,8 +53,6 @@ func (t seekTable) NumFrames() int64 {
 	return int64(len(t.entries))
 }
 
-// EntryByDecompressedOffset returns the frame containing off in the decompressed stream.
-// It returns false if off is greater than or equal to Size().
 func (t seekTable) EntryByDecompressedOffset(off uint64) (FrameOffsetEntry, bool) {
 	if off >= t.Size() {
 		return FrameOffsetEntry{}, false
@@ -50,8 +69,6 @@ func (t seekTable) EntryByDecompressedOffset(off uint64) (FrameOffsetEntry, bool
 	return t.entries[n], true
 }
 
-// EntryByID returns the frame with id.
-// It returns false if id is greater than or equal to NumFrames() or less than 0.
 func (t seekTable) EntryByID(id int64) (FrameOffsetEntry, bool) {
 	if id < 0 || id >= int64(len(t.entries)) {
 		return FrameOffsetEntry{}, false
