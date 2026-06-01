@@ -35,7 +35,3 @@ func (o *FrameOffsetEntry) LogValue() slog.Value {
 		slog.Uint64("Checksum", uint64(o.Checksum)),
 	)
 }
-
-func Less(a, b *FrameOffsetEntry) bool {
-	return a.DecompOffset < b.DecompOffset
-}

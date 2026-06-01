@@ -1,6 +1,8 @@
 package seekable
 
 import (
+	"sort"
+
 	"github.com/SaveTheRbtz/zstd-seekable-format-go/pkg/env"
 )
 
@@ -70,24 +72,19 @@ func (r *readerImpl) GetIndexByDecompOffset(off uint64) (found *env.FrameOffsetE
 		return nil
 	}
 
-	r.index.DescendLessOrEqual(&env.FrameOffsetEntry{DecompOffset: off}, func(index *env.FrameOffsetEntry) bool {
-		found = index
-		return false
+	i := sort.Search(len(r.index), func(i int) bool {
+		return r.index[i].DecompOffset+uint64(r.index[i].DecompSize) > off
 	})
-	return
+	if i == len(r.index) || r.index[i].DecompOffset > off {
+		return nil
+	}
+	return &r.index[i]
 }
 
 func (r *readerImpl) GetIndexByID(id int64) (found *env.FrameOffsetEntry) {
-	if id < 0 {
+	if id < 0 || id >= int64(len(r.index)) {
 		return nil
 	}
 
-	r.index.Descend(func(index *env.FrameOffsetEntry) bool {
-		if index.ID == id {
-			found = index
-			return false
-		}
-		return true
-	})
-	return
+	return &r.index[int(id)]
 }

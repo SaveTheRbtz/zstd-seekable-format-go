@@ -11,7 +11,6 @@ import (
 	"sync/atomic"
 
 	"github.com/cespare/xxhash/v2"
-	"github.com/google/btree"
 
 	"github.com/SaveTheRbtz/zstd-seekable-format-go/pkg/env"
 )
@@ -99,7 +98,7 @@ func (rs *readSeekerEnvImpl) ReadSkipFrame(skippableFrameOffset int64) ([]byte, 
 
 type readerImpl struct {
 	dec   ZSTDDecoder
-	index *btree.BTreeG[*env.FrameOffsetEntry]
+	index []env.FrameOffsetEntry
 
 	checksums bool
 
@@ -173,12 +172,12 @@ func NewReader(rs io.ReadSeeker, decoder ZSTDDecoder, opts ...rOption) (Reader, 
 		}
 	}
 
-	tree, last, err := sr.indexFooter()
+	index, last, err := sr.indexFooter()
 	if err != nil {
 		return nil, err
 	}
 
-	sr.index = tree
+	sr.index = index
 	if last != nil {
 		sr.endOffset = int64(last.DecompOffset) + int64(last.DecompSize)
 		sr.numFrames = last.ID + 1
@@ -316,7 +315,7 @@ func (r *readerImpl) Seek(offset int64, whence int) (int64, error) {
 	return r.offset, nil
 }
 
-func (r *readerImpl) indexFooter() (*btree.BTreeG[*env.FrameOffsetEntry], *env.FrameOffsetEntry, error) {
+func (r *readerImpl) indexFooter() ([]env.FrameOffsetEntry, *env.FrameOffsetEntry, error) {
 	// read seekTableFooter
 	buf, err := r.env.ReadFooter()
 	if err != nil {
@@ -386,8 +385,11 @@ func (r *readerImpl) indexFooter() (*btree.BTreeG[*env.FrameOffsetEntry], *env.F
 }
 
 func (r *readerImpl) indexSeekTableEntries(p []byte, entrySize uint64, numberOfFrames uint32) (
-	*btree.BTreeG[*env.FrameOffsetEntry], *env.FrameOffsetEntry, error,
+	[]env.FrameOffsetEntry, *env.FrameOffsetEntry, error,
 ) {
+	if entrySize == 0 {
+		return nil, nil, fmt.Errorf("seek table entry size is 0")
+	}
 	if uint64(len(p))%entrySize != 0 {
 		return nil, nil, fmt.Errorf("seek table size is not multiple of %d", entrySize)
 	}
@@ -397,12 +399,10 @@ func (r *readerImpl) indexSeekTableEntries(p []byte, entrySize uint64, numberOfF
 			parsedEntries, numberOfFrames)
 	}
 
-	// TODO: make fan-out tunable?
-	t := btree.NewG(8, env.Less)
+	index := make([]env.FrameOffsetEntry, 0, int(uint64(len(p))/entrySize))
 	entry := seekTableEntry{}
 	var compOffset, decompOffset uint64
 
-	var last *env.FrameOffsetEntry
 	var i int64
 	for indexOffset := uint64(0); indexOffset < uint64(len(p)); indexOffset += entrySize {
 		err := entry.UnmarshalBinary(p[indexOffset : indexOffset+entrySize])
@@ -411,19 +411,22 @@ func (r *readerImpl) indexSeekTableEntries(p []byte, entrySize uint64, numberOfF
 				p[indexOffset:indexOffset+entrySize], indexOffset, err)
 		}
 
-		last = &env.FrameOffsetEntry{
+		index = append(index, env.FrameOffsetEntry{
 			ID:           i,
 			CompOffset:   compOffset,
 			DecompOffset: decompOffset,
 			CompSize:     entry.CompressedSize,
 			DecompSize:   entry.DecompressedSize,
 			Checksum:     entry.Checksum,
-		}
-		t.ReplaceOrInsert(last)
+		})
 		compOffset += uint64(entry.CompressedSize)
 		decompOffset += uint64(entry.DecompressedSize)
 		i++
 	}
 
-	return t, last, nil
+	if len(index) == 0 {
+		return index, nil, nil
+	}
+
+	return index, &index[len(index)-1], nil
 }
