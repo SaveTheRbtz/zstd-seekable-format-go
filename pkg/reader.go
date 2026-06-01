@@ -19,6 +19,8 @@ type cachedFrame struct {
 	data   []byte
 }
 
+const maxReaderOffset = uint64(1<<63 - 1)
+
 func (f *cachedFrame) replace(offset uint64, data []byte) {
 	f.m.Lock()
 	defer f.m.Unlock()
@@ -131,7 +133,7 @@ type Reader interface {
 	EntryByID(id int64) (FrameOffsetEntry, bool)
 
 	// Size returns the size of the uncompressed stream.
-	Size() int64
+	Size() uint64
 
 	// NumFrames returns number of frames in the compressed stream.
 	NumFrames() int64
@@ -188,6 +190,9 @@ func NewReader(rs io.ReadSeeker, decoder ZSTDDecoder, opts ...rOption) (Reader, 
 	if err != nil {
 		return nil, err
 	}
+	if table.Size() > maxReaderOffset {
+		return nil, fmt.Errorf("decompressed size is too large for Reader: %d > %d", table.Size(), maxReaderOffset)
+	}
 
 	sr.seekTable = table
 
@@ -205,7 +210,7 @@ func (r *readerImpl) Read(p []byte) (n int, err error) {
 	offset, n, err := r.read(p, r.offset)
 	if err != nil {
 		if errors.Is(err, io.EOF) {
-			r.offset = r.Size()
+			r.offset = int64(r.Size())
 		}
 		return
 	}
@@ -226,11 +231,11 @@ func (r *readerImpl) read(dst []byte, off int64) (int64, int, error) {
 		return 0, 0, fmt.Errorf("reader is closed")
 	}
 
-	if off >= r.Size() {
-		return 0, 0, io.EOF
-	}
 	if off < 0 {
 		return 0, 0, fmt.Errorf("offset before the start of the file: %d", off)
+	}
+	if uint64(off) >= r.Size() {
+		return 0, 0, io.EOF
 	}
 
 	index, ok := r.EntryByDecompressedOffset(uint64(off))
@@ -306,7 +311,7 @@ func (r *readerImpl) Seek(offset int64, whence int) (int64, error) {
 	case io.SeekStart:
 		newOffset = offset
 	case io.SeekEnd:
-		newOffset = r.Size() + offset
+		newOffset = int64(r.Size()) + offset
 	default:
 		return 0, fmt.Errorf("unknown whence: %d", whence)
 	}

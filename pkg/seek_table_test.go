@@ -18,7 +18,7 @@ func TestNewSeekTable(t *testing.T) {
 	table, err := NewSeekTable(checksum[17+18:])
 	require.NoError(t, err)
 
-	assert.Equal(t, int64(len(sourceString)), table.Size())
+	assert.Equal(t, uint64(len(sourceString)), table.Size())
 	assert.Equal(t, int64(2), table.NumFrames())
 
 	for _, tc := range []struct {

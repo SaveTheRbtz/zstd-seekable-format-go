@@ -147,7 +147,7 @@ func TestReader(t *testing.T) {
 		require.NoError(t, err)
 
 		sr := r.(*readerImpl)
-		assert.Equal(t, int64(9), sr.Size())
+		assert.Equal(t, uint64(9), sr.Size())
 		assert.Equal(t, int64(2), sr.NumFrames())
 		assert.Equal(t, int64(0), sr.offset)
 

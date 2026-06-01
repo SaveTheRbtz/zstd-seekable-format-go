@@ -12,17 +12,17 @@ func (i frameIndex) numFrames() int64 {
 	return int64(len(i.entries))
 }
 
-func (i frameIndex) size() int64 {
+func (i frameIndex) size() uint64 {
 	if len(i.entries) == 0 {
 		return 0
 	}
 
 	last := i.entries[len(i.entries)-1]
-	return int64(last.DecompOffset) + int64(last.DecompSize)
+	return last.DecompOffset + uint64(last.DecompSize)
 }
 
 func (i frameIndex) entryByDecompressedOffset(off uint64) (FrameOffsetEntry, bool) {
-	if off >= uint64(i.size()) {
+	if off >= i.size() {
 		return FrameOffsetEntry{}, false
 	}
 

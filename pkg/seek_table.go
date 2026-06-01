@@ -17,7 +17,7 @@ func NewSeekTable(buf []byte) (*seekTable, error) {
 	return &table, nil
 }
 
-func (t seekTable) Size() int64 {
+func (t seekTable) Size() uint64 {
 	return t.size()
 }
 

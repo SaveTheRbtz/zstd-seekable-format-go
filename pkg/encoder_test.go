@@ -41,6 +41,6 @@ func TestEncoder(t *testing.T) {
 	table, err := NewSeekTable(footer)
 	require.NoError(t, err)
 
-	assert.Equal(t, int64(len(sourceString)), table.Size())
+	assert.Equal(t, uint64(len(sourceString)), table.Size())
 	assert.Equal(t, int64(2), table.NumFrames())
 }

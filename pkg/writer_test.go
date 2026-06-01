@@ -287,7 +287,7 @@ func TestZeroSizedFrameIgnored(t *testing.T) {
 	defer func() { require.NoError(t, r.Close()) }()
 
 	rr := r.(*readerImpl)
-	assert.Equal(t, int64(len("foobar")), rr.Size())
+	assert.Equal(t, uint64(len("foobar")), rr.Size())
 	assert.Equal(t, int64(2), rr.NumFrames())
 
 	idx, ok := rr.EntryByID(1)
