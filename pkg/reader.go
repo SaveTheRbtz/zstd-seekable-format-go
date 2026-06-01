@@ -130,7 +130,9 @@ type Reader interface {
 	io.Reader
 	io.ReaderAt
 	io.Seeker
-	io.Closer
+
+	// Close releases reader-owned memory and causes future Reader method calls to fail.
+	Close() error
 }
 
 // ZSTDDecoder is the decompressor.  Tested with github.com/klauspost/compress/zstd.
@@ -138,8 +140,8 @@ type ZSTDDecoder interface {
 	DecodeAll(input, dst []byte) ([]byte, error)
 }
 
-// NewReader returns ZSTD stream reader that can be randomly accessed using uncompressed data offset.
-// Ideally, passed io.ReadSeeker should implement io.ReaderAt interface.
+// NewReader returns a Zstandard stream reader that can be randomly accessed by uncompressed offset.
+// Ideally, rs should implement io.ReaderAt.
 func NewReader(rs io.ReadSeeker, decoder ZSTDDecoder, opts ...rOption) (Reader, error) {
 	sr := readerImpl{
 		dec: decoder,

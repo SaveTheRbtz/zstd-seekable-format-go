@@ -43,16 +43,16 @@ var (
 )
 
 type Writer interface {
-	// Write writes a chunk of data as a separate frame into the datastream.
+	// Write writes a chunk of data as a separate frame into the data stream.
 	//
 	// Note that Write does not do any coalescing nor splitting of data,
-	// so each write will map to a separate ZSTD Frame.
+	// so each write will map to a separate Zstandard frame.
 	Write(src []byte) (int, error)
 
-	// Close implement io.Closer interface.  It writes the seek table footer
-	// and releases occupied memory.
+	// Close implements io.Closer. It writes the seek table, releases the in-memory
+	// frame index, and causes future Writer method calls to fail.
 	//
-	// Caller is still responsible to Close the underlying writer.
+	// The caller is still responsible for closing the underlying writer.
 	Close() (err error)
 }
 
@@ -60,11 +60,11 @@ type Writer interface {
 // When there are no more frames, returns nil.
 type FrameSource func() ([]byte, error)
 
-// ConcurrentWriter allows writing many frames concurrently
+// ConcurrentWriter allows writing many frames concurrently.
 type ConcurrentWriter interface {
 	Writer
 
-	// WriteMany writes many frames concurrently
+	// WriteMany writes many frames concurrently.
 	WriteMany(ctx context.Context, frameSource FrameSource, options ...WriteManyOption) error
 }
 
@@ -73,8 +73,8 @@ type ZSTDEncoder interface {
 	EncodeAll(src, dst []byte) []byte
 }
 
-// NewWriter wraps the passed io.Writer and Encoder into and indexed ZSTD stream.
-// Resulting stream then can be randomly accessed through Reader or NewSeekTable.
+// NewWriter wraps w and encoder into an indexed Zstandard stream.
+// The resulting stream can be randomly accessed through Reader or NewSeekTable.
 func NewWriter(w io.Writer, encoder ZSTDEncoder, opts ...wOption) (ConcurrentWriter, error) {
 	sw := writerImpl{
 		enc: encoder,

@@ -12,10 +12,11 @@ type Encoder interface {
 	// Encode returns compressed data and appends a frame to in-memory seek table.
 	Encode(src []byte) ([]byte, error)
 
-	// EndStream returns in-memory seek table as a ZSTD's skippable frame.
+	// EndStream returns the in-memory seek table as a Zstandard skippable frame.
 	EndStream() ([]byte, error)
 }
 
+// NewEncoder returns a byte-oriented encoder that uses encoder for Zstandard compression.
 func NewEncoder(encoder ZSTDEncoder, opts ...wOption) (Encoder, error) {
 	sw, err := NewWriter(nil, encoder, opts...)
 	if err != nil {

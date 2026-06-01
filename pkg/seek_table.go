@@ -8,7 +8,7 @@ type seekTable struct {
 }
 
 // NewSeekTable parses a seek table into random-access metadata.
-// The seek table can be produced by either Writer's WriteSeekTable or Encoder's EndStream.
+// The seek table can be the skippable frame written by Writer.Close or returned by Encoder.EndStream.
 // Lookup methods can be used concurrently.
 func NewSeekTable(buf []byte) (*seekTable, error) {
 	table, err := parseSeekTableFrame(buf)
