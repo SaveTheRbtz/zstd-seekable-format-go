@@ -1,10 +1,8 @@
 package seekable
 
 import (
-	"fmt"
 	"io"
 	"os"
-	"strconv"
 	"testing"
 
 	"github.com/klauspost/compress/zstd"
@@ -13,47 +11,54 @@ import (
 )
 
 type bytesErr struct {
+	name          string
 	tag           uint32
 	input         []byte
 	expectedBytes []byte
-	expectedErr   error
+	expectedErr   string
 }
 
 func TestCreateSkippableFrame(t *testing.T) {
 	t.Parallel()
 
-	dec, err := zstd.NewReader(nil)
-	require.NoError(t, err)
-
-	for i, tab := range []bytesErr{
+	for _, tab := range []bytesErr{
 		{
+			name:          "Empty",
 			tag:           0x00,
 			input:         []byte{},
 			expectedBytes: nil,
-			expectedErr:   nil,
 		}, {
+			name:          "TagOne",
 			tag:           0x01,
 			input:         []byte{'T'},
 			expectedBytes: []byte{0x51, 0x2a, 0x4d, 0x18, 0x01, 0x00, 0x00, 0x00, 'T'},
-			expectedErr:   nil,
 		}, {
+			name:          "InvalidTag",
 			tag:           0xff,
 			input:         []byte{'T'},
 			expectedBytes: nil,
-			expectedErr:   fmt.Errorf("requested tag (255) > 0xf"),
+			expectedErr:   "requested tag (255) > 0xf",
 		},
 	} {
 		tab := tab
-		t.Run(strconv.Itoa(i), func(t *testing.T) {
+		t.Run(tab.name, func(t *testing.T) {
 			t.Parallel()
+
 			actualBytes, err := createSkippableFrame(tab.tag, tab.input)
-			assert.Equal(t, tab.expectedErr, err, "createSkippableFrame err does not match expected")
-			if tab.expectedErr == nil && err == nil {
-				assert.Equal(t, tab.expectedBytes, actualBytes, "createSkippableFrame output does not match expected")
-				decodedBytes, err := dec.DecodeAll(actualBytes, nil)
-				require.NoError(t, err)
-				assert.Equal(t, []byte(nil), decodedBytes)
+			if tab.expectedErr != "" {
+				require.ErrorContains(t, err, tab.expectedErr)
+				return
 			}
+			require.NoError(t, err)
+			assert.Equal(t, tab.expectedBytes, actualBytes, "createSkippableFrame output does not match expected")
+
+			dec, err := zstd.NewReader(nil)
+			require.NoError(t, err)
+			defer dec.Close()
+
+			decodedBytes, err := dec.DecodeAll(actualBytes, nil)
+			require.NoError(t, err)
+			assert.Empty(t, decodedBytes)
 		})
 	}
 }
@@ -61,8 +66,9 @@ func TestCreateSkippableFrame(t *testing.T) {
 func TestIntercompat(t *testing.T) {
 	t.Parallel()
 
-	dec, err := zstd.NewReader(nil)
-	require.NoError(t, err)
+	const firstFrameSize = 1024
+	licensePrefix := []byte("  [![License]")
+	licenseSuffix := []byte("[license]: https://opensource.org/licenses/MIT\n")
 
 	for _, fn := range []string{
 		// t2sz README.md -l 22 -s 1024 -o intercompat-t2sz.zst
@@ -76,7 +82,11 @@ func TestIntercompat(t *testing.T) {
 		t.Run(fn, func(t *testing.T) {
 			t.Parallel()
 
-			f, err := os.Open(fmt.Sprintf("./testdata/%s", fn))
+			dec, err := zstd.NewReader(nil)
+			require.NoError(t, err)
+			defer dec.Close()
+
+			f, err := os.Open("./testdata/" + fn)
 			require.NoError(t, err)
 			defer func() { require.NoError(t, f.Close()) }()
 
@@ -87,21 +97,21 @@ func TestIntercompat(t *testing.T) {
 			buf := make([]byte, 4000)
 			n, err := r.Read(buf)
 			require.NoError(t, err)
-			assert.Equal(t, 1024, n)
-			assert.Equal(t, []byte("  [![License]"), buf[:13])
+			assert.Equal(t, firstFrameSize, n)
+			assert.Equal(t, licensePrefix, buf[:len(licensePrefix)])
 
 			all, err := io.ReadAll(r)
 			require.NoError(t, err)
-			assert.Greater(t, len(all), 1024)
+			assert.Greater(t, len(all), firstFrameSize)
 
-			i, err := r.Seek(-47, io.SeekEnd)
+			i, err := r.Seek(-int64(len(licenseSuffix)), io.SeekEnd)
 			require.NoError(t, err)
-			assert.Greater(t, i, int64(1024))
+			assert.Greater(t, i, int64(firstFrameSize))
 
 			n, err = r.ReadAt(buf, i)
 			require.ErrorIs(t, err, io.EOF)
-			assert.Equal(t, 47, n)
-			assert.Equal(t, []byte("[license]: https://opensource.org/licenses/MIT\n"), buf[:n])
+			assert.Equal(t, len(licenseSuffix), n)
+			assert.Equal(t, licenseSuffix, buf[:n])
 		})
 	}
 }

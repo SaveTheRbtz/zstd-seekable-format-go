@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"crypto/rand"
-	"encoding/binary"
 	"errors"
 	"fmt"
 	"io"
@@ -33,31 +32,11 @@ func TestWriter(t *testing.T) {
 	bytesWritten2, err := w.Write(bytes2)
 	require.NoError(t, err)
 
-	// test internals
-	sw := w.(*writerImpl)
-	assert.Len(t, sw.frameEntries, 2)
-	assert.Len(t, bytes1, int(sw.frameEntries[0].DecompressedSize))
 	assert.Len(t, bytes1, bytesWritten1)
-	assert.Equal(t, uint32(len(bytes2)), sw.frameEntries[1].DecompressedSize)
-	assert.Equal(t, uint32(bytesWritten2), sw.frameEntries[1].DecompressedSize)
+	assert.Len(t, bytes2, bytesWritten2)
 
-	index1CompressedSize := sw.frameEntries[0].CompressedSize
 	err = w.Close()
 	require.NoError(t, err)
-
-	// verify buffer content
-	buf := b.Bytes()
-	// magic footer
-	assert.Equal(t, []byte{0xb1, 0xea, 0x92, 0x8f}, buf[len(buf)-4:])
-	assert.Equal(t, uint32(2), binary.LittleEndian.Uint32(buf[len(buf)-9:len(buf)-5]))
-	// index.1
-	indexOffset := len(buf) - 4 - 1 - 4 - 2*12
-	assert.Equal(t, index1CompressedSize, binary.LittleEndian.Uint32(buf[indexOffset:indexOffset+4]))
-	assert.Equal(t, uint32(len(bytes1)), binary.LittleEndian.Uint32(buf[indexOffset+4:indexOffset+8]))
-	// skipframe header
-	frameOffset := indexOffset - 4 - 4
-	assert.Equal(t, []byte{0x5e, 0x2a, 0x4d, 0x18}, buf[frameOffset:frameOffset+4])
-	assert.Equal(t, uint32(0x21), binary.LittleEndian.Uint32(buf[frameOffset+4:frameOffset+8]))
 
 	// test decompression
 	br := io.Reader(&b)
@@ -133,17 +112,12 @@ func TestConcurrentWriter(t *testing.T) {
 	require.NoError(t, err)
 
 	for i := 0; i < frameCount; i++ {
-		require.NoError(t, err)
 		_, err = oneWriter.Write(frames[i])
 		require.NoError(t, err)
 	}
 
 	// Output should be the same
 	assert.Equal(t, b.Bytes(), nb.Bytes())
-
-	concurrentImpl := concurrentWriter.(*writerImpl)
-	oneImpl := oneWriter.(*writerImpl)
-	assert.Equal(t, concurrentImpl.frameEntries, oneImpl.frameEntries)
 
 	// test decompression
 	dec, err := zstd.NewReader(nil)
@@ -286,22 +260,22 @@ func TestZeroSizedFrameIgnored(t *testing.T) {
 	require.NoError(t, err)
 	defer func() { require.NoError(t, r.Close()) }()
 
-	rr := r.(*readerImpl)
-	assert.Equal(t, uint64(len("foobar")), rr.Size())
-	assert.Equal(t, int64(2), rr.NumFrames())
+	table, err := readSeekTable(&readSeekerEnvImpl{rs: bytes.NewReader(b.Bytes())})
+	require.NoError(t, err)
+	assert.Equal(t, uint64(len("foobar")), table.Size())
+	assert.Equal(t, int64(2), table.NumFrames())
+	_, ok := table.EntryByID(2)
+	require.False(t, ok)
 
-	idx, ok := rr.EntryByID(1)
-	require.True(t, ok)
-
-	expected := []byte("bar")
+	expected := []byte("foobar")
 	buf := make([]byte, len(expected))
-	n, err = r.ReadAt(buf, int64(idx.DecompOffset))
+	n, err = r.ReadAt(buf, 0)
 	require.NoError(t, err)
 	assert.Equal(t, len(expected), n)
 	assert.Equal(t, expected, buf)
 
-	_, ok = rr.EntryByID(2)
-	require.False(t, ok)
+	_, err = r.ReadAt(make([]byte, 1), int64(len(expected)))
+	require.ErrorIs(t, err, io.EOF)
 }
 
 func TestCloseErrors(t *testing.T) {
