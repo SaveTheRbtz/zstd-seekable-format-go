@@ -1,42 +1,44 @@
 package seekable
 
 import (
-	"sync"
 	"testing"
 
 	"github.com/SaveTheRbtz/zstd-seekable-format-go/pkg/env"
 )
 
-const benchmarkChunkIndexSize = 1 << 20
+var benchmarkChunkIndexSizes = []struct {
+	name string
+	size int
+}{
+	{name: "16K", size: 16 << 10},
+	{name: "128K", size: 128 << 10},
+	{name: "1M", size: 1 << 20},
+}
 
 var (
-	benchmarkLargeIndexOnce   sync.Once
-	benchmarkLargeIndexReader *readerImpl
-	benchmarkLargeIndexErr    error
-
 	benchmarkDecoderSink Decoder
 	benchmarkEntrySink   *env.FrameOffsetEntry
 	benchmarkIntSink     int64
 )
 
-func benchmarkLargeSeekTable(b testing.TB) []byte {
+func benchmarkSeekTable(b testing.TB, size int) []byte {
 	b.Helper()
 
 	const entrySize = 12
-	seekTable := make([]byte, benchmarkChunkIndexSize*entrySize+seekTableFooterOffset)
+	seekTable := make([]byte, size*entrySize+seekTableFooterOffset)
 	entry := seekTableEntry{CompressedSize: 1, DecompressedSize: 1}
-	for i := 0; i < benchmarkChunkIndexSize; i++ {
+	for i := 0; i < size; i++ {
 		entry.marshalBinaryInline(seekTable[i*entrySize : (i+1)*entrySize])
 	}
 
 	footer := seekTableFooter{
-		NumberOfFrames: benchmarkChunkIndexSize,
+		NumberOfFrames: uint32(size),
 		SeekTableDescriptor: seekTableDescriptor{
 			ChecksumFlag: true,
 		},
 		SeekableMagicNumber: seekableMagicNumber,
 	}
-	footer.marshalBinaryInline(seekTable[benchmarkChunkIndexSize*entrySize:])
+	footer.marshalBinaryInline(seekTable[size*entrySize:])
 
 	frame, err := createSkippableFrame(seekableTag, seekTable)
 	if err != nil {
@@ -45,150 +47,165 @@ func benchmarkLargeSeekTable(b testing.TB) []byte {
 	return frame
 }
 
-func benchmarkLargeReader(b *testing.B) *readerImpl {
+func benchmarkReader(b *testing.B, size int) *readerImpl {
 	b.Helper()
 
-	benchmarkLargeIndexOnce.Do(func() {
-		seekTable := benchmarkLargeSeekTable(b)
-		d, err := NewDecoder(seekTable, nil)
-		benchmarkLargeIndexErr = err
-		if err != nil {
-			return
-		}
-		benchmarkLargeIndexReader = d.(*readerImpl)
-	})
-	if benchmarkLargeIndexErr != nil {
-		b.Fatal(benchmarkLargeIndexErr)
+	seekTable := benchmarkSeekTable(b, size)
+	d, err := NewDecoder(seekTable, nil)
+	if err != nil {
+		b.Fatal(err)
 	}
-	return benchmarkLargeIndexReader
+	return d.(*readerImpl)
 }
 
-func BenchmarkDecoderLargeIndexBuild(b *testing.B) {
-	seekTable := benchmarkLargeSeekTable(b)
+func BenchmarkDecoderIndexBuild(b *testing.B) {
+	for _, benchmarkSize := range benchmarkChunkIndexSizes {
+		b.Run(benchmarkSize.name, func(b *testing.B) {
+			seekTable := benchmarkSeekTable(b, benchmarkSize.size)
 
-	b.ReportAllocs()
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		d, err := NewDecoder(seekTable, nil)
-		if err != nil {
-			b.Fatal(err)
-		}
-		benchmarkDecoderSink = d
-		if err := d.Close(); err != nil {
-			b.Fatal(err)
-		}
-	}
-}
-
-func BenchmarkDecoderLargeIndexGetIndexByDecompOffset(b *testing.B) {
-	r := benchmarkLargeReader(b)
-
-	cases := []struct {
-		name string
-		off  uint64
-	}{
-		{name: "First", off: 0},
-		{name: "Middle", off: benchmarkChunkIndexSize / 2},
-		{name: "Last", off: benchmarkChunkIndexSize - 1},
-		{name: "MissPastEnd", off: benchmarkChunkIndexSize},
-	}
-
-	for _, tc := range cases {
-		b.Run(tc.name, func(b *testing.B) {
 			b.ReportAllocs()
 			b.ResetTimer()
 			for i := 0; i < b.N; i++ {
-				benchmarkEntrySink = r.GetIndexByDecompOffset(tc.off)
+				d, err := NewDecoder(seekTable, nil)
+				if err != nil {
+					b.Fatal(err)
+				}
+				benchmarkDecoderSink = d
+				if err := d.Close(); err != nil {
+					b.Fatal(err)
+				}
 			}
 		})
 	}
-
-	b.Run("Sequential", func(b *testing.B) {
-		var ids int64
-		mask := uint64(benchmarkChunkIndexSize - 1)
-
-		b.ReportAllocs()
-		b.ResetTimer()
-		for i := 0; i < b.N; i++ {
-			index := r.GetIndexByDecompOffset(uint64(i) & mask)
-			if index != nil {
-				ids += index.ID
-			}
-		}
-		benchmarkIntSink = ids
-	})
-
-	b.Run("PseudoRandom", func(b *testing.B) {
-		var ids int64
-		x := uint64(1)
-		mask := uint64(benchmarkChunkIndexSize - 1)
-
-		b.ReportAllocs()
-		b.ResetTimer()
-		for i := 0; i < b.N; i++ {
-			x = x*6364136223846793005 + 1
-			index := r.GetIndexByDecompOffset(x & mask)
-			if index != nil {
-				ids += index.ID
-			}
-		}
-		benchmarkIntSink = ids
-	})
 }
 
-func BenchmarkDecoderLargeIndexGetIndexByID(b *testing.B) {
-	r := benchmarkLargeReader(b)
+func BenchmarkDecoderGetIndexByDecompOffset(b *testing.B) {
+	for _, benchmarkSize := range benchmarkChunkIndexSizes {
+		b.Run(benchmarkSize.name, func(b *testing.B) {
+			r := benchmarkReader(b, benchmarkSize.size)
+			defer func() {
+				if err := r.Close(); err != nil {
+					b.Fatal(err)
+				}
+			}()
 
-	cases := []struct {
-		name string
-		id   int64
-	}{
-		{name: "First", id: 0},
-		{name: "Middle", id: benchmarkChunkIndexSize / 2},
-		{name: "Last", id: benchmarkChunkIndexSize - 1},
-		{name: "MissNegative", id: -1},
-		{name: "MissPastEnd", id: benchmarkChunkIndexSize},
-	}
-
-	for _, tc := range cases {
-		b.Run(tc.name, func(b *testing.B) {
-			b.ReportAllocs()
-			b.ResetTimer()
-			for i := 0; i < b.N; i++ {
-				benchmarkEntrySink = r.GetIndexByID(tc.id)
+			cases := []struct {
+				name string
+				off  uint64
+			}{
+				{name: "First", off: 0},
+				{name: "Middle", off: uint64(benchmarkSize.size / 2)},
+				{name: "Last", off: uint64(benchmarkSize.size - 1)},
+				{name: "MissPastEnd", off: uint64(benchmarkSize.size)},
 			}
+
+			for _, tc := range cases {
+				b.Run(tc.name, func(b *testing.B) {
+					b.ReportAllocs()
+					b.ResetTimer()
+					for i := 0; i < b.N; i++ {
+						benchmarkEntrySink = r.GetIndexByDecompOffset(tc.off)
+					}
+				})
+			}
+
+			b.Run("Sequential", func(b *testing.B) {
+				var ids int64
+				mask := uint64(benchmarkSize.size - 1)
+
+				b.ReportAllocs()
+				b.ResetTimer()
+				for i := 0; i < b.N; i++ {
+					index := r.GetIndexByDecompOffset(uint64(i) & mask)
+					if index != nil {
+						ids += index.ID
+					}
+				}
+				benchmarkIntSink = ids
+			})
+
+			b.Run("PseudoRandom", func(b *testing.B) {
+				var ids int64
+				x := uint64(1)
+				mask := uint64(benchmarkSize.size - 1)
+
+				b.ReportAllocs()
+				b.ResetTimer()
+				for i := 0; i < b.N; i++ {
+					x = x*6364136223846793005 + 1
+					index := r.GetIndexByDecompOffset(x & mask)
+					if index != nil {
+						ids += index.ID
+					}
+				}
+				benchmarkIntSink = ids
+			})
 		})
 	}
+}
 
-	b.Run("Sequential", func(b *testing.B) {
-		var ids int64
-		mask := int64(benchmarkChunkIndexSize - 1)
+func BenchmarkDecoderGetIndexByID(b *testing.B) {
+	for _, benchmarkSize := range benchmarkChunkIndexSizes {
+		b.Run(benchmarkSize.name, func(b *testing.B) {
+			r := benchmarkReader(b, benchmarkSize.size)
+			defer func() {
+				if err := r.Close(); err != nil {
+					b.Fatal(err)
+				}
+			}()
 
-		b.ReportAllocs()
-		b.ResetTimer()
-		for i := 0; i < b.N; i++ {
-			index := r.GetIndexByID(int64(i) & mask)
-			if index != nil {
-				ids += index.ID
+			cases := []struct {
+				name string
+				id   int64
+			}{
+				{name: "First", id: 0},
+				{name: "Middle", id: int64(benchmarkSize.size / 2)},
+				{name: "Last", id: int64(benchmarkSize.size - 1)},
+				{name: "MissNegative", id: -1},
+				{name: "MissPastEnd", id: int64(benchmarkSize.size)},
 			}
-		}
-		benchmarkIntSink = ids
-	})
 
-	b.Run("PseudoRandom", func(b *testing.B) {
-		var ids int64
-		x := uint64(1)
-		mask := uint64(benchmarkChunkIndexSize - 1)
-
-		b.ReportAllocs()
-		b.ResetTimer()
-		for i := 0; i < b.N; i++ {
-			x = x*6364136223846793005 + 1
-			index := r.GetIndexByID(int64(x & mask))
-			if index != nil {
-				ids += index.ID
+			for _, tc := range cases {
+				b.Run(tc.name, func(b *testing.B) {
+					b.ReportAllocs()
+					b.ResetTimer()
+					for i := 0; i < b.N; i++ {
+						benchmarkEntrySink = r.GetIndexByID(tc.id)
+					}
+				})
 			}
-		}
-		benchmarkIntSink = ids
-	})
+
+			b.Run("Sequential", func(b *testing.B) {
+				var ids int64
+				mask := int64(benchmarkSize.size - 1)
+
+				b.ReportAllocs()
+				b.ResetTimer()
+				for i := 0; i < b.N; i++ {
+					index := r.GetIndexByID(int64(i) & mask)
+					if index != nil {
+						ids += index.ID
+					}
+				}
+				benchmarkIntSink = ids
+			})
+
+			b.Run("PseudoRandom", func(b *testing.B) {
+				var ids int64
+				x := uint64(1)
+				mask := uint64(benchmarkSize.size - 1)
+
+				b.ReportAllocs()
+				b.ResetTimer()
+				for i := 0; i < b.N; i++ {
+					x = x*6364136223846793005 + 1
+					index := r.GetIndexByID(int64(x & mask))
+					if index != nil {
+						ids += index.ID
+					}
+				}
+				benchmarkIntSink = ids
+			})
+		})
+	}
 }
