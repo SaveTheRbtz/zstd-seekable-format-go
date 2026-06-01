@@ -84,6 +84,70 @@ func TestDecoderRejectsSeekTableEntryCountMismatch(t *testing.T) {
 	assert.Nil(t, d)
 }
 
+func TestDecoderZeroSizeEntries(t *testing.T) {
+	t.Parallel()
+
+	entries := []seekTableEntry{
+		{CompressedSize: 2, DecompressedSize: 0},
+		{CompressedSize: 10, DecompressedSize: 3},
+		{CompressedSize: 5, DecompressedSize: 0},
+		{CompressedSize: 20, DecompressedSize: 4},
+		{CompressedSize: 7, DecompressedSize: 0},
+	}
+	seekTable := mustCreateSeekTableFrame(t, entries, uint32(len(entries)))
+
+	d, err := NewDecoder(seekTable, nil)
+	require.NoError(t, err)
+	defer func() { require.NoError(t, d.Close()) }()
+
+	assert.Equal(t, int64(7), d.Size())
+	assert.Equal(t, int64(5), d.NumFrames())
+
+	indexID0 := d.GetIndexByID(0)
+	require.NotNil(t, indexID0)
+	assert.Equal(t, int64(0), indexID0.ID)
+	assert.Equal(t, uint64(0), indexID0.DecompOffset)
+	assert.Equal(t, uint32(0), indexID0.DecompSize)
+
+	indexID2 := d.GetIndexByID(2)
+	require.NotNil(t, indexID2)
+	assert.Equal(t, int64(2), indexID2.ID)
+	assert.Equal(t, uint64(3), indexID2.DecompOffset)
+	assert.Equal(t, uint32(0), indexID2.DecompSize)
+
+	indexID4 := d.GetIndexByID(4)
+	require.NotNil(t, indexID4)
+	assert.Equal(t, int64(4), indexID4.ID)
+	assert.Equal(t, uint64(7), indexID4.DecompOffset)
+	assert.Equal(t, uint32(0), indexID4.DecompSize)
+
+	indexID1 := d.GetIndexByID(1)
+	require.NotNil(t, indexID1)
+	assert.Equal(t, int64(1), indexID1.ID)
+	assert.Equal(t, uint64(0), indexID1.DecompOffset)
+	assert.Equal(t, uint32(3), indexID1.DecompSize)
+
+	indexID3 := d.GetIndexByID(3)
+	require.NotNil(t, indexID3)
+	assert.Equal(t, int64(3), indexID3.ID)
+	assert.Equal(t, uint64(3), indexID3.DecompOffset)
+	assert.Equal(t, uint32(4), indexID3.DecompSize)
+
+	for _, off := range []uint64{0, 1, 2} {
+		index := d.GetIndexByDecompOffset(off)
+		require.NotNil(t, index)
+		assert.Equal(t, int64(1), index.ID)
+	}
+
+	for _, off := range []uint64{3, 4, 6} {
+		index := d.GetIndexByDecompOffset(off)
+		require.NotNil(t, index)
+		assert.Equal(t, int64(3), index.ID)
+	}
+
+	assert.Nil(t, d.GetIndexByDecompOffset(7))
+}
+
 func mustCreateSeekTableFrame(t testing.TB, entries []seekTableEntry, numberOfFrames uint32) []byte {
 	t.Helper()
 
