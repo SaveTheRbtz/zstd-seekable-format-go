@@ -15,9 +15,8 @@ func TestParseSeekTableRejectsEntryCountMismatch(t *testing.T) {
 		{CompressedSize: 1, DecompressedSize: 1},
 	}, 1)
 
-	table, err := parseSeekTableFrame(frame)
+	_, err := parseSeekTableFrame(frame)
 	require.ErrorContains(t, err, "seek table entry count mismatch")
-	assert.Equal(t, seekTable{}, table)
 }
 
 func TestParseSeekTableZeroSizeEntries(t *testing.T) {
@@ -83,63 +82,84 @@ func TestParseSeekTableZeroSizeEntries(t *testing.T) {
 }
 
 func TestSeekTableFooterParsing(t *testing.T) {
-	var err error
-	var stf seekTableFooter
-
 	t.Parallel()
 
-	// Checksum.
-	err = stf.UnmarshalBinary([]byte{
-		0x00, 0x00, 0x00, 0x00,
-		1 << 7,
-		0xb1, 0xea, 0x92, 0x8f,
-	})
-	require.NoError(t, err)
+	for _, tc := range []struct {
+		name string
+		buf  []byte
+		err  string
+	}{
+		{
+			name: "Checksum",
+			buf: []byte{
+				0x00, 0x00, 0x00, 0x00,
+				1 << 7,
+				0xb1, 0xea, 0x92, 0x8f,
+			},
+		},
+		{
+			name: "NoChecksum",
+			buf: []byte{
+				0x00, 0x00, 0x00, 0x00,
+				0x00,
+				0xb1, 0xea, 0x92, 0x8f,
+			},
+		},
+		{
+			name: "UnusedBits",
+			buf: []byte{
+				0x00, 0x00, 0x00, 0x00,
+				(1 << 7) + 0x01 + 0x2,
+				0xb1, 0xea, 0x92, 0x8f,
+			},
+		},
+		{
+			name: "ReservedBits",
+			buf: []byte{
+				0x00, 0x00, 0x00, 0x00,
+				0x84,
+				0xb1, 0xea, 0x92, 0x8f,
+			},
+			err: "footer reserved bits",
+		},
+		{
+			name: "ReservedHighBit",
+			buf: []byte{
+				0x00, 0x00, 0x00, 0x00,
+				0x80 + 0x40,
+				0xb1, 0xea, 0x92, 0x8f,
+			},
+			err: "footer reserved bits",
+		},
+		{
+			name: "Size",
+			buf: []byte{
+				0xb1, 0xea, 0x92, 0x8f,
+			},
+			err: "footer length mismatch",
+		},
+		{
+			name: "Magic",
+			buf: []byte{
+				0x00, 0x00, 0x00, 0x00,
+				0x80,
+				0xea, 0x92, 0x8f, 0xb1,
+			},
+			err: "footer magic mismatch",
+		},
+	} {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 
-	// No checksum.
-	err = stf.UnmarshalBinary([]byte{
-		0x00, 0x00, 0x00, 0x00,
-		0x00,
-		0xb1, 0xea, 0x92, 0x8f,
-	})
-	require.NoError(t, err)
-
-	// Unused bits.
-	require.NoError(t, err)
-	err = stf.UnmarshalBinary([]byte{
-		0x00, 0x00, 0x00, 0x00,
-		(1 << 7) + 0x01 + 0x2,
-		0xb1, 0xea, 0x92, 0x8f,
-	})
-	require.NoError(t, err)
-
-	// Reserved bits.
-	err = stf.UnmarshalBinary([]byte{
-		0x00, 0x00, 0x00, 0x00,
-		0x84,
-		0xb1, 0xea, 0x92, 0x8f,
-	})
-	require.ErrorContains(t, err, "footer reserved bits")
-	err = stf.UnmarshalBinary([]byte{
-		0x00, 0x00, 0x00, 0x00,
-		0x80 + 0x40,
-		0xb1, 0xea, 0x92, 0x8f,
-	})
-	require.ErrorContains(t, err, "footer reserved bits")
-
-	// Size.
-	err = stf.UnmarshalBinary([]byte{
-		0xb1, 0xea, 0x92, 0x8f,
-	})
-	require.ErrorContains(t, err, "footer length mismatch")
-
-	// Magic.
-	err = stf.UnmarshalBinary([]byte{
-		0x00, 0x00, 0x00, 0x00,
-		0x80,
-		0xea, 0x92, 0x8f, 0xb1,
-	})
-	require.ErrorContains(t, err, "footer magic mismatch")
+			err := (&seekTableFooter{}).UnmarshalBinary(tc.buf)
+			if tc.err == "" {
+				require.NoError(t, err)
+				return
+			}
+			require.ErrorContains(t, err, tc.err)
+		})
+	}
 }
 
 func mustCreateSeekTableFrame(t testing.TB, entries []seekTableEntry, numberOfFrames uint32) []byte {

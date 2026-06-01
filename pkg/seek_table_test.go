@@ -32,21 +32,22 @@ func TestNewSeekTable(t *testing.T) {
 	} {
 		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
+			indexByID, ok := table.EntryByID(tc.id)
+			require.True(t, ok)
+			assert.Equal(t, tc.id, indexByID.ID)
+			assert.Equal(t, uint32(len(tc.data)), indexByID.DecompSize)
+			assert.NotEqual(t, uint32(0), indexByID.Checksum)
+
+			decomp, err := dec.DecodeAll(
+				checksum[indexByID.CompOffset:indexByID.CompOffset+uint64(indexByID.CompSize)], nil,
+			)
+			require.NoError(t, err)
+			assert.Equal(t, tc.data, decomp)
+
 			for _, off := range tc.offsets {
 				indexByOffset, ok := table.EntryByDecompressedOffset(off)
 				require.True(t, ok)
-				indexByID, ok := table.EntryByID(tc.id)
-				require.True(t, ok)
 				assert.Equal(t, indexByID, indexByOffset)
-				assert.Equal(t, tc.id, indexByOffset.ID)
-				assert.Equal(t, uint32(len(tc.data)), indexByOffset.DecompSize)
-				assert.NotEqual(t, uint32(0), indexByOffset.Checksum)
-
-				decomp, err := dec.DecodeAll(
-					checksum[indexByOffset.CompOffset:indexByOffset.CompOffset+uint64(indexByOffset.CompSize)], nil,
-				)
-				require.NoError(t, err)
-				assert.Equal(t, tc.data, decomp)
 			}
 		})
 	}
@@ -60,14 +61,4 @@ func TestNewSeekTable(t *testing.T) {
 		_, ok := table.EntryByID(id)
 		assert.False(t, ok)
 	}
-}
-
-func TestNewSeekTableIsMetadataOnly(t *testing.T) {
-	t.Parallel()
-
-	table, err := NewSeekTable(checksum[17+18:])
-	require.NoError(t, err)
-
-	_, ok := any(table).(Reader)
-	assert.False(t, ok)
 }

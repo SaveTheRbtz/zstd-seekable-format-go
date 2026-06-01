@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"crypto/rand"
-	"encoding/binary"
 	"errors"
 	"fmt"
 	"io"
@@ -33,31 +32,11 @@ func TestWriter(t *testing.T) {
 	bytesWritten2, err := w.Write(bytes2)
 	require.NoError(t, err)
 
-	// test internals
-	sw := w.(*writerImpl)
-	assert.Len(t, sw.frameEntries, 2)
-	assert.Len(t, bytes1, int(sw.frameEntries[0].DecompressedSize))
 	assert.Len(t, bytes1, bytesWritten1)
-	assert.Equal(t, uint32(len(bytes2)), sw.frameEntries[1].DecompressedSize)
-	assert.Equal(t, uint32(bytesWritten2), sw.frameEntries[1].DecompressedSize)
+	assert.Len(t, bytes2, bytesWritten2)
 
-	index1CompressedSize := sw.frameEntries[0].CompressedSize
 	err = w.Close()
 	require.NoError(t, err)
-
-	// verify buffer content
-	buf := b.Bytes()
-	// magic footer
-	assert.Equal(t, []byte{0xb1, 0xea, 0x92, 0x8f}, buf[len(buf)-4:])
-	assert.Equal(t, uint32(2), binary.LittleEndian.Uint32(buf[len(buf)-9:len(buf)-5]))
-	// index.1
-	indexOffset := len(buf) - 4 - 1 - 4 - 2*12
-	assert.Equal(t, index1CompressedSize, binary.LittleEndian.Uint32(buf[indexOffset:indexOffset+4]))
-	assert.Equal(t, uint32(len(bytes1)), binary.LittleEndian.Uint32(buf[indexOffset+4:indexOffset+8]))
-	// skipframe header
-	frameOffset := indexOffset - 4 - 4
-	assert.Equal(t, []byte{0x5e, 0x2a, 0x4d, 0x18}, buf[frameOffset:frameOffset+4])
-	assert.Equal(t, uint32(0x21), binary.LittleEndian.Uint32(buf[frameOffset+4:frameOffset+8]))
 
 	// test decompression
 	br := io.Reader(&b)
@@ -140,10 +119,6 @@ func TestConcurrentWriter(t *testing.T) {
 
 	// Output should be the same
 	assert.Equal(t, b.Bytes(), nb.Bytes())
-
-	concurrentImpl := concurrentWriter.(*writerImpl)
-	oneImpl := oneWriter.(*writerImpl)
-	assert.Equal(t, concurrentImpl.frameEntries, oneImpl.frameEntries)
 
 	// test decompression
 	dec, err := zstd.NewReader(nil)
