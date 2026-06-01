@@ -256,7 +256,7 @@ func (r *readerImpl) read(dst []byte, off int64) (int64, int, error) {
 		}
 
 		if r.checksums {
-			checksum := uint32((xxhash.Sum64(decompressed) << 32) >> 32)
+			checksum := uint32(xxhash.Sum64(decompressed))
 			if index.Checksum != checksum {
 				return 0, 0, fmt.Errorf("checksum verification failed at: %d: expected: %d, actual: %d",
 					index.CompOffset, index.Checksum, checksum)

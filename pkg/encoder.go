@@ -47,7 +47,7 @@ func (s *writerImpl) encodeOne(src []byte) ([]byte, seekTableEntry, error) {
 	return dst, seekTableEntry{
 		CompressedSize:   uint32(len(dst)),
 		DecompressedSize: uint32(len(src)),
-		Checksum:         uint32((xxhash.Sum64(src) << 32) >> 32),
+		Checksum:         uint32(xxhash.Sum64(src)),
 	}, nil
 }
 
