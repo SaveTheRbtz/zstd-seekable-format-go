@@ -205,7 +205,7 @@ func (r *readerImpl) Read(p []byte) (n int, err error) {
 	offset, n, err := r.read(p, r.offset)
 	if err != nil {
 		if errors.Is(err, io.EOF) {
-			r.offset = r.size
+			r.offset = r.Size()
 		}
 		return
 	}
@@ -226,7 +226,7 @@ func (r *readerImpl) read(dst []byte, off int64) (int64, int, error) {
 		return 0, 0, fmt.Errorf("reader is closed")
 	}
 
-	if off >= r.size {
+	if off >= r.Size() {
 		return 0, 0, io.EOF
 	}
 	if off < 0 {
@@ -306,7 +306,7 @@ func (r *readerImpl) Seek(offset int64, whence int) (int64, error) {
 	case io.SeekStart:
 		newOffset = offset
 	case io.SeekEnd:
-		newOffset = r.size + offset
+		newOffset = r.Size() + offset
 	default:
 		return 0, fmt.Errorf("unknown whence: %d", whence)
 	}

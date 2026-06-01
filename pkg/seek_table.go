@@ -18,7 +18,7 @@ func NewSeekTable(buf []byte) (*seekTable, error) {
 }
 
 func (t seekTable) Size() int64 {
-	return t.size
+	return t.size()
 }
 
 func (t seekTable) NumFrames() int64 {

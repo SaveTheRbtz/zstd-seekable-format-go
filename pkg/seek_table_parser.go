@@ -151,6 +151,5 @@ func parseSeekTableEntries(p []byte, entrySize uint64, numberOfFrames uint32) (f
 
 	return frameIndex{
 		entries: entries,
-		size:    int64(decompOffset),
 	}, nil
 }

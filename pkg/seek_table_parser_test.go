@@ -35,7 +35,7 @@ func TestParseSeekTableZeroSizeEntries(t *testing.T) {
 	table, err := parseSeekTableFrame(frame)
 	require.NoError(t, err)
 	assert.True(t, table.checksums)
-	assert.Equal(t, int64(7), table.size)
+	assert.Equal(t, int64(7), table.Size())
 	assert.Equal(t, int64(5), table.numFrames())
 
 	for _, tc := range []struct {
