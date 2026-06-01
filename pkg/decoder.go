@@ -51,6 +51,7 @@ func (d *decoderImpl) NumFrames() int64 {
 }
 
 func (d *decoderImpl) Close() error {
+	d.index = frameIndex{}
 	return nil
 }
 

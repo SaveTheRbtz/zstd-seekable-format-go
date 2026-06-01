@@ -70,3 +70,20 @@ func TestDecoderIsMetadataOnly(t *testing.T) {
 	_, ok := d.(Reader)
 	assert.False(t, ok)
 }
+
+func TestDecoderCloseReleasesIndex(t *testing.T) {
+	t.Parallel()
+
+	d, err := NewDecoder(checksum[17+18:])
+	require.NoError(t, err)
+
+	impl := d.(*decoderImpl)
+	require.NotEmpty(t, impl.index.entries)
+	require.NotZero(t, impl.index.size)
+
+	require.NoError(t, d.Close())
+	assert.Equal(t, frameIndex{}, impl.index)
+
+	require.NoError(t, d.Close())
+	assert.Equal(t, frameIndex{}, impl.index)
+}
