@@ -101,8 +101,8 @@ func (rs *readSeekerEnvImpl) ReadSkipFrame(skippableFrameOffset int64) ([]byte, 
 }
 
 type readerImpl struct {
-	dec   ZSTDDecoder
-	table parsedSeekTable
+	dec ZSTDDecoder
+	parsedSeekTable
 
 	offset int64
 
@@ -179,7 +179,7 @@ func NewReader(rs io.ReadSeeker, decoder ZSTDDecoder, opts ...rOption) (Reader, 
 		return nil, err
 	}
 
-	sr.table = table
+	sr.parsedSeekTable = table
 
 	return &sr, nil
 }
@@ -195,7 +195,7 @@ func (r *readerImpl) Read(p []byte) (n int, err error) {
 	offset, n, err := r.read(p, r.offset)
 	if err != nil {
 		if errors.Is(err, io.EOF) {
-			r.offset = r.table.size
+			r.offset = r.size
 		}
 		return
 	}
@@ -206,25 +206,9 @@ func (r *readerImpl) Read(p []byte) (n int, err error) {
 func (r *readerImpl) Close() error {
 	if r.closed.CompareAndSwap(false, true) {
 		r.cachedFrame.replace(math.MaxUint64, nil)
-		r.table = parsedSeekTable{}
+		r.parsedSeekTable = parsedSeekTable{}
 	}
 	return nil
-}
-
-func (r *readerImpl) Size() int64 {
-	return r.table.size
-}
-
-func (r *readerImpl) NumFrames() int64 {
-	return r.table.numFrames()
-}
-
-func (r *readerImpl) GetIndexByDecompOffset(off uint64) (found *env.FrameOffsetEntry) {
-	return r.table.byDecompOffset(off)
-}
-
-func (r *readerImpl) GetIndexByID(id int64) (found *env.FrameOffsetEntry) {
-	return r.table.byID(id)
 }
 
 func (r *readerImpl) read(dst []byte, off int64) (int64, int, error) {
@@ -232,7 +216,7 @@ func (r *readerImpl) read(dst []byte, off int64) (int64, int, error) {
 		return 0, 0, fmt.Errorf("reader is closed")
 	}
 
-	if off >= r.table.size {
+	if off >= r.size {
 		return 0, 0, io.EOF
 	}
 	if off < 0 {
@@ -276,7 +260,7 @@ func (r *readerImpl) read(dst []byte, off int64) (int64, int, error) {
 			return 0, 0, fmt.Errorf("failed to decompress data data at: %d, %w", index.CompOffset, err)
 		}
 
-		if r.table.checksums {
+		if r.checksums {
 			checksum := uint32((xxhash.Sum64(decompressed) << 32) >> 32)
 			if index.Checksum != checksum {
 				return 0, 0, fmt.Errorf("checksum verification failed at: %d: expected: %d, actual: %d",
@@ -312,7 +296,7 @@ func (r *readerImpl) Seek(offset int64, whence int) (int64, error) {
 	case io.SeekStart:
 		newOffset = offset
 	case io.SeekEnd:
-		newOffset = r.table.size + offset
+		newOffset = r.size + offset
 	default:
 		return 0, fmt.Errorf("unknown whence: %d", whence)
 	}

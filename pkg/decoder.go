@@ -1,10 +1,6 @@
 package seekable
 
-import (
-	"sync/atomic"
-
-	"github.com/SaveTheRbtz/zstd-seekable-format-go/pkg/env"
-)
+import "github.com/SaveTheRbtz/zstd-seekable-format-go/pkg/env"
 
 // SeekTable provides random-access metadata from a ZSTD seek table.
 type SeekTable interface {
@@ -31,59 +27,21 @@ type Decoder interface {
 	Close() error
 }
 
-type seekTableDecoder struct {
-	table atomic.Pointer[parsedSeekTable]
-}
-
-var _ Decoder = (*seekTableDecoder)(nil)
+var _ Decoder = (*parsedSeekTable)(nil)
 
 // NewDecoder creates a metadata Decoder from a seek table.
 // The seek table can be produced by either Writer's WriteSeekTable or Encoder's EndStream.
-// Decoder can be used concurrently.
+// Lookup methods can be used concurrently. Close should be called after lookups have finished.
 func NewDecoder(seekTable []byte) (Decoder, error) {
 	table, err := parseSeekTable(seekTable)
 	if err != nil {
 		return nil, err
 	}
 
-	d := &seekTableDecoder{}
-	d.table.Store(&table)
-	return d, nil
+	return &table, nil
 }
 
-func (d *seekTableDecoder) Size() int64 {
-	table := d.table.Load()
-	if table == nil {
-		return 0
-	}
-	return table.size
-}
-
-func (d *seekTableDecoder) NumFrames() int64 {
-	table := d.table.Load()
-	if table == nil {
-		return 0
-	}
-	return table.numFrames()
-}
-
-func (d *seekTableDecoder) Close() error {
-	d.table.Store(nil)
+func (t *parsedSeekTable) Close() error {
+	*t = parsedSeekTable{}
 	return nil
-}
-
-func (d *seekTableDecoder) GetIndexByDecompOffset(off uint64) (found *env.FrameOffsetEntry) {
-	table := d.table.Load()
-	if table == nil {
-		return nil
-	}
-	return table.byDecompOffset(off)
-}
-
-func (d *seekTableDecoder) GetIndexByID(id int64) (found *env.FrameOffsetEntry) {
-	table := d.table.Load()
-	if table == nil {
-		return nil
-	}
-	return table.byID(id)
 }

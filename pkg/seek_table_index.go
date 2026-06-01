@@ -14,6 +14,22 @@ type parsedSeekTable struct {
 
 const skippableFrameHeaderSize = frameSizeFieldSize + skippableMagicNumberFieldSize
 
+func (t parsedSeekTable) Size() int64 {
+	return t.size
+}
+
+func (t parsedSeekTable) NumFrames() int64 {
+	return t.numFrames()
+}
+
+func (t parsedSeekTable) GetIndexByDecompOffset(off uint64) (found *env.FrameOffsetEntry) {
+	return t.byDecompOffset(off)
+}
+
+func (t parsedSeekTable) GetIndexByID(id int64) (found *env.FrameOffsetEntry) {
+	return t.byID(id)
+}
+
 func readSeekTable(renv env.REnvironment) (parsedSeekTable, error) {
 	footerBuf, err := renv.ReadFooter()
 	if err != nil {
