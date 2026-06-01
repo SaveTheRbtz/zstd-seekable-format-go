@@ -190,7 +190,7 @@ func (s *writerImpl) writeManyEncoder(ctx context.Context, ch chan<- encodeResul
 
 		select {
 		case <-ctx.Done():
-			return ctx.Err()
+			return context.Cause(ctx)
 		case ch <- encodeResult{dst, entry}:
 			close(ch)
 		}
@@ -221,7 +221,7 @@ func (s *writerImpl) writeManyProducer(ctx context.Context, frameSource FrameSou
 			ch := make(chan encodeResult, 1)
 			select {
 			case <-ctx.Done():
-				return ctx.Err()
+				return context.Cause(ctx)
 			case queue <- ch:
 			}
 
@@ -236,7 +236,7 @@ func (s *writerImpl) writeManyConsumer(ctx context.Context, callback func(uint32
 			var ch <-chan encodeResult
 			select {
 			case <-ctx.Done():
-				return ctx.Err()
+				return context.Cause(ctx)
 			case ch = <-queue:
 			}
 			if ch == nil {
@@ -247,7 +247,7 @@ func (s *writerImpl) writeManyConsumer(ctx context.Context, callback func(uint32
 			var result encodeResult
 			select {
 			case <-ctx.Done():
-				return ctx.Err()
+				return context.Cause(ctx)
 			case result = <-ch:
 			}
 
@@ -279,7 +279,7 @@ func (s *writerImpl) WriteMany(ctx context.Context, frameSource FrameSource, opt
 	if s.failed {
 		return errWriterFailed
 	}
-	if err := ctx.Err(); err != nil {
+	if err := context.Cause(ctx); err != nil {
 		return err
 	}
 

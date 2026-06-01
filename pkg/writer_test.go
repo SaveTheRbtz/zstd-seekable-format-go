@@ -283,6 +283,16 @@ func TestConcurrentWriterCancellation(t *testing.T) {
 	err = w.WriteMany(ctx, makeTestFrameSource([][]byte{[]byte("test")}), WithConcurrency(1))
 	assert.ErrorIs(t, err, context.Canceled)
 
+	cause := errors.New("stop writing")
+	causeCtx, cancelCause := context.WithCancelCause(context.Background())
+	cancelCause(cause)
+
+	w, err = NewWriter(&b, enc)
+	require.NoError(t, err)
+
+	err = w.WriteMany(causeCtx, makeTestFrameSource([][]byte{[]byte("test")}), WithConcurrency(1))
+	assert.ErrorIs(t, err, cause)
+
 	ctx, cancel = context.WithCancel(context.Background())
 	defer cancel()
 
