@@ -378,14 +378,23 @@ func (r *readerImpl) indexFooter() (*btree.BTreeG[*env.FrameOffsetEntry], *env.F
 		return nil, nil, fmt.Errorf("frame is too big: %d > %d", frameSize, maxDecoderFrameSize)
 	}
 
-	return r.indexSeekTableEntries(buf[8:len(buf)-seekTableFooterOffset], uint64(seekTableEntrySize))
+	return r.indexSeekTableEntries(
+		buf[8:len(buf)-seekTableFooterOffset],
+		uint64(seekTableEntrySize),
+		footer.NumberOfFrames,
+	)
 }
 
-func (r *readerImpl) indexSeekTableEntries(p []byte, entrySize uint64) (
+func (r *readerImpl) indexSeekTableEntries(p []byte, entrySize uint64, numberOfFrames uint32) (
 	*btree.BTreeG[*env.FrameOffsetEntry], *env.FrameOffsetEntry, error,
 ) {
 	if uint64(len(p))%entrySize != 0 {
 		return nil, nil, fmt.Errorf("seek table size is not multiple of %d", entrySize)
+	}
+	parsedEntries := uint64(len(p)) / entrySize
+	if parsedEntries != uint64(numberOfFrames) {
+		return nil, nil, fmt.Errorf("seek table entry count mismatch: parsed %d, footer %d",
+			parsedEntries, numberOfFrames)
 	}
 
 	// TODO: make fan-out tunable?
