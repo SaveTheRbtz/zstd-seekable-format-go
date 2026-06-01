@@ -1,12 +1,10 @@
-package env
+package seekable
 
-import (
-	"log/slog"
-)
+import "log/slog"
 
-// FrameOffsetEntry is the post-processed view of the Seek_Table_Entries suitable for indexing.
+// FrameOffsetEntry is the post-processed view of a seek table entry suitable for indexing.
 type FrameOffsetEntry struct {
-	// ID is the is the sequence number of the frame in the index.
+	// ID is the sequence number of the frame in the index.
 	ID int64
 
 	// CompOffset is the offset within compressed stream.
@@ -22,10 +20,7 @@ type FrameOffsetEntry struct {
 	Checksum uint32
 }
 
-func (o *FrameOffsetEntry) LogValue() slog.Value {
-	if o == nil {
-		return slog.Value{}
-	}
+func (o FrameOffsetEntry) LogValue() slog.Value {
 	return slog.GroupValue(
 		slog.Int64("ID", o.ID),
 		slog.Uint64("CompOffset", o.CompOffset),

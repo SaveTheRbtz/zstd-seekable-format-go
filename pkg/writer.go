@@ -10,8 +10,6 @@ import (
 	"sync"
 
 	"golang.org/x/sync/errgroup"
-
-	"github.com/SaveTheRbtz/zstd-seekable-format-go/pkg/env"
 )
 
 var errWriterClosed = errors.New("writer is closed")
@@ -34,7 +32,7 @@ type writerImpl struct {
 	frameEntries []seekTableEntry
 
 	logger *slog.Logger
-	env    env.WEnvironment
+	env    WEnvironment
 
 	mu sync.Mutex
 }
@@ -76,7 +74,7 @@ type ZSTDEncoder interface {
 }
 
 // NewWriter wraps the passed io.Writer and Encoder into and indexed ZSTD stream.
-// Resulting stream then can be randomly accessed through the Reader and Decoder interfaces.
+// Resulting stream then can be randomly accessed through Reader or NewSeekTable.
 func NewWriter(w io.Writer, encoder ZSTDEncoder, opts ...wOption) (ConcurrentWriter, error) {
 	sw := writerImpl{
 		enc: encoder,

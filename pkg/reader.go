@@ -1,7 +1,6 @@
 package seekable
 
 import (
-	"encoding/binary"
 	"errors"
 	"fmt"
 	"io"
@@ -11,8 +10,6 @@ import (
 	"sync/atomic"
 
 	"github.com/cespare/xxhash/v2"
-
-	"github.com/SaveTheRbtz/zstd-seekable-format-go/pkg/env"
 )
 
 type cachedFrame struct {
@@ -21,6 +18,8 @@ type cachedFrame struct {
 	offset uint64
 	data   []byte
 }
+
+const maxReaderOffset = uint64(1<<63 - 1)
 
 func (f *cachedFrame) replace(offset uint64, data []byte) {
 	f.m.Lock()
@@ -43,7 +42,7 @@ type readSeekerEnvImpl struct {
 	mu sync.Mutex
 }
 
-func (rs *readSeekerEnvImpl) GetFrameByIndex(index env.FrameOffsetEntry) ([]byte, error) {
+func (rs *readSeekerEnvImpl) GetFrameByIndex(index FrameOffsetEntry) ([]byte, error) {
 	p := make([]byte, index.CompSize)
 	off := int64(index.CompOffset)
 
@@ -102,18 +101,13 @@ func (rs *readSeekerEnvImpl) ReadSkipFrame(skippableFrameOffset int64) ([]byte, 
 }
 
 type readerImpl struct {
-	dec   ZSTDDecoder
-	index []env.FrameOffsetEntry
-
-	checksums bool
+	dec ZSTDDecoder
+	seekTable
 
 	offset int64
 
-	numFrames int64
-	endOffset int64
-
 	logger *slog.Logger
-	env    env.REnvironment
+	env    REnvironment
 
 	closed atomic.Bool
 
@@ -122,30 +116,19 @@ type readerImpl struct {
 }
 
 var (
+	_ Reader      = (*readerImpl)(nil)
 	_ io.Seeker   = (*readerImpl)(nil)
 	_ io.Reader   = (*readerImpl)(nil)
 	_ io.ReaderAt = (*readerImpl)(nil)
 	_ io.Closer   = (*readerImpl)(nil)
 )
 
+// Reader provides sequential and random access to a seekable ZSTD stream.
 type Reader interface {
-	// Seek implements io.Seeker interface to randomly access data.
-	// This method is NOT goroutine-safe and CAN NOT be called
-	// concurrently since it modifies the underlying offset.
-	Seek(offset int64, whence int) (int64, error)
-
-	// Read implements io.Reader interface to sequentially access data.
-	// This method is NOT goroutine-safe and CAN NOT be called
-	// concurrently since it modifies the underlying offset.
-	Read(p []byte) (n int, err error)
-
-	// ReadAt implements io.ReaderAt interface to randomly access data.
-	// This method is goroutine-safe and can be called concurrently ONLY if
-	// the underlying reader supports io.ReaderAt interface.
-	ReadAt(p []byte, off int64) (n int, err error)
-
-	// Close implements io.Closer interface free up any resources.
-	Close() error
+	io.Reader
+	io.ReaderAt
+	io.Seeker
+	io.Closer
 }
 
 // ZSTDDecoder is the decompressor.  Tested with github.com/klauspost/compress/zstd.
@@ -177,19 +160,15 @@ func NewReader(rs io.ReadSeeker, decoder ZSTDDecoder, opts ...rOption) (Reader, 
 		}
 	}
 
-	index, last, err := sr.indexFooter()
+	table, err := readSeekTable(sr.env)
 	if err != nil {
 		return nil, err
 	}
-
-	sr.index = index
-	if last != nil {
-		sr.endOffset = int64(last.DecompOffset) + int64(last.DecompSize)
-		sr.numFrames = last.ID + 1
-	} else {
-		sr.endOffset = 0
-		sr.numFrames = 0
+	if table.Size() > maxReaderOffset {
+		return nil, fmt.Errorf("decompressed size is too large for Reader: %d > %d", table.Size(), maxReaderOffset)
 	}
+
+	sr.seekTable = table
 
 	return &sr, nil
 }
@@ -205,7 +184,7 @@ func (r *readerImpl) Read(p []byte) (n int, err error) {
 	offset, n, err := r.read(p, r.offset)
 	if err != nil {
 		if errors.Is(err, io.EOF) {
-			r.offset = r.endOffset
+			r.offset = int64(r.Size())
 		}
 		return
 	}
@@ -216,7 +195,7 @@ func (r *readerImpl) Read(p []byte) (n int, err error) {
 func (r *readerImpl) Close() error {
 	if r.closed.CompareAndSwap(false, true) {
 		r.cachedFrame.replace(math.MaxUint64, nil)
-		r.index = nil
+		r.seekTable = seekTable{}
 	}
 	return nil
 }
@@ -226,15 +205,15 @@ func (r *readerImpl) read(dst []byte, off int64) (int64, int, error) {
 		return 0, 0, fmt.Errorf("reader is closed")
 	}
 
-	if off >= r.endOffset {
-		return 0, 0, io.EOF
-	}
 	if off < 0 {
 		return 0, 0, fmt.Errorf("offset before the start of the file: %d", off)
 	}
+	if uint64(off) >= r.Size() {
+		return 0, 0, io.EOF
+	}
 
-	index := r.GetIndexByDecompOffset(uint64(off))
-	if index == nil {
+	index, ok := r.EntryByDecompressedOffset(uint64(off))
+	if !ok {
 		return 0, 0, fmt.Errorf("failed to get index by offset: %d", off)
 	}
 	if off < int64(index.DecompOffset) || off > int64(index.DecompOffset)+int64(index.DecompSize) {
@@ -255,7 +234,7 @@ func (r *readerImpl) read(dst []byte, off int64) (int64, int, error) {
 				index.CompSize, maxDecoderFrameSize)
 		}
 
-		src, err := r.env.GetFrameByIndex(*index)
+		src, err := r.env.GetFrameByIndex(index)
 		if err != nil {
 			return 0, 0, fmt.Errorf("failed to read compressed data at: %d, %w", index.CompOffset, err)
 		}
@@ -306,7 +285,7 @@ func (r *readerImpl) Seek(offset int64, whence int) (int64, error) {
 	case io.SeekStart:
 		newOffset = offset
 	case io.SeekEnd:
-		newOffset = r.endOffset + offset
+		newOffset = int64(r.Size()) + offset
 	default:
 		return 0, fmt.Errorf("unknown whence: %d", whence)
 	}
@@ -318,120 +297,4 @@ func (r *readerImpl) Seek(offset int64, whence int) (int64, error) {
 
 	r.offset = newOffset
 	return r.offset, nil
-}
-
-func (r *readerImpl) indexFooter() ([]env.FrameOffsetEntry, *env.FrameOffsetEntry, error) {
-	// read seekTableFooter
-	buf, err := r.env.ReadFooter()
-	if err != nil {
-		return nil, nil, fmt.Errorf("failed to read footer: %w", err)
-	}
-	if len(buf) < seekTableFooterOffset {
-		return nil, nil, fmt.Errorf("footer is too small: %d", len(buf))
-	}
-
-	// parse seekTableFooter
-	footer := seekTableFooter{}
-	err = footer.UnmarshalBinary(buf[len(buf)-seekTableFooterOffset:])
-	if err != nil {
-		return nil, nil, fmt.Errorf("failed to parse footer %+v: %w", buf, err)
-	}
-	r.logger.Debug("loaded", slog.Any("footer", &footer))
-
-	r.checksums = footer.SeekTableDescriptor.ChecksumFlag
-
-	// read SeekTableEntries
-	seekTableEntrySize := int64(8)
-	if footer.SeekTableDescriptor.ChecksumFlag {
-		seekTableEntrySize += 4
-	}
-
-	skippableFrameOffset := seekTableFooterOffset + seekTableEntrySize*int64(footer.NumberOfFrames)
-	skippableFrameOffset += frameSizeFieldSize
-	skippableFrameOffset += skippableMagicNumberFieldSize
-
-	if skippableFrameOffset > maxDecoderFrameSize {
-		return nil, nil, fmt.Errorf("frame offset is too big: %d > %d",
-			skippableFrameOffset, maxDecoderFrameSize)
-	}
-
-	buf, err = r.env.ReadSkipFrame(skippableFrameOffset)
-	if err != nil {
-		return nil, nil, fmt.Errorf("failed to read footer: %w", err)
-	}
-
-	if len(buf) < frameSizeFieldSize+skippableMagicNumberFieldSize+seekTableFooterOffset {
-		return nil, nil, fmt.Errorf("skip frame is too small: %d", len(buf))
-	}
-
-	// parse SeekTableEntries
-	magic := binary.LittleEndian.Uint32(buf[0:4])
-	if magic != skippableFrameMagic+seekableTag {
-		return nil, nil, fmt.Errorf("skippable frame magic mismatch %d vs %d",
-			magic, skippableFrameMagic+seekableTag)
-	}
-
-	expectedFrameSize := int64(len(buf)) - frameSizeFieldSize - skippableMagicNumberFieldSize
-	frameSize := int64(binary.LittleEndian.Uint32(buf[4:8]))
-	if frameSize != expectedFrameSize {
-		return nil, nil, fmt.Errorf("skippable frame size mismatch: expected: %d, actual: %d",
-			expectedFrameSize, frameSize)
-	}
-
-	if frameSize > maxDecoderFrameSize {
-		return nil, nil, fmt.Errorf("frame is too big: %d > %d", frameSize, maxDecoderFrameSize)
-	}
-
-	return r.indexSeekTableEntries(
-		buf[8:len(buf)-seekTableFooterOffset],
-		uint64(seekTableEntrySize),
-		footer.NumberOfFrames,
-	)
-}
-
-func (r *readerImpl) indexSeekTableEntries(p []byte, entrySize uint64, numberOfFrames uint32) (
-	[]env.FrameOffsetEntry, *env.FrameOffsetEntry, error,
-) {
-	if entrySize == 0 {
-		return nil, nil, fmt.Errorf("seek table entry size is 0")
-	}
-	if uint64(len(p))%entrySize != 0 {
-		return nil, nil, fmt.Errorf("seek table size is not multiple of %d", entrySize)
-	}
-	parsedEntries := uint64(len(p)) / entrySize
-	if parsedEntries != uint64(numberOfFrames) {
-		return nil, nil, fmt.Errorf("seek table entry count mismatch: parsed %d, footer %d",
-			parsedEntries, numberOfFrames)
-	}
-
-	index := make([]env.FrameOffsetEntry, 0, int(uint64(len(p))/entrySize))
-	entry := seekTableEntry{}
-	var compOffset, decompOffset uint64
-
-	var i int64
-	for indexOffset := uint64(0); indexOffset < uint64(len(p)); indexOffset += entrySize {
-		err := entry.UnmarshalBinary(p[indexOffset : indexOffset+entrySize])
-		if err != nil {
-			return nil, nil, fmt.Errorf("failed to parse entry %+v at: %d: %w",
-				p[indexOffset:indexOffset+entrySize], indexOffset, err)
-		}
-
-		index = append(index, env.FrameOffsetEntry{
-			ID:           i,
-			CompOffset:   compOffset,
-			DecompOffset: decompOffset,
-			CompSize:     entry.CompressedSize,
-			DecompSize:   entry.DecompressedSize,
-			Checksum:     entry.Checksum,
-		})
-		compOffset += uint64(entry.CompressedSize)
-		decompOffset += uint64(entry.DecompressedSize)
-		i++
-	}
-
-	if len(index) == 0 {
-		return index, nil, nil
-	}
-
-	return index, &index[len(index)-1], nil
 }

@@ -48,16 +48,15 @@ func FuzzCorruptSeekTable(f *testing.F) {
 			}
 		}
 
-		d, err := NewDecoder(mutated, dec)
+		table, err := NewSeekTable(mutated)
 		if err != nil {
 			return
 		}
-		defer func() { require.NoError(t, d.Close()) }()
 
-		_ = d.Size()
-		_ = d.NumFrames()
-		_ = d.GetIndexByDecompOffset(uint64(off))
-		_ = d.GetIndexByID(off)
+		_ = table.Size()
+		_ = table.NumFrames()
+		_, _ = table.EntryByDecompressedOffset(uint64(off))
+		_, _ = table.EntryByID(off)
 
 		stream := append(append([]byte(nil), noChecksum[:35]...), mutated...)
 		sr := &seekableBufferReaderAt{buf: stream}

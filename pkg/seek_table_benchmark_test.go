@@ -2,11 +2,9 @@ package seekable
 
 import (
 	"testing"
-
-	"github.com/SaveTheRbtz/zstd-seekable-format-go/pkg/env"
 )
 
-var benchmarkChunkIndexSizes = []struct {
+var seekTableBenchmarkSizes = []struct {
 	name string
 	size int
 }{
@@ -16,15 +14,16 @@ var benchmarkChunkIndexSizes = []struct {
 }
 
 var (
-	benchmarkDecoderSink Decoder
-	benchmarkEntrySink   *env.FrameOffsetEntry
-	benchmarkIntSink     int64
+	benchmarkSeekTableSink *seekTable
+	benchmarkEntrySink     FrameOffsetEntry
+	benchmarkBoolSink      bool
+	benchmarkIntSink       int64
 )
 
 func benchmarkSeekTable(b testing.TB, size int) []byte {
 	b.Helper()
 
-	const entrySize = 12
+	entrySize := int(seekTableEntrySize(true))
 	seekTable := make([]byte, size*entrySize+seekTableFooterOffset)
 	entry := seekTableEntry{CompressedSize: 1, DecompressedSize: 1}
 	for i := 0; i < size; i++ {
@@ -47,47 +46,39 @@ func benchmarkSeekTable(b testing.TB, size int) []byte {
 	return frame
 }
 
-func benchmarkReader(b *testing.B, size int) *readerImpl {
+func benchmarkParsedSeekTable(b *testing.B, size int) *seekTable {
 	b.Helper()
 
 	seekTable := benchmarkSeekTable(b, size)
-	d, err := NewDecoder(seekTable, nil)
+	table, err := NewSeekTable(seekTable)
 	if err != nil {
 		b.Fatal(err)
 	}
-	return d.(*readerImpl)
+	return table
 }
 
-func BenchmarkDecoderIndexBuild(b *testing.B) {
-	for _, benchmarkSize := range benchmarkChunkIndexSizes {
+func BenchmarkSeekTableIndexBuild(b *testing.B) {
+	for _, benchmarkSize := range seekTableBenchmarkSizes {
 		b.Run(benchmarkSize.name, func(b *testing.B) {
 			seekTable := benchmarkSeekTable(b, benchmarkSize.size)
 
 			b.ReportAllocs()
 			b.ResetTimer()
 			for i := 0; i < b.N; i++ {
-				d, err := NewDecoder(seekTable, nil)
+				table, err := NewSeekTable(seekTable)
 				if err != nil {
 					b.Fatal(err)
 				}
-				benchmarkDecoderSink = d
-				if err := d.Close(); err != nil {
-					b.Fatal(err)
-				}
+				benchmarkSeekTableSink = table
 			}
 		})
 	}
 }
 
-func BenchmarkDecoderGetIndexByDecompOffset(b *testing.B) {
-	for _, benchmarkSize := range benchmarkChunkIndexSizes {
+func BenchmarkSeekTableEntryByDecompressedOffset(b *testing.B) {
+	for _, benchmarkSize := range seekTableBenchmarkSizes {
 		b.Run(benchmarkSize.name, func(b *testing.B) {
-			r := benchmarkReader(b, benchmarkSize.size)
-			defer func() {
-				if err := r.Close(); err != nil {
-					b.Fatal(err)
-				}
-			}()
+			table := benchmarkParsedSeekTable(b, benchmarkSize.size)
 
 			cases := []struct {
 				name string
@@ -104,7 +95,7 @@ func BenchmarkDecoderGetIndexByDecompOffset(b *testing.B) {
 					b.ReportAllocs()
 					b.ResetTimer()
 					for i := 0; i < b.N; i++ {
-						benchmarkEntrySink = r.GetIndexByDecompOffset(tc.off)
+						benchmarkEntrySink, benchmarkBoolSink = table.EntryByDecompressedOffset(tc.off)
 					}
 				})
 			}
@@ -116,8 +107,8 @@ func BenchmarkDecoderGetIndexByDecompOffset(b *testing.B) {
 				b.ReportAllocs()
 				b.ResetTimer()
 				for i := 0; i < b.N; i++ {
-					index := r.GetIndexByDecompOffset(uint64(i) & mask)
-					if index != nil {
+					index, ok := table.EntryByDecompressedOffset(uint64(i) & mask)
+					if ok {
 						ids += index.ID
 					}
 				}
@@ -133,8 +124,8 @@ func BenchmarkDecoderGetIndexByDecompOffset(b *testing.B) {
 				b.ResetTimer()
 				for i := 0; i < b.N; i++ {
 					x = x*6364136223846793005 + 1
-					index := r.GetIndexByDecompOffset(x & mask)
-					if index != nil {
+					index, ok := table.EntryByDecompressedOffset(x & mask)
+					if ok {
 						ids += index.ID
 					}
 				}
@@ -144,15 +135,10 @@ func BenchmarkDecoderGetIndexByDecompOffset(b *testing.B) {
 	}
 }
 
-func BenchmarkDecoderGetIndexByID(b *testing.B) {
-	for _, benchmarkSize := range benchmarkChunkIndexSizes {
+func BenchmarkSeekTableEntryByID(b *testing.B) {
+	for _, benchmarkSize := range seekTableBenchmarkSizes {
 		b.Run(benchmarkSize.name, func(b *testing.B) {
-			r := benchmarkReader(b, benchmarkSize.size)
-			defer func() {
-				if err := r.Close(); err != nil {
-					b.Fatal(err)
-				}
-			}()
+			table := benchmarkParsedSeekTable(b, benchmarkSize.size)
 
 			cases := []struct {
 				name string
@@ -170,7 +156,7 @@ func BenchmarkDecoderGetIndexByID(b *testing.B) {
 					b.ReportAllocs()
 					b.ResetTimer()
 					for i := 0; i < b.N; i++ {
-						benchmarkEntrySink = r.GetIndexByID(tc.id)
+						benchmarkEntrySink, benchmarkBoolSink = table.EntryByID(tc.id)
 					}
 				})
 			}
@@ -182,8 +168,8 @@ func BenchmarkDecoderGetIndexByID(b *testing.B) {
 				b.ReportAllocs()
 				b.ResetTimer()
 				for i := 0; i < b.N; i++ {
-					index := r.GetIndexByID(int64(i) & mask)
-					if index != nil {
+					index, ok := table.EntryByID(int64(i) & mask)
+					if ok {
 						ids += index.ID
 					}
 				}
@@ -199,8 +185,8 @@ func BenchmarkDecoderGetIndexByID(b *testing.B) {
 				b.ResetTimer()
 				for i := 0; i < b.N; i++ {
 					x = x*6364136223846793005 + 1
-					index := r.GetIndexByID(int64(x & mask))
-					if index != nil {
+					index, ok := table.EntryByID(int64(x & mask))
+					if ok {
 						ids += index.ID
 					}
 				}

@@ -3,8 +3,6 @@ package seekable
 import (
 	"fmt"
 	"log/slog"
-
-	"github.com/SaveTheRbtz/zstd-seekable-format-go/pkg/env"
 )
 
 type wOption func(*writerImpl) error
@@ -16,7 +14,7 @@ func WithWLogger(l *slog.Logger) wOption {
 	return func(w *writerImpl) error { w.logger = l; return nil }
 }
 
-func WithWEnvironment(e env.WEnvironment) wOption {
+func WithWEnvironment(e WEnvironment) wOption {
 	return func(w *writerImpl) error { w.env = e; return nil }
 }
 

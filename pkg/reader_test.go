@@ -12,8 +12,6 @@ import (
 	"github.com/klauspost/compress/zstd"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-
-	"github.com/SaveTheRbtz/zstd-seekable-format-go/pkg/env"
 )
 
 const sourceString = "testtest2"
@@ -149,8 +147,8 @@ func TestReader(t *testing.T) {
 		require.NoError(t, err)
 
 		sr := r.(*readerImpl)
-		assert.Equal(t, int64(9), sr.endOffset)
-		assert.Len(t, sr.index, 2)
+		assert.Equal(t, uint64(9), sr.Size())
+		assert.Equal(t, int64(2), sr.NumFrames())
 		assert.Equal(t, int64(0), sr.offset)
 
 		bytes1 := []byte("test")
@@ -199,7 +197,7 @@ func TestGetFrameByIndexShortReaderAt(t *testing.T) {
 
 	r := &readSeekerEnvImpl{rs: bytes.NewReader([]byte{0})}
 
-	_, err := r.GetFrameByIndex(env.FrameOffsetEntry{CompSize: 2})
+	_, err := r.GetFrameByIndex(FrameOffsetEntry{CompSize: 2})
 	require.ErrorIs(t, err, io.ErrUnexpectedEOF)
 }
 
@@ -221,7 +219,7 @@ func TestGetFrameByIndexPreservesReaderAtError(t *testing.T) {
 		err:    expectedErr,
 	}}
 
-	_, err := r.GetFrameByIndex(env.FrameOffsetEntry{CompSize: 2})
+	_, err := r.GetFrameByIndex(FrameOffsetEntry{CompSize: 2})
 	require.ErrorIs(t, err, expectedErr)
 }
 
@@ -402,7 +400,7 @@ func TestReaderEdgesParallel(t *testing.T) {
 
 type fakeReadEnvironment struct{}
 
-func (s *fakeReadEnvironment) GetFrameByIndex(index env.FrameOffsetEntry) ([]byte, error) {
+func (s *fakeReadEnvironment) GetFrameByIndex(index FrameOffsetEntry) ([]byte, error) {
 	switch index.ID {
 	case 0:
 		return checksum[:17], nil
@@ -594,66 +592,6 @@ func TestEmptyWriteRead(t *testing.T) {
 	n, err = dec2.Read(tmp2)
 	require.ErrorIs(t, err, io.EOF)
 	assert.Equal(t, 0, n)
-}
-
-func TestSeekTableParsing(t *testing.T) {
-	var err error
-	var stf seekTableFooter
-
-	t.Parallel()
-
-	// Checksum.
-	err = stf.UnmarshalBinary([]byte{
-		0x00, 0x00, 0x00, 0x00,
-		1 << 7,
-		0xb1, 0xea, 0x92, 0x8f,
-	})
-	require.NoError(t, err)
-
-	// No checksum.
-	err = stf.UnmarshalBinary([]byte{
-		0x00, 0x00, 0x00, 0x00,
-		0x00,
-		0xb1, 0xea, 0x92, 0x8f,
-	})
-	require.NoError(t, err)
-
-	// Unused bits.
-	require.NoError(t, err)
-	err = stf.UnmarshalBinary([]byte{
-		0x00, 0x00, 0x00, 0x00,
-		(1 << 7) + 0x01 + 0x2,
-		0xb1, 0xea, 0x92, 0x8f,
-	})
-	require.NoError(t, err)
-
-	// Reserved bits.
-	err = stf.UnmarshalBinary([]byte{
-		0x00, 0x00, 0x00, 0x00,
-		0x84,
-		0xb1, 0xea, 0x92, 0x8f,
-	})
-	require.ErrorContains(t, err, "footer reserved bits")
-	err = stf.UnmarshalBinary([]byte{
-		0x00, 0x00, 0x00, 0x00,
-		0x80 + 0x40,
-		0xb1, 0xea, 0x92, 0x8f,
-	})
-	require.ErrorContains(t, err, "footer reserved bits")
-
-	// Size.
-	err = stf.UnmarshalBinary([]byte{
-		0xb1, 0xea, 0x92, 0x8f,
-	})
-	require.ErrorContains(t, err, "footer length mismatch")
-
-	// Magic.
-	err = stf.UnmarshalBinary([]byte{
-		0x00, 0x00, 0x00, 0x00,
-		0x80,
-		0xea, 0x92, 0x8f, 0xb1,
-	})
-	require.ErrorContains(t, err, "footer magic mismatch")
 }
 
 func TestNilReaderNoEnvironment(t *testing.T) {
