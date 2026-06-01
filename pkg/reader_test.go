@@ -309,7 +309,7 @@ func TestReaderEdges(t *testing.T) {
 	}
 }
 
-// TestReaderAt verified the following ReaderAt asssumption:
+// TestReaderAt verified the following ReaderAt assumption:
 //
 // When ReadAt returns n < len(p), it returns a non-nil error explaining why more bytes were not returned.
 // In this respect, ReadAt is stricter than Read.
@@ -319,6 +319,7 @@ func TestReaderAt(t *testing.T) {
 	dec, err := zstd.NewReader(nil)
 	require.NoError(t, err)
 	defer dec.Close()
+	source := []byte(sourceString)
 
 	for _, sr := range []io.ReadSeeker{
 		&seekableBufferReader{seekableBufferReaderAt{buf: noChecksum}},
@@ -361,7 +362,7 @@ func TestReaderAt(t *testing.T) {
 			require.ErrorIs(t, err, io.EOF)
 
 			assert.Equal(t, 6, k2)
-			assert.Equal(t, []byte("ttest2"), tmp2[:k2])
+			assert.Equal(t, source[3:], tmp2[:k2])
 
 			sectionReader := io.NewSectionReader(r, 3, 4)
 			tmp3, err := io.ReadAll(sectionReader)
