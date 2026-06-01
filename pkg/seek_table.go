@@ -2,15 +2,18 @@ package seekable
 
 import "sort"
 
-type seekTable struct {
+// SeekTable is parsed random-access metadata from a Zstandard seek-table skippable frame.
+//
+// Use NewSeekTable to construct a SeekTable from bytes written by Writer.Close
+// or returned by Encoder.EndStream. Lookup methods can be used concurrently.
+type SeekTable struct {
 	entries   []FrameOffsetEntry
 	checksums bool
 }
 
-// NewSeekTable parses a seek table into random-access metadata.
-// The seek table can be the skippable frame written by Writer.Close or returned by Encoder.EndStream.
-// Lookup methods can be used concurrently.
-func NewSeekTable(buf []byte) (*seekTable, error) {
+// NewSeekTable parses the seek-table skippable frame written by Writer.Close
+// or returned by Encoder.EndStream.
+func NewSeekTable(buf []byte) (*SeekTable, error) {
 	table, err := parseSeekTableFrame(buf)
 	if err != nil {
 		return nil, err
@@ -19,7 +22,8 @@ func NewSeekTable(buf []byte) (*seekTable, error) {
 	return &table, nil
 }
 
-func (t seekTable) Size() uint64 {
+// Size returns the size of the decompressed stream.
+func (t SeekTable) Size() uint64 {
 	if len(t.entries) == 0 {
 		return 0
 	}
@@ -28,13 +32,19 @@ func (t seekTable) Size() uint64 {
 	return last.DecompOffset + uint64(last.DecompSize)
 }
 
-func (t seekTable) NumFrames() int64 {
+// NumFrames returns the number of frames in the seek table.
+func (t SeekTable) NumFrames() int64 {
 	return int64(len(t.entries))
+}
+
+// HasChecksums reports whether entries in the seek table include checksum fields.
+func (t SeekTable) HasChecksums() bool {
+	return t.checksums
 }
 
 // EntryByDecompressedOffset returns the frame containing off in the decompressed stream.
 // It returns false if off is greater than or equal to Size().
-func (t seekTable) EntryByDecompressedOffset(off uint64) (FrameOffsetEntry, bool) {
+func (t SeekTable) EntryByDecompressedOffset(off uint64) (FrameOffsetEntry, bool) {
 	if off >= t.Size() {
 		return FrameOffsetEntry{}, false
 	}
@@ -52,7 +62,7 @@ func (t seekTable) EntryByDecompressedOffset(off uint64) (FrameOffsetEntry, bool
 
 // EntryByID returns the frame with id.
 // It returns false if id is greater than or equal to NumFrames() or less than 0.
-func (t seekTable) EntryByID(id int64) (FrameOffsetEntry, bool) {
+func (t SeekTable) EntryByID(id int64) (FrameOffsetEntry, bool) {
 	if id < 0 || id >= int64(len(t.entries)) {
 		return FrameOffsetEntry{}, false
 	}

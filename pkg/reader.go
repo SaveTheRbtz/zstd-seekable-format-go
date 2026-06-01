@@ -102,7 +102,7 @@ func (rs *readSeekerEnvImpl) ReadSkipFrame(skippableFrameOffset int64) ([]byte, 
 
 type readerImpl struct {
 	dec ZSTDDecoder
-	seekTable
+	SeekTable
 
 	offset int64
 
@@ -172,7 +172,7 @@ func NewReader(rs io.ReadSeeker, decoder ZSTDDecoder, opts ...rOption) (Reader, 
 		return nil, fmt.Errorf("decompressed size is too large for Reader: %d > %d", table.Size(), maxReaderOffset)
 	}
 
-	sr.seekTable = table
+	sr.SeekTable = table
 
 	return &sr, nil
 }
@@ -203,7 +203,7 @@ func (r *readerImpl) Read(p []byte) (n int, err error) {
 func (r *readerImpl) Close() error {
 	if !r.closed.Swap(true) {
 		r.cachedFrame.replace(math.MaxUint64, nil)
-		r.seekTable = seekTable{}
+		r.SeekTable = SeekTable{}
 	}
 	return nil
 }
