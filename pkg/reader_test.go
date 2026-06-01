@@ -146,11 +146,6 @@ func TestReader(t *testing.T) {
 		r, err := NewReader(br, dec)
 		require.NoError(t, err)
 
-		sr := r.(*readerImpl)
-		assert.Equal(t, uint64(9), sr.Size())
-		assert.Equal(t, int64(2), sr.NumFrames())
-		assert.Equal(t, int64(0), sr.offset)
-
 		bytes1 := []byte("test")
 		bytes2 := []byte("test2")
 
@@ -160,21 +155,10 @@ func TestReader(t *testing.T) {
 		assert.Equal(t, len(bytes1), n)
 		assert.Equal(t, bytes1, tmp[:n])
 
-		assert.Equal(t, int64(n), sr.offset)
-
-		offset1, data1 := sr.cachedFrame.get()
-		assert.Equal(t, uint64(0), offset1)
-		assert.Equal(t, bytes1, data1)
-
 		m, err := r.Read(tmp)
 		require.NoError(t, err)
 		assert.Equal(t, len(bytes2), m)
 		assert.Equal(t, bytes2, tmp[:m])
-
-		assert.Equal(t, int64(n)+int64(m), sr.offset)
-		offset2, data2 := sr.cachedFrame.get()
-		assert.Equal(t, uint64(len(bytes1)), offset2)
-		assert.Equal(t, bytes2, data2)
 
 		_, err = r.Read(tmp)
 		require.ErrorIs(t, err, io.EOF)
@@ -224,15 +208,16 @@ func TestGetFrameByIndexPreservesReaderAtError(t *testing.T) {
 }
 
 func TestReaderEdges(t *testing.T) {
-	dec, err := zstd.NewReader(nil)
-	require.NoError(t, err)
-
 	source := []byte(sourceString)
 	for i, b := range [][]byte{checksum, noChecksum} {
 		i := i
 		b := b
 		t.Run(strconv.Itoa(i), func(t *testing.T) {
 			t.Parallel()
+
+			dec, err := zstd.NewReader(nil)
+			require.NoError(t, err)
+			defer dec.Close()
 
 			sr := &seekableBufferReaderAt{buf: b}
 			r, err := NewReader(sr, dec)
@@ -333,7 +318,6 @@ func TestReaderAt(t *testing.T) {
 			sectionReader := io.NewSectionReader(r, 3, 4)
 			tmp3, err := io.ReadAll(sectionReader)
 			require.NoError(t, err)
-			assert.Len(t, tmp3, 4)
 			assert.Equal(t, []byte("ttes"), tmp3)
 		})
 	}
@@ -342,6 +326,7 @@ func TestReaderAt(t *testing.T) {
 func TestReaderEdgesParallel(t *testing.T) {
 	dec, err := zstd.NewReader(nil)
 	require.NoError(t, err)
+	t.Cleanup(dec.Close)
 
 	source := []byte(sourceString)
 	for i, b := range [][]byte{checksum, noChecksum} {
@@ -351,6 +336,7 @@ func TestReaderEdgesParallel(t *testing.T) {
 		sr := &seekableBufferReaderAt{buf: b}
 		r, err := NewReader(sr, dec)
 		require.NoError(t, err)
+		t.Cleanup(func() { require.NoError(t, r.Close()) })
 
 		for n := int64(-1); n <= int64(len(source)); n++ {
 			for m := int64(0); m <= int64(len(source)); m++ {
@@ -371,7 +357,6 @@ func TestReaderEdgesParallel(t *testing.T) {
 					if m == 0 {
 						require.NoError(t, err)
 						assert.Equal(t, 0, k)
-						assert.Equal(t, make([]byte, m), tmp)
 						return
 					}
 

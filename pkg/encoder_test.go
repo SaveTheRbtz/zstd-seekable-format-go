@@ -4,7 +4,6 @@ import (
 	"testing"
 
 	"github.com/klauspost/compress/zstd"
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -17,13 +16,16 @@ func TestEncoder(t *testing.T) {
 	e, err := NewEncoder(enc)
 	require.NoError(t, err)
 
-	decBytes1 := sourceString[:4]
-	encBytes1, err := e.Encode([]byte(decBytes1))
-	require.NoError(t, err)
-
-	decBytes2 := sourceString[4:]
-	encBytes2, err := e.Encode([]byte(decBytes2))
-	require.NoError(t, err)
+	chunks := [][]byte{
+		[]byte(sourceString[:4]),
+		[]byte(sourceString[4:]),
+	}
+	var combined []byte
+	for _, chunk := range chunks {
+		encoded, err := e.Encode(chunk)
+		require.NoError(t, err)
+		combined = append(combined, encoded...)
+	}
 
 	footer, err := e.EndStream()
 	require.NoError(t, err)
@@ -31,16 +33,16 @@ func TestEncoder(t *testing.T) {
 	// Standard Reader.
 	dec, err := zstd.NewReader(nil)
 	require.NoError(t, err)
+	defer dec.Close()
 
-	combined := append(append([]byte{}, encBytes1...), encBytes2...)
 	decompressed, err := dec.DecodeAll(combined, nil)
 	require.NoError(t, err)
-	assert.Equal(t, sourceString, string(decompressed))
+	require.Equal(t, sourceString, string(decompressed))
 
 	// Seek table metadata.
 	table, err := NewSeekTable(footer)
 	require.NoError(t, err)
 
-	assert.Equal(t, uint64(len(sourceString)), table.Size())
-	assert.Equal(t, int64(2), table.NumFrames())
+	require.Equal(t, uint64(len(sourceString)), table.Size())
+	require.Equal(t, int64(len(chunks)), table.NumFrames())
 }

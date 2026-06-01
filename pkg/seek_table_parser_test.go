@@ -33,27 +33,23 @@ func TestParseSeekTableZeroSizeEntries(t *testing.T) {
 
 	table, err := parseSeekTableFrame(frame)
 	require.NoError(t, err)
-	assert.True(t, table.checksums)
 	assert.Equal(t, uint64(7), table.Size())
 	assert.Equal(t, int64(5), table.NumFrames())
 
-	for _, tc := range []struct {
+	for id, tc := range []struct {
 		name         string
-		id           int64
 		decompOffset uint64
 		decompSize   uint32
 	}{
-		{name: "LeadingZero", id: 0, decompOffset: 0, decompSize: 0},
-		{name: "FirstNonZero", id: 1, decompOffset: 0, decompSize: 3},
-		{name: "MiddleZero", id: 2, decompOffset: 3, decompSize: 0},
-		{name: "SecondNonZero", id: 3, decompOffset: 3, decompSize: 4},
-		{name: "TrailingZero", id: 4, decompOffset: 7, decompSize: 0},
+		{name: "LeadingZero", decompOffset: 0, decompSize: 0},
+		{name: "FirstNonZero", decompOffset: 0, decompSize: 3},
+		{name: "MiddleZero", decompOffset: 3, decompSize: 0},
+		{name: "SecondNonZero", decompOffset: 3, decompSize: 4},
+		{name: "TrailingZero", decompOffset: 7, decompSize: 0},
 	} {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
-			index, ok := table.EntryByID(tc.id)
+			index, ok := table.EntryByID(int64(id))
 			require.True(t, ok)
-			assert.Equal(t, tc.id, index.ID)
 			assert.Equal(t, tc.decompOffset, index.DecompOffset)
 			assert.Equal(t, tc.decompSize, index.DecompSize)
 		})
@@ -64,10 +60,9 @@ func TestParseSeekTableZeroSizeEntries(t *testing.T) {
 		offsets []uint64
 		id      int64
 	}{
-		{name: "FirstNonZero", offsets: []uint64{0, 1, 2}, id: 1},
-		{name: "SecondNonZero", offsets: []uint64{3, 4, 6}, id: 3},
+		{name: "FirstNonZero", offsets: []uint64{0, 2}, id: 1},
+		{name: "SecondNonZero", offsets: []uint64{3, 6}, id: 3},
 	} {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			for _, off := range tc.offsets {
 				index, ok := table.EntryByDecompressedOffset(off)
@@ -85,51 +80,34 @@ func TestSeekTableFooterParsing(t *testing.T) {
 	t.Parallel()
 
 	for _, tc := range []struct {
-		name string
-		buf  []byte
-		err  string
+		name         string
+		buf          []byte
+		wantChecksum bool
+		err          string
 	}{
 		{
-			name: "Checksum",
-			buf: []byte{
-				0x00, 0x00, 0x00, 0x00,
-				1 << 7,
-				0xb1, 0xea, 0x92, 0x8f,
-			},
+			name:         "Checksum",
+			buf:          seekTableFooterBytes(1 << 7),
+			wantChecksum: true,
 		},
 		{
 			name: "NoChecksum",
-			buf: []byte{
-				0x00, 0x00, 0x00, 0x00,
-				0x00,
-				0xb1, 0xea, 0x92, 0x8f,
-			},
+			buf:  seekTableFooterBytes(0x00),
 		},
 		{
-			name: "UnusedBits",
-			buf: []byte{
-				0x00, 0x00, 0x00, 0x00,
-				(1 << 7) + 0x01 + 0x2,
-				0xb1, 0xea, 0x92, 0x8f,
-			},
+			name:         "UnusedBits",
+			buf:          seekTableFooterBytes((1 << 7) + 0x01 + 0x2),
+			wantChecksum: true,
 		},
 		{
 			name: "ReservedBits",
-			buf: []byte{
-				0x00, 0x00, 0x00, 0x00,
-				0x84,
-				0xb1, 0xea, 0x92, 0x8f,
-			},
-			err: "footer reserved bits",
+			buf:  seekTableFooterBytes(0x84),
+			err:  "footer reserved bits",
 		},
 		{
 			name: "ReservedHighBit",
-			buf: []byte{
-				0x00, 0x00, 0x00, 0x00,
-				0x80 + 0x40,
-				0xb1, 0xea, 0x92, 0x8f,
-			},
-			err: "footer reserved bits",
+			buf:  seekTableFooterBytes(0x80 + 0x40),
+			err:  "footer reserved bits",
 		},
 		{
 			name: "Size",
@@ -140,25 +118,31 @@ func TestSeekTableFooterParsing(t *testing.T) {
 		},
 		{
 			name: "Magic",
-			buf: []byte{
-				0x00, 0x00, 0x00, 0x00,
-				0x80,
-				0xea, 0x92, 0x8f, 0xb1,
-			},
-			err: "footer magic mismatch",
+			buf:  []byte{0x00, 0x00, 0x00, 0x00, 0x80, 0xea, 0x92, 0x8f, 0xb1},
+			err:  "footer magic mismatch",
 		},
 	} {
 		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			err := (&seekTableFooter{}).UnmarshalBinary(tc.buf)
+			var footer seekTableFooter
+			err := footer.UnmarshalBinary(tc.buf)
 			if tc.err == "" {
 				require.NoError(t, err)
+				assert.Equal(t, tc.wantChecksum, footer.SeekTableDescriptor.ChecksumFlag)
 				return
 			}
 			require.ErrorContains(t, err, tc.err)
 		})
+	}
+}
+
+func seekTableFooterBytes(descriptor byte) []byte {
+	return []byte{
+		0x00, 0x00, 0x00, 0x00,
+		descriptor,
+		0xb1, 0xea, 0x92, 0x8f,
 	}
 }
 

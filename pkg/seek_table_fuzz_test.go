@@ -11,16 +11,21 @@ import (
 )
 
 func FuzzCorruptSeekTable(f *testing.F) {
-	dec, err := zstd.NewReader(nil)
-	require.NoError(f, err)
-	defer dec.Close()
+	const noChecksumSeekTableOffset = 35
 
-	base := noChecksum[35:]
+	base := noChecksum[noChecksumSeekTableOffset:]
 
-	f.Add(base, uint8(0), int64(0))
-	f.Add(base, uint8(1), int64(-1))
-	f.Add(base, uint8(2), int64(1))
-	f.Add(base, uint8(3), int64(8))
+	for _, seed := range []struct {
+		mode uint8
+		off  int64
+	}{
+		{mode: 0, off: 0},
+		{mode: 1, off: -1},
+		{mode: 2, off: 1},
+		{mode: 3, off: 8},
+	} {
+		f.Add(base, seed.mode, seed.off)
+	}
 
 	f.Fuzz(func(t *testing.T, in []byte, mode uint8, off int64) {
 		mutated := make([]byte, len(base))
@@ -58,8 +63,13 @@ func FuzzCorruptSeekTable(f *testing.F) {
 		_, _ = table.EntryByDecompressedOffset(uint64(off))
 		_, _ = table.EntryByID(off)
 
-		stream := append(append([]byte(nil), noChecksum[:35]...), mutated...)
+		stream := append(append([]byte(nil), noChecksum[:noChecksumSeekTableOffset]...), mutated...)
 		sr := &seekableBufferReaderAt{buf: stream}
+
+		dec, err := zstd.NewReader(nil)
+		require.NoError(t, err)
+		defer dec.Close()
+
 		r, err := NewReader(sr, dec)
 		if err != nil {
 			return

@@ -112,7 +112,6 @@ func TestConcurrentWriter(t *testing.T) {
 	require.NoError(t, err)
 
 	for i := 0; i < frameCount; i++ {
-		require.NoError(t, err)
 		_, err = oneWriter.Write(frames[i])
 		require.NoError(t, err)
 	}
@@ -261,22 +260,22 @@ func TestZeroSizedFrameIgnored(t *testing.T) {
 	require.NoError(t, err)
 	defer func() { require.NoError(t, r.Close()) }()
 
-	rr := r.(*readerImpl)
-	assert.Equal(t, uint64(len("foobar")), rr.Size())
-	assert.Equal(t, int64(2), rr.NumFrames())
+	table, err := readSeekTable(&readSeekerEnvImpl{rs: bytes.NewReader(b.Bytes())})
+	require.NoError(t, err)
+	assert.Equal(t, uint64(len("foobar")), table.Size())
+	assert.Equal(t, int64(2), table.NumFrames())
+	_, ok := table.EntryByID(2)
+	require.False(t, ok)
 
-	idx, ok := rr.EntryByID(1)
-	require.True(t, ok)
-
-	expected := []byte("bar")
+	expected := []byte("foobar")
 	buf := make([]byte, len(expected))
-	n, err = r.ReadAt(buf, int64(idx.DecompOffset))
+	n, err = r.ReadAt(buf, 0)
 	require.NoError(t, err)
 	assert.Equal(t, len(expected), n)
 	assert.Equal(t, expected, buf)
 
-	_, ok = rr.EntryByID(2)
-	require.False(t, ok)
+	_, err = r.ReadAt(make([]byte, 1), int64(len(expected)))
+	require.ErrorIs(t, err, io.EOF)
 }
 
 func TestCloseErrors(t *testing.T) {

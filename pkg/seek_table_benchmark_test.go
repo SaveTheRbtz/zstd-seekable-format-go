@@ -5,12 +5,12 @@ import (
 )
 
 var seekTableBenchmarkSizes = []struct {
-	name string
-	size int
+	name       string
+	frameCount int
 }{
-	{name: "16K", size: 16 << 10},
-	{name: "128K", size: 128 << 10},
-	{name: "1M", size: 1 << 20},
+	{name: "16K", frameCount: 16 << 10},
+	{name: "128K", frameCount: 128 << 10},
+	{name: "1M", frameCount: 1 << 20},
 }
 
 var (
@@ -20,24 +20,24 @@ var (
 	benchmarkIntSink       int64
 )
 
-func benchmarkSeekTable(b testing.TB, size int) []byte {
+func benchmarkSeekTable(b testing.TB, frameCount int) []byte {
 	b.Helper()
 
 	entrySize := int(seekTableEntrySize(true))
-	seekTable := make([]byte, size*entrySize+seekTableFooterOffset)
+	seekTable := make([]byte, frameCount*entrySize+seekTableFooterOffset)
 	entry := seekTableEntry{CompressedSize: 1, DecompressedSize: 1}
-	for i := 0; i < size; i++ {
+	for i := 0; i < frameCount; i++ {
 		entry.marshalBinaryInline(seekTable[i*entrySize : (i+1)*entrySize])
 	}
 
 	footer := seekTableFooter{
-		NumberOfFrames: uint32(size),
+		NumberOfFrames: uint32(frameCount),
 		SeekTableDescriptor: seekTableDescriptor{
 			ChecksumFlag: true,
 		},
 		SeekableMagicNumber: seekableMagicNumber,
 	}
-	footer.marshalBinaryInline(seekTable[size*entrySize:])
+	footer.marshalBinaryInline(seekTable[frameCount*entrySize:])
 
 	frame, err := createSkippableFrame(seekableTag, seekTable)
 	if err != nil {
@@ -46,10 +46,10 @@ func benchmarkSeekTable(b testing.TB, size int) []byte {
 	return frame
 }
 
-func benchmarkParsedSeekTable(b *testing.B, size int) *seekTable {
+func benchmarkParsedSeekTable(b *testing.B, frameCount int) *seekTable {
 	b.Helper()
 
-	seekTable := benchmarkSeekTable(b, size)
+	seekTable := benchmarkSeekTable(b, frameCount)
 	table, err := NewSeekTable(seekTable)
 	if err != nil {
 		b.Fatal(err)
@@ -60,7 +60,7 @@ func benchmarkParsedSeekTable(b *testing.B, size int) *seekTable {
 func BenchmarkSeekTableIndexBuild(b *testing.B) {
 	for _, benchmarkSize := range seekTableBenchmarkSizes {
 		b.Run(benchmarkSize.name, func(b *testing.B) {
-			seekTable := benchmarkSeekTable(b, benchmarkSize.size)
+			seekTable := benchmarkSeekTable(b, benchmarkSize.frameCount)
 
 			b.ReportAllocs()
 			b.ResetTimer()
@@ -78,16 +78,16 @@ func BenchmarkSeekTableIndexBuild(b *testing.B) {
 func BenchmarkSeekTableEntryByDecompressedOffset(b *testing.B) {
 	for _, benchmarkSize := range seekTableBenchmarkSizes {
 		b.Run(benchmarkSize.name, func(b *testing.B) {
-			table := benchmarkParsedSeekTable(b, benchmarkSize.size)
+			table := benchmarkParsedSeekTable(b, benchmarkSize.frameCount)
 
 			cases := []struct {
 				name string
 				off  uint64
 			}{
 				{name: "First", off: 0},
-				{name: "Middle", off: uint64(benchmarkSize.size / 2)},
-				{name: "Last", off: uint64(benchmarkSize.size - 1)},
-				{name: "MissPastEnd", off: uint64(benchmarkSize.size)},
+				{name: "Middle", off: uint64(benchmarkSize.frameCount / 2)},
+				{name: "Last", off: uint64(benchmarkSize.frameCount - 1)},
+				{name: "MissPastEnd", off: uint64(benchmarkSize.frameCount)},
 			}
 
 			for _, tc := range cases {
@@ -102,7 +102,7 @@ func BenchmarkSeekTableEntryByDecompressedOffset(b *testing.B) {
 
 			b.Run("Sequential", func(b *testing.B) {
 				var ids int64
-				mask := uint64(benchmarkSize.size - 1)
+				mask := uint64(benchmarkSize.frameCount - 1)
 
 				b.ReportAllocs()
 				b.ResetTimer()
@@ -118,7 +118,7 @@ func BenchmarkSeekTableEntryByDecompressedOffset(b *testing.B) {
 			b.Run("PseudoRandom", func(b *testing.B) {
 				var ids int64
 				x := uint64(1)
-				mask := uint64(benchmarkSize.size - 1)
+				mask := uint64(benchmarkSize.frameCount - 1)
 
 				b.ReportAllocs()
 				b.ResetTimer()
@@ -138,17 +138,17 @@ func BenchmarkSeekTableEntryByDecompressedOffset(b *testing.B) {
 func BenchmarkSeekTableEntryByID(b *testing.B) {
 	for _, benchmarkSize := range seekTableBenchmarkSizes {
 		b.Run(benchmarkSize.name, func(b *testing.B) {
-			table := benchmarkParsedSeekTable(b, benchmarkSize.size)
+			table := benchmarkParsedSeekTable(b, benchmarkSize.frameCount)
 
 			cases := []struct {
 				name string
 				id   int64
 			}{
 				{name: "First", id: 0},
-				{name: "Middle", id: int64(benchmarkSize.size / 2)},
-				{name: "Last", id: int64(benchmarkSize.size - 1)},
+				{name: "Middle", id: int64(benchmarkSize.frameCount / 2)},
+				{name: "Last", id: int64(benchmarkSize.frameCount - 1)},
 				{name: "MissNegative", id: -1},
-				{name: "MissPastEnd", id: int64(benchmarkSize.size)},
+				{name: "MissPastEnd", id: int64(benchmarkSize.frameCount)},
 			}
 
 			for _, tc := range cases {
@@ -163,7 +163,7 @@ func BenchmarkSeekTableEntryByID(b *testing.B) {
 
 			b.Run("Sequential", func(b *testing.B) {
 				var ids int64
-				mask := int64(benchmarkSize.size - 1)
+				mask := int64(benchmarkSize.frameCount - 1)
 
 				b.ReportAllocs()
 				b.ResetTimer()
@@ -179,7 +179,7 @@ func BenchmarkSeekTableEntryByID(b *testing.B) {
 			b.Run("PseudoRandom", func(b *testing.B) {
 				var ids int64
 				x := uint64(1)
-				mask := uint64(benchmarkSize.size - 1)
+				mask := uint64(benchmarkSize.frameCount - 1)
 
 				b.ReportAllocs()
 				b.ResetTimer()

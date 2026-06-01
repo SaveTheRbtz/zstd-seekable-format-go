@@ -82,7 +82,10 @@ func Example() {
 	}
 	fmt.Printf("Offset: -6 from the end: %s\n", string(world))
 
-	_, _ = f.Seek(0, io.SeekStart)
+	_, err = f.Seek(0, io.SeekStart)
+	if err != nil {
+		log.Fatal(err)
+	}
 
 	// Standard ZSTD Reader.
 	dec, err = zstd.NewReader(f)

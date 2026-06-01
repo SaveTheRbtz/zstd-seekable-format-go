@@ -17,19 +17,15 @@ import (
 )
 
 func FuzzRoundTrip(f *testing.F) {
-	dec, err := zstd.NewReader(nil)
-	require.NoError(f, err)
-	defer dec.Close()
-
-	enc, err := zstd.NewWriter(nil, zstd.WithEncoderLevel(zstd.SpeedDefault))
-	require.NoError(f, err)
-	defer func() { require.NoError(f, enc.Close()) }()
-
 	f.Add(int64(1), uint8(0), int16(1), int8(io.SeekStart))
 	f.Add(int64(10), uint8(1), int16(2), int8(io.SeekEnd))
 	f.Add(int64(111), uint8(2), int16(3), int8(io.SeekCurrent))
 
 	f.Fuzz(func(t *testing.T, seed int64, frames uint8, l int16, whence int8) {
+		enc, err := zstd.NewWriter(nil, zstd.WithEncoderLevel(zstd.SpeedDefault))
+		require.NoError(t, err)
+		defer func() { require.NoError(t, enc.Close()) }()
+
 		var b bytes.Buffer
 		bufWriter := bufio.NewWriter(&b)
 
@@ -56,6 +52,10 @@ func FuzzRoundTrip(f *testing.F) {
 		err = bufWriter.Flush()
 		require.NoError(t, err)
 
+		dec, err := zstd.NewReader(nil)
+		require.NoError(t, err)
+		defer dec.Close()
+
 		r, err := NewReader(bytes.NewReader(b.Bytes()), dec)
 		require.NoError(t, err)
 		defer func() { require.NoError(t, r.Close()) }()
@@ -78,13 +78,12 @@ func FuzzRoundTrip(f *testing.F) {
 
 		buf2 := make([]byte, n)
 		m, err := r.ReadAt(buf2, i)
-		// t.Logf("off: %d, l: %d, whence: %d, i: %d, n: %d, m: %d", off, l, whence, i, n, m)
 
 		if !errors.Is(err, io.EOF) {
 			require.NoError(t, err)
 		}
 
-		assert.Equal(t, m, n)
+		assert.Equal(t, n, m)
 		assert.Equal(t, buf1[:n], buf2)
 	})
 }

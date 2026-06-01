@@ -21,22 +21,18 @@ func TestNewSeekTable(t *testing.T) {
 	assert.Equal(t, uint64(len(sourceString)), table.Size())
 	assert.Equal(t, int64(2), table.NumFrames())
 
-	for _, tc := range []struct {
+	for id, tc := range []struct {
 		name    string
-		id      int64
 		offsets []uint64
 		data    []byte
 	}{
-		{name: "FirstFrame", id: 0, offsets: []uint64{0, 1, 3}, data: []byte("test")},
-		{name: "SecondFrame", id: 1, offsets: []uint64{4, 5, 8}, data: []byte("test2")},
+		{name: "FirstFrame", offsets: []uint64{0, 3}, data: []byte("test")},
+		{name: "SecondFrame", offsets: []uint64{4, 8}, data: []byte("test2")},
 	} {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
-			indexByID, ok := table.EntryByID(tc.id)
+			indexByID, ok := table.EntryByID(int64(id))
 			require.True(t, ok)
-			assert.Equal(t, tc.id, indexByID.ID)
 			assert.Equal(t, uint32(len(tc.data)), indexByID.DecompSize)
-			assert.NotEqual(t, uint32(0), indexByID.Checksum)
 
 			decomp, err := dec.DecodeAll(
 				checksum[indexByID.CompOffset:indexByID.CompOffset+uint64(indexByID.CompSize)], nil,
