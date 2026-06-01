@@ -36,7 +36,7 @@ func TestParseSeekTableZeroSizeEntries(t *testing.T) {
 	require.NoError(t, err)
 	assert.True(t, table.checksums)
 	assert.Equal(t, uint64(7), table.Size())
-	assert.Equal(t, int64(5), table.numFrames())
+	assert.Equal(t, int64(5), table.NumFrames())
 
 	for _, tc := range []struct {
 		name         string
@@ -52,7 +52,7 @@ func TestParseSeekTableZeroSizeEntries(t *testing.T) {
 	} {
 		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
-			index, ok := table.entryByID(tc.id)
+			index, ok := table.EntryByID(tc.id)
 			require.True(t, ok)
 			assert.Equal(t, tc.id, index.ID)
 			assert.Equal(t, tc.decompOffset, index.DecompOffset)
@@ -71,14 +71,14 @@ func TestParseSeekTableZeroSizeEntries(t *testing.T) {
 		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			for _, off := range tc.offsets {
-				index, ok := table.entryByDecompressedOffset(off)
+				index, ok := table.EntryByDecompressedOffset(off)
 				require.True(t, ok)
 				assert.Equal(t, tc.id, index.ID)
 			}
 		})
 	}
 
-	_, ok := table.entryByDecompressedOffset(7)
+	_, ok := table.EntryByDecompressedOffset(7)
 	assert.False(t, ok)
 }
 

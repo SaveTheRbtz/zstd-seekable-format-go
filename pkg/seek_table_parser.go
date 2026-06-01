@@ -61,7 +61,7 @@ func parseSeekTableFrame(buf []byte) (seekTable, error) {
 		return seekTable{}, fmt.Errorf("frame is too big: %d > %d", frameSize, maxDecoderFrameSize)
 	}
 
-	index, err := parseSeekTableEntries(
+	entries, err := parseSeekTableEntries(
 		buf[skippableFrameHeaderSize:len(buf)-seekTableFooterOffset],
 		uint64(entrySize),
 		footer.NumberOfFrames,
@@ -71,8 +71,8 @@ func parseSeekTableFrame(buf []byte) (seekTable, error) {
 	}
 
 	return seekTable{
-		frameIndex: index,
-		checksums:  footer.SeekTableDescriptor.ChecksumFlag,
+		entries:   entries,
+		checksums: footer.SeekTableDescriptor.ChecksumFlag,
 	}, nil
 }
 
@@ -111,16 +111,16 @@ func seekTableEntrySize(checksum bool) int64 {
 	return baseSize
 }
 
-func parseSeekTableEntries(p []byte, entrySize uint64, numberOfFrames uint32) (frameIndex, error) {
+func parseSeekTableEntries(p []byte, entrySize uint64, numberOfFrames uint32) ([]FrameOffsetEntry, error) {
 	if entrySize == 0 {
-		return frameIndex{}, fmt.Errorf("seek table entry size is 0")
+		return nil, fmt.Errorf("seek table entry size is 0")
 	}
 	if uint64(len(p))%entrySize != 0 {
-		return frameIndex{}, fmt.Errorf("seek table size is not multiple of %d", entrySize)
+		return nil, fmt.Errorf("seek table size is not multiple of %d", entrySize)
 	}
 	parsedEntries := uint64(len(p)) / entrySize
 	if parsedEntries != uint64(numberOfFrames) {
-		return frameIndex{}, fmt.Errorf("seek table entry count mismatch: parsed %d, footer %d",
+		return nil, fmt.Errorf("seek table entry count mismatch: parsed %d, footer %d",
 			parsedEntries, numberOfFrames)
 	}
 
@@ -132,7 +132,7 @@ func parseSeekTableEntries(p []byte, entrySize uint64, numberOfFrames uint32) (f
 	for indexOffset := uint64(0); indexOffset < uint64(len(p)); indexOffset += entrySize {
 		err := entry.UnmarshalBinary(p[indexOffset : indexOffset+entrySize])
 		if err != nil {
-			return frameIndex{}, fmt.Errorf("failed to parse entry %+v at: %d: %w",
+			return nil, fmt.Errorf("failed to parse entry %+v at: %d: %w",
 				p[indexOffset:indexOffset+entrySize], indexOffset, err)
 		}
 
@@ -149,7 +149,5 @@ func parseSeekTableEntries(p []byte, entrySize uint64, numberOfFrames uint32) (f
 		i++
 	}
 
-	return frameIndex{
-		entries: entries,
-	}, nil
+	return entries, nil
 }

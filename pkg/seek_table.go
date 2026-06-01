@@ -1,7 +1,9 @@
 package seekable
 
+import "sort"
+
 type seekTable struct {
-	frameIndex
+	entries   []FrameOffsetEntry
 	checksums bool
 }
 
@@ -18,21 +20,42 @@ func NewSeekTable(buf []byte) (*seekTable, error) {
 }
 
 func (t seekTable) Size() uint64 {
-	return t.size()
+	if len(t.entries) == 0 {
+		return 0
+	}
+
+	last := t.entries[len(t.entries)-1]
+	return last.DecompOffset + uint64(last.DecompSize)
 }
 
 func (t seekTable) NumFrames() int64 {
-	return t.numFrames()
+	return int64(len(t.entries))
 }
 
 // EntryByDecompressedOffset returns the frame containing off in the decompressed stream.
 // It returns false if off is greater than or equal to Size().
 func (t seekTable) EntryByDecompressedOffset(off uint64) (FrameOffsetEntry, bool) {
-	return t.entryByDecompressedOffset(off)
+	if off >= t.Size() {
+		return FrameOffsetEntry{}, false
+	}
+
+	// Find the first frame whose decompressed range contains off; this skips
+	// zero-size entries that share an offset with a following non-empty frame.
+	n := sort.Search(len(t.entries), func(n int) bool {
+		return t.entries[n].DecompOffset+uint64(t.entries[n].DecompSize) > off
+	})
+	if n == len(t.entries) || t.entries[n].DecompOffset > off {
+		return FrameOffsetEntry{}, false
+	}
+	return t.entries[n], true
 }
 
 // EntryByID returns the frame with id.
 // It returns false if id is greater than or equal to NumFrames() or less than 0.
 func (t seekTable) EntryByID(id int64) (FrameOffsetEntry, bool) {
-	return t.entryByID(id)
+	if id < 0 || id >= int64(len(t.entries)) {
+		return FrameOffsetEntry{}, false
+	}
+
+	return t.entries[int(id)], true
 }
