@@ -43,28 +43,33 @@ type readSeekerEnvImpl struct {
 	mu sync.Mutex
 }
 
-func (rs *readSeekerEnvImpl) GetFrameByIndex(index env.FrameOffsetEntry) (p []byte, err error) {
-	p = make([]byte, index.CompSize)
+func (rs *readSeekerEnvImpl) GetFrameByIndex(index env.FrameOffsetEntry) ([]byte, error) {
+	p := make([]byte, index.CompSize)
 	off := int64(index.CompOffset)
 
 	switch v := rs.rs.(type) {
 	case io.ReaderAt:
-		_, err = v.ReadAt(p, off)
-		if errors.Is(err, io.EOF) {
-			err = nil
+		n, err := v.ReadAt(p, off)
+		if err != nil && !errors.Is(err, io.EOF) {
+			return nil, err
+		}
+		if n != len(p) {
+			return nil, io.ErrUnexpectedEOF
 		}
 	default:
 		rs.mu.Lock()
 		defer rs.mu.Unlock()
 
-		_, err = v.Seek(off, io.SeekStart)
+		_, err := v.Seek(off, io.SeekStart)
 		if err != nil {
 			return nil, err
 		}
-		_, err = io.ReadFull(rs.rs, p)
+		if _, err := io.ReadFull(rs.rs, p); err != nil {
+			return nil, err
+		}
 	}
 
-	return
+	return p, nil
 }
 
 func (rs *readSeekerEnvImpl) ReadFooter() ([]byte, error) {
