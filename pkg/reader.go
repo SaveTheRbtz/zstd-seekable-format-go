@@ -199,7 +199,7 @@ func (r *readerImpl) Read(p []byte) (n int, err error) {
 }
 
 func (r *readerImpl) Close() error {
-	if r.closed.CompareAndSwap(false, true) {
+	if !r.closed.Swap(true) {
 		r.cachedFrame.replace(math.MaxUint64, nil)
 		r.seekTable = seekTable{}
 	}
