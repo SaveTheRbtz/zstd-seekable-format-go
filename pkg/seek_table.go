@@ -12,7 +12,7 @@ type seekTable struct {
 // The returned value exposes Size, NumFrames, GetIndexByID, and GetIndexByDecompOffset.
 // Lookup methods can be used concurrently.
 func NewSeekTable(buf []byte) (*seekTable, error) {
-	table, err := parseSeekTable(buf)
+	table, err := parseSeekTableFrame(buf)
 	if err != nil {
 		return nil, err
 	}

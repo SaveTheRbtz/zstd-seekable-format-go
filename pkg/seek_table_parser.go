@@ -30,10 +30,10 @@ func readSeekTable(renv env.REnvironment) (seekTable, error) {
 		return seekTable{}, fmt.Errorf("failed to read seek table frame: %w", err)
 	}
 
-	return parseSeekTable(frameBuf)
+	return parseSeekTableFrame(frameBuf)
 }
 
-func parseSeekTable(buf []byte) (seekTable, error) {
+func parseSeekTableFrame(buf []byte) (seekTable, error) {
 	footer, entrySize, err := parseSeekTableFooter(buf)
 	if err != nil {
 		return seekTable{}, err
