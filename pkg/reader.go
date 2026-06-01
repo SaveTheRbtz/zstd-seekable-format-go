@@ -102,7 +102,7 @@ func (rs *readSeekerEnvImpl) ReadSkipFrame(skippableFrameOffset int64) ([]byte, 
 
 type readerImpl struct {
 	dec ZSTDDecoder
-	parsedSeekTable
+	seekTable
 
 	offset int64
 
@@ -124,7 +124,19 @@ var (
 )
 
 type Reader interface {
-	SeekTable
+	// GetIndexByDecompOffset returns FrameOffsetEntry for an offset in the decompressed stream.
+	// Will return nil if offset is greater or equal than Size().
+	GetIndexByDecompOffset(off uint64) *env.FrameOffsetEntry
+
+	// GetIndexByID returns FrameOffsetEntry for a given frame id.
+	// Will return nil if offset is greater or equal than NumFrames() or less than 0.
+	GetIndexByID(id int64) *env.FrameOffsetEntry
+
+	// Size returns the size of the uncompressed stream.
+	Size() int64
+
+	// NumFrames returns number of frames in the compressed stream.
+	NumFrames() int64
 
 	// Seek implements io.Seeker interface to randomly access data.
 	// This method is NOT goroutine-safe and CAN NOT be called
@@ -179,7 +191,7 @@ func NewReader(rs io.ReadSeeker, decoder ZSTDDecoder, opts ...rOption) (Reader, 
 		return nil, err
 	}
 
-	sr.parsedSeekTable = table
+	sr.seekTable = table
 
 	return &sr, nil
 }
@@ -206,7 +218,7 @@ func (r *readerImpl) Read(p []byte) (n int, err error) {
 func (r *readerImpl) Close() error {
 	if r.closed.CompareAndSwap(false, true) {
 		r.cachedFrame.replace(math.MaxUint64, nil)
-		r.parsedSeekTable = parsedSeekTable{}
+		r.seekTable = seekTable{}
 	}
 	return nil
 }

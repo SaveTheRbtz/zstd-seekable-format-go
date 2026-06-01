@@ -48,7 +48,7 @@ func FuzzCorruptSeekTable(f *testing.F) {
 			}
 		}
 
-		table, err := ParseSeekTable(mutated)
+		table, err := NewSeekTable(mutated)
 		if err != nil {
 			return
 		}

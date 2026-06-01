@@ -38,7 +38,7 @@ func TestEncoder(t *testing.T) {
 	assert.Equal(t, sourceString, string(decompressed))
 
 	// Seek table metadata.
-	table, err := ParseSeekTable(footer)
+	table, err := NewSeekTable(footer)
 	require.NoError(t, err)
 
 	assert.Equal(t, int64(len(sourceString)), table.Size())

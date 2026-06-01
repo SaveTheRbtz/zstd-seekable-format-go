@@ -8,14 +8,14 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestParseSeekTable(t *testing.T) {
+func TestNewSeekTable(t *testing.T) {
 	t.Parallel()
 
 	dec, err := zstd.NewReader(nil)
 	require.NoError(t, err)
 	defer dec.Close()
 
-	table, err := ParseSeekTable(checksum[17+18:])
+	table, err := NewSeekTable(checksum[17+18:])
 	require.NoError(t, err)
 
 	assert.Equal(t, int64(len(sourceString)), table.Size())
@@ -59,12 +59,12 @@ func TestParseSeekTable(t *testing.T) {
 	}
 }
 
-func TestParseSeekTableIsMetadataOnly(t *testing.T) {
+func TestNewSeekTableIsMetadataOnly(t *testing.T) {
 	t.Parallel()
 
-	table, err := ParseSeekTable(checksum[17+18:])
+	table, err := NewSeekTable(checksum[17+18:])
 	require.NoError(t, err)
 
-	_, ok := table.(Reader)
+	_, ok := any(table).(Reader)
 	assert.False(t, ok)
 }
