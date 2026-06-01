@@ -8,8 +8,14 @@ import (
 )
 
 // Encoder is a byte-oriented API that is useful where wrapping io.Writer is not desirable.
+//
+// Each non-empty Encode call returns one compressed Zstandard frame and appends
+// one entry to the in-memory seek table. EndStream returns the final seek-table
+// skippable frame, which must be appended after all encoded frames to form a
+// complete seekable stream.
 type Encoder interface {
 	// Encode returns compressed data and appends a frame to in-memory seek table.
+	// Empty inputs return an empty slice and do not add seek-table entries.
 	Encode(src []byte) ([]byte, error)
 
 	// EndStream returns the in-memory seek table as a Zstandard skippable frame.
@@ -17,6 +23,8 @@ type Encoder interface {
 }
 
 // NewEncoder returns a byte-oriented encoder that uses encoder for Zstandard compression.
+//
+// The caller remains responsible for closing encoder, if it requires closing.
 func NewEncoder(encoder ZSTDEncoder, opts ...wOption) (Encoder, error) {
 	sw, err := NewWriter(nil, encoder, opts...)
 	if err != nil {

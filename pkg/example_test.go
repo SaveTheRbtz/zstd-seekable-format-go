@@ -1,94 +1,54 @@
 package seekable_test
 
 import (
+	"bytes"
+	"context"
 	"fmt"
 	"io"
 	"log"
-	"os"
 
 	"github.com/klauspost/compress/zstd"
 
 	seekable "github.com/SaveTheRbtz/zstd-seekable-format-go/pkg"
 )
 
-func Example() {
-	f, err := os.CreateTemp("", "example")
-	if err != nil {
-		log.Fatal(err)
+func exampleFrames() [][]byte {
+	return [][]byte{[]byte("Hello"), []byte(" "), []byte("World!")}
+}
+
+func writeExampleFrames(w seekable.Writer) {
+	for _, frame := range exampleFrames() {
+		if _, err := w.Write(frame); err != nil {
+			log.Fatal(err)
+		}
 	}
-	defer func() {
-		_ = os.Remove(f.Name())
-	}()
+}
+
+func exampleSeekableStream() []byte {
+	var buf bytes.Buffer
 
 	enc, err := zstd.NewWriter(nil, zstd.WithEncoderLevel(zstd.SpeedFastest))
 	if err != nil {
 		log.Fatal(err)
 	}
-	defer func() {
-		_ = enc.Close()
-	}()
+	defer enc.Close()
 
-	w, err := seekable.NewWriter(f, enc)
+	w, err := seekable.NewWriter(&buf, enc)
 	if err != nil {
 		log.Fatal(err)
 	}
-
-	// Write data in chunks.
-	for _, b := range [][]byte{[]byte("Hello"), []byte(" "), []byte("World!")} {
-		_, err = w.Write(b)
-		if err != nil {
-			log.Fatal(err)
-		}
-	}
-
-	// Close and flush seek table.
-	err = w.Close()
-	if err != nil {
+	writeExampleFrames(w)
+	if err := w.Close(); err != nil {
 		log.Fatal(err)
 	}
 
-	dec, err := zstd.NewReader(nil)
-	if err != nil {
-		log.Fatal(err)
-	}
-	defer dec.Close()
+	return buf.Bytes()
+}
 
-	r, err := seekable.NewReader(f, dec)
-	if err != nil {
-		log.Fatal(err)
-	}
-	defer func() {
-		_ = r.Close()
-	}()
+func ExampleNewWriter() {
+	compressed := exampleSeekableStream()
 
-	ello := make([]byte, 4)
-	// ReaderAt
-	_, err = r.ReadAt(ello, 1)
-	if err != nil {
-		log.Fatal(err)
-	}
-	fmt.Printf("Offset: 1 from the start: %s\n", string(ello))
-
-	world := make([]byte, 5)
-	// Seeker
-	_, err = r.Seek(-6, io.SeekEnd)
-	if err != nil {
-		log.Fatal(err)
-	}
-	// Reader
-	_, err = r.Read(world)
-	if err != nil {
-		log.Fatal(err)
-	}
-	fmt.Printf("Offset: -6 from the end: %s\n", string(world))
-
-	_, err = f.Seek(0, io.SeekStart)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	// Standard ZSTD Reader.
-	dec, err = zstd.NewReader(f)
+	dec, err := zstd.NewReader(bytes.NewReader(compressed))
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -98,11 +58,127 @@ func Example() {
 	if err != nil {
 		log.Fatal(err)
 	}
-
-	fmt.Printf("Whole string: %s\n", string(all))
+	fmt.Println(string(all))
 
 	// Output:
-	// Offset: 1 from the start: ello
-	// Offset: -6 from the end: World
-	// Whole string: Hello World!
+	// Hello World!
+}
+
+func ExampleNewReader() {
+	compressed := exampleSeekableStream()
+
+	dec, err := zstd.NewReader(nil)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer dec.Close()
+
+	r, err := seekable.NewReader(bytes.NewReader(compressed), dec)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer func() {
+		_ = r.Close()
+	}()
+
+	ello := make([]byte, 4)
+	if _, err := r.ReadAt(ello, 1); err != nil {
+		log.Fatal(err)
+	}
+	fmt.Println(string(ello))
+
+	world := make([]byte, 5)
+	if _, err := r.Seek(-6, io.SeekEnd); err != nil {
+		log.Fatal(err)
+	}
+	if _, err := r.Read(world); err != nil {
+		log.Fatal(err)
+	}
+	fmt.Println(string(world))
+
+	// Output:
+	// ello
+	// World
+}
+
+func ExampleNewSeekTable() {
+	enc, err := zstd.NewWriter(nil, zstd.WithEncoderLevel(zstd.SpeedFastest))
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer enc.Close()
+
+	e, err := seekable.NewEncoder(enc)
+	if err != nil {
+		log.Fatal(err)
+	}
+	if _, err := e.Encode([]byte("Hello")); err != nil {
+		log.Fatal(err)
+	}
+	if _, err := e.Encode([]byte(" World!")); err != nil {
+		log.Fatal(err)
+	}
+
+	seekTableFrame, err := e.EndStream()
+	if err != nil {
+		log.Fatal(err)
+	}
+	table, err := seekable.NewSeekTable(seekTableFrame)
+	if err != nil {
+		log.Fatal(err)
+	}
+	entry, ok := table.EntryByDecompressedOffset(7)
+	if !ok {
+		log.Fatal("missing seek-table entry")
+	}
+
+	fmt.Printf("frames=%d size=%d checksums=%t\n", table.NumFrames(), table.Size(), table.HasChecksums())
+	fmt.Printf("offset 7 is in frame %d\n", entry.ID)
+
+	// Output:
+	// frames=2 size=12 checksums=true
+	// offset 7 is in frame 1
+}
+
+func ExampleConcurrentWriter_WriteMany() {
+	var buf bytes.Buffer
+
+	enc, err := zstd.NewWriter(nil, zstd.WithEncoderLevel(zstd.SpeedFastest))
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer enc.Close()
+
+	w, err := seekable.NewWriter(&buf, enc)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	frames := exampleFrames()
+	next := func() ([]byte, error) {
+		if len(frames) == 0 {
+			return nil, nil
+		}
+		frame := frames[0]
+		frames = frames[1:]
+		return frame, nil
+	}
+
+	err = w.WriteMany(context.Background(), next,
+		seekable.WithConcurrency(2),
+		seekable.WithWriteCallback(func(size uint32) {
+			fmt.Println(size)
+		}),
+	)
+	if err != nil {
+		log.Fatal(err)
+	}
+	if err := w.Close(); err != nil {
+		log.Fatal(err)
+	}
+
+	// Output:
+	// 5
+	// 1
+	// 6
 }

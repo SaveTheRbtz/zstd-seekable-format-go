@@ -125,7 +125,10 @@ var (
 	_ io.Closer   = (*readerImpl)(nil)
 )
 
-// Reader provides sequential and random access to a seekable ZSTD stream.
+// Reader provides sequential and random access to a seekable Zstandard stream.
+//
+// Offsets are expressed in the decompressed stream. Read and Seek use an
+// internal current offset; ReadAt does not.
 type Reader interface {
 	io.Reader
 	io.ReaderAt
@@ -135,13 +138,22 @@ type Reader interface {
 	Close() error
 }
 
-// ZSTDDecoder is the decompressor.  Tested with github.com/klauspost/compress/zstd.
+// ZSTDDecoder is the decompressor.
+//
+// It is compatible with the DecodeAll method provided by
+// github.com/klauspost/compress/zstd.
 type ZSTDDecoder interface {
 	DecodeAll(input, dst []byte) ([]byte, error)
 }
 
 // NewReader returns a Zstandard stream reader that can be randomly accessed by uncompressed offset.
-// Ideally, rs should implement io.ReaderAt.
+//
+// The stream must contain a final seek-table skippable frame. rs must be
+// non-nil unless WithREnvironment supplies a custom read environment. If rs
+// also implements io.ReaderAt, frame reads do not move rs's current offset.
+//
+// NewReader reads and validates the seek table during construction. The caller
+// remains responsible for closing rs and decoder, if they require closing.
 func NewReader(rs io.ReadSeeker, decoder ZSTDDecoder, opts ...rOption) (Reader, error) {
 	sr := readerImpl{
 		dec: decoder,
