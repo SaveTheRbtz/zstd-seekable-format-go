@@ -70,3 +70,39 @@ func TestDecoder(t *testing.T) {
 		assert.Nil(t, d.GetIndexByID(id))
 	}
 }
+
+func TestDecoderRejectsSeekTableEntryCountMismatch(t *testing.T) {
+	t.Parallel()
+
+	seekTable := mustCreateSeekTableFrame(t, []seekTableEntry{
+		{CompressedSize: 1, DecompressedSize: 1},
+		{CompressedSize: 1, DecompressedSize: 1},
+	}, 1)
+
+	d, err := NewDecoder(seekTable, nil)
+	require.ErrorContains(t, err, "seek table entry count mismatch")
+	assert.Nil(t, d)
+}
+
+func mustCreateSeekTableFrame(t testing.TB, entries []seekTableEntry, numberOfFrames uint32) []byte {
+	t.Helper()
+
+	const entrySize = 12
+	seekTable := make([]byte, len(entries)*entrySize+seekTableFooterOffset)
+	for i, entry := range entries {
+		entry.marshalBinaryInline(seekTable[i*entrySize : (i+1)*entrySize])
+	}
+
+	footer := seekTableFooter{
+		NumberOfFrames: numberOfFrames,
+		SeekTableDescriptor: seekTableDescriptor{
+			ChecksumFlag: true,
+		},
+		SeekableMagicNumber: seekableMagicNumber,
+	}
+	footer.marshalBinaryInline(seekTable[len(entries)*entrySize:])
+
+	frame, err := createSkippableFrame(seekableTag, seekTable)
+	require.NoError(t, err)
+	return frame
+}
