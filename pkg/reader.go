@@ -102,9 +102,7 @@ func (rs *readSeekerEnvImpl) ReadSkipFrame(skippableFrameOffset int64) ([]byte, 
 
 type readerImpl struct {
 	dec   ZSTDDecoder
-	index frameIndex
-
-	checksums bool
+	table parsedSeekTable
 
 	offset int64
 
@@ -118,6 +116,7 @@ type readerImpl struct {
 }
 
 var (
+	_ Reader      = (*readerImpl)(nil)
 	_ io.Seeker   = (*readerImpl)(nil)
 	_ io.Reader   = (*readerImpl)(nil)
 	_ io.ReaderAt = (*readerImpl)(nil)
@@ -125,6 +124,8 @@ var (
 )
 
 type Reader interface {
+	SeekTable
+
 	// Seek implements io.Seeker interface to randomly access data.
 	// This method is NOT goroutine-safe and CAN NOT be called
 	// concurrently since it modifies the underlying offset.
@@ -173,13 +174,12 @@ func NewReader(rs io.ReadSeeker, decoder ZSTDDecoder, opts ...rOption) (Reader, 
 		}
 	}
 
-	seekTable, err := readSeekTable(sr.env)
+	table, err := readSeekTable(sr.env)
 	if err != nil {
 		return nil, err
 	}
 
-	sr.index = seekTable.frameIndex
-	sr.checksums = seekTable.checksums
+	sr.table = table
 
 	return &sr, nil
 }
@@ -195,7 +195,7 @@ func (r *readerImpl) Read(p []byte) (n int, err error) {
 	offset, n, err := r.read(p, r.offset)
 	if err != nil {
 		if errors.Is(err, io.EOF) {
-			r.offset = r.index.size
+			r.offset = r.table.size
 		}
 		return
 	}
@@ -206,25 +206,25 @@ func (r *readerImpl) Read(p []byte) (n int, err error) {
 func (r *readerImpl) Close() error {
 	if r.closed.CompareAndSwap(false, true) {
 		r.cachedFrame.replace(math.MaxUint64, nil)
-		r.index = frameIndex{}
+		r.table = parsedSeekTable{}
 	}
 	return nil
 }
 
 func (r *readerImpl) Size() int64 {
-	return r.index.size
+	return r.table.size
 }
 
 func (r *readerImpl) NumFrames() int64 {
-	return r.index.numFrames()
+	return r.table.numFrames()
 }
 
 func (r *readerImpl) GetIndexByDecompOffset(off uint64) (found *env.FrameOffsetEntry) {
-	return r.index.byDecompOffset(off)
+	return r.table.byDecompOffset(off)
 }
 
 func (r *readerImpl) GetIndexByID(id int64) (found *env.FrameOffsetEntry) {
-	return r.index.byID(id)
+	return r.table.byID(id)
 }
 
 func (r *readerImpl) read(dst []byte, off int64) (int64, int, error) {
@@ -232,7 +232,7 @@ func (r *readerImpl) read(dst []byte, off int64) (int64, int, error) {
 		return 0, 0, fmt.Errorf("reader is closed")
 	}
 
-	if off >= r.index.size {
+	if off >= r.table.size {
 		return 0, 0, io.EOF
 	}
 	if off < 0 {
@@ -276,7 +276,7 @@ func (r *readerImpl) read(dst []byte, off int64) (int64, int, error) {
 			return 0, 0, fmt.Errorf("failed to decompress data data at: %d, %w", index.CompOffset, err)
 		}
 
-		if r.checksums {
+		if r.table.checksums {
 			checksum := uint32((xxhash.Sum64(decompressed) << 32) >> 32)
 			if index.Checksum != checksum {
 				return 0, 0, fmt.Errorf("checksum verification failed at: %d: expected: %d, actual: %d",
@@ -312,7 +312,7 @@ func (r *readerImpl) Seek(offset int64, whence int) (int64, error) {
 	case io.SeekStart:
 		newOffset = offset
 	case io.SeekEnd:
-		newOffset = r.index.size + offset
+		newOffset = r.table.size + offset
 	default:
 		return 0, fmt.Errorf("unknown whence: %d", whence)
 	}

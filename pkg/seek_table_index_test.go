@@ -17,7 +17,7 @@ func TestParseSeekTableRejectsEntryCountMismatch(t *testing.T) {
 
 	table, err := parseSeekTable(frame)
 	require.ErrorContains(t, err, "seek table entry count mismatch")
-	assert.Equal(t, seekTable{}, table)
+	assert.Equal(t, parsedSeekTable{}, table)
 }
 
 func TestParseSeekTableZeroSizeEntries(t *testing.T) {

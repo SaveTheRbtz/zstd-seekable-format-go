@@ -77,13 +77,19 @@ func TestDecoderCloseReleasesIndex(t *testing.T) {
 	d, err := NewDecoder(checksum[17+18:])
 	require.NoError(t, err)
 
-	impl := d.(*decoderImpl)
-	require.NotEmpty(t, impl.index.entries)
-	require.NotZero(t, impl.index.size)
+	impl := d.(*seekTableDecoder)
+	table := impl.table.Load()
+	require.NotNil(t, table)
+	require.NotEmpty(t, table.entries)
+	require.NotZero(t, table.size)
 
 	require.NoError(t, d.Close())
-	assert.Equal(t, frameIndex{}, impl.index)
+	assert.Nil(t, impl.table.Load())
+	assert.Zero(t, d.Size())
+	assert.Zero(t, d.NumFrames())
+	assert.Nil(t, d.GetIndexByID(0))
+	assert.Nil(t, d.GetIndexByDecompOffset(0))
 
 	require.NoError(t, d.Close())
-	assert.Equal(t, frameIndex{}, impl.index)
+	assert.Nil(t, impl.table.Load())
 }

@@ -7,65 +7,65 @@ import (
 	"github.com/SaveTheRbtz/zstd-seekable-format-go/pkg/env"
 )
 
-type seekTable struct {
+type parsedSeekTable struct {
 	frameIndex
 	checksums bool
 }
 
 const skippableFrameHeaderSize = frameSizeFieldSize + skippableMagicNumberFieldSize
 
-func readSeekTable(renv env.REnvironment) (seekTable, error) {
+func readSeekTable(renv env.REnvironment) (parsedSeekTable, error) {
 	footerBuf, err := renv.ReadFooter()
 	if err != nil {
-		return seekTable{}, fmt.Errorf("failed to read footer: %w", err)
+		return parsedSeekTable{}, fmt.Errorf("failed to read footer: %w", err)
 	}
 
 	footer, entrySize, err := parseSeekTableFooter(footerBuf)
 	if err != nil {
-		return seekTable{}, err
+		return parsedSeekTable{}, err
 	}
 
 	frameOffset, err := seekTableFrameOffset(footer, entrySize)
 	if err != nil {
-		return seekTable{}, err
+		return parsedSeekTable{}, err
 	}
 
 	frameBuf, err := renv.ReadSkipFrame(frameOffset)
 	if err != nil {
-		return seekTable{}, fmt.Errorf("failed to read seek table frame: %w", err)
+		return parsedSeekTable{}, fmt.Errorf("failed to read seek table frame: %w", err)
 	}
 
 	return parseSeekTable(frameBuf)
 }
 
-func parseSeekTable(buf []byte) (seekTable, error) {
+func parseSeekTable(buf []byte) (parsedSeekTable, error) {
 	footer, entrySize, err := parseSeekTableFooter(buf)
 	if err != nil {
-		return seekTable{}, err
+		return parsedSeekTable{}, err
 	}
 	if _, err := seekTableFrameOffset(footer, entrySize); err != nil {
-		return seekTable{}, err
+		return parsedSeekTable{}, err
 	}
 
 	if len(buf) < skippableFrameHeaderSize+seekTableFooterOffset {
-		return seekTable{}, fmt.Errorf("skip frame is too small: %d", len(buf))
+		return parsedSeekTable{}, fmt.Errorf("skip frame is too small: %d", len(buf))
 	}
 
 	magic := binary.LittleEndian.Uint32(buf[0:4])
 	if magic != skippableFrameMagic+seekableTag {
-		return seekTable{}, fmt.Errorf("skippable frame magic mismatch %d vs %d",
+		return parsedSeekTable{}, fmt.Errorf("skippable frame magic mismatch %d vs %d",
 			magic, skippableFrameMagic+seekableTag)
 	}
 
 	expectedFrameSize := int64(len(buf)) - skippableFrameHeaderSize
 	frameSize := int64(binary.LittleEndian.Uint32(buf[4:8]))
 	if frameSize != expectedFrameSize {
-		return seekTable{}, fmt.Errorf("skippable frame size mismatch: expected: %d, actual: %d",
+		return parsedSeekTable{}, fmt.Errorf("skippable frame size mismatch: expected: %d, actual: %d",
 			expectedFrameSize, frameSize)
 	}
 
 	if frameSize > maxDecoderFrameSize {
-		return seekTable{}, fmt.Errorf("frame is too big: %d > %d", frameSize, maxDecoderFrameSize)
+		return parsedSeekTable{}, fmt.Errorf("frame is too big: %d > %d", frameSize, maxDecoderFrameSize)
 	}
 
 	index, err := parseSeekTableEntries(
@@ -74,10 +74,10 @@ func parseSeekTable(buf []byte) (seekTable, error) {
 		footer.NumberOfFrames,
 	)
 	if err != nil {
-		return seekTable{}, err
+		return parsedSeekTable{}, err
 	}
 
-	return seekTable{
+	return parsedSeekTable{
 		frameIndex: index,
 		checksums:  footer.SeekTableDescriptor.ChecksumFlag,
 	}, nil
