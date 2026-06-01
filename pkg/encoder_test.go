@@ -37,10 +37,10 @@ func TestEncoder(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, sourceString, string(decompressed))
 
-	// Seekable Decoder.
-	d, err := NewDecoder(footer)
+	// Seek table metadata.
+	table, err := ParseSeekTable(footer)
 	require.NoError(t, err)
 
-	assert.Equal(t, int64(len(sourceString)), d.Size())
-	assert.Equal(t, int64(2), d.NumFrames())
+	assert.Equal(t, int64(len(sourceString)), table.Size())
+	assert.Equal(t, int64(2), table.NumFrames())
 }

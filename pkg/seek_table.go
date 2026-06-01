@@ -19,15 +19,12 @@ type SeekTable interface {
 	NumFrames() int64
 }
 
-// Decoder is a parsed seek table for callers that do not need an io.ReadSeeker.
-type Decoder = SeekTable
+var _ SeekTable = (*parsedSeekTable)(nil)
 
-var _ Decoder = (*parsedSeekTable)(nil)
-
-// NewDecoder creates a metadata Decoder from a seek table.
+// ParseSeekTable parses a seek table into random-access metadata.
 // The seek table can be produced by either Writer's WriteSeekTable or Encoder's EndStream.
 // Lookup methods can be used concurrently.
-func NewDecoder(seekTable []byte) (Decoder, error) {
+func ParseSeekTable(seekTable []byte) (SeekTable, error) {
 	table, err := parseSeekTable(seekTable)
 	if err != nil {
 		return nil, err

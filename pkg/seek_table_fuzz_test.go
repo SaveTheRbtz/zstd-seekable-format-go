@@ -48,15 +48,15 @@ func FuzzCorruptSeekTable(f *testing.F) {
 			}
 		}
 
-		d, err := NewDecoder(mutated)
+		table, err := ParseSeekTable(mutated)
 		if err != nil {
 			return
 		}
 
-		_ = d.Size()
-		_ = d.NumFrames()
-		_ = d.GetIndexByDecompOffset(uint64(off))
-		_ = d.GetIndexByID(off)
+		_ = table.Size()
+		_ = table.NumFrames()
+		_ = table.GetIndexByDecompOffset(uint64(off))
+		_ = table.GetIndexByID(off)
 
 		stream := append(append([]byte(nil), noChecksum[:35]...), mutated...)
 		sr := &seekableBufferReaderAt{buf: stream}

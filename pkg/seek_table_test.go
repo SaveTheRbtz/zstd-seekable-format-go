@@ -8,18 +8,18 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestDecoder(t *testing.T) {
+func TestParseSeekTable(t *testing.T) {
 	t.Parallel()
 
 	dec, err := zstd.NewReader(nil)
 	require.NoError(t, err)
 	defer dec.Close()
 
-	d, err := NewDecoder(checksum[17+18:])
+	table, err := ParseSeekTable(checksum[17+18:])
 	require.NoError(t, err)
 
-	assert.Equal(t, int64(len(sourceString)), d.Size())
-	assert.Equal(t, int64(2), d.NumFrames())
+	assert.Equal(t, int64(len(sourceString)), table.Size())
+	assert.Equal(t, int64(2), table.NumFrames())
 
 	for _, tc := range []struct {
 		name    string
@@ -33,8 +33,8 @@ func TestDecoder(t *testing.T) {
 		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			for _, off := range tc.offsets {
-				indexByOffset := d.GetIndexByDecompOffset(off)
-				indexByID := d.GetIndexByID(tc.id)
+				indexByOffset := table.GetIndexByDecompOffset(off)
+				indexByID := table.GetIndexByID(tc.id)
 				assert.Equal(t, indexByID, indexByOffset)
 				require.NotNil(t, indexByOffset)
 				assert.Equal(t, tc.id, indexByOffset.ID)
@@ -51,20 +51,20 @@ func TestDecoder(t *testing.T) {
 	}
 
 	for _, off := range []uint64{9, 99} {
-		assert.Nil(t, d.GetIndexByDecompOffset(off))
+		assert.Nil(t, table.GetIndexByDecompOffset(off))
 	}
 
 	for _, id := range []int64{-1, 2, 99} {
-		assert.Nil(t, d.GetIndexByID(id))
+		assert.Nil(t, table.GetIndexByID(id))
 	}
 }
 
-func TestDecoderIsMetadataOnly(t *testing.T) {
+func TestParseSeekTableIsMetadataOnly(t *testing.T) {
 	t.Parallel()
 
-	d, err := NewDecoder(checksum[17+18:])
+	table, err := ParseSeekTable(checksum[17+18:])
 	require.NoError(t, err)
 
-	_, ok := d.(Reader)
+	_, ok := table.(Reader)
 	assert.False(t, ok)
 }

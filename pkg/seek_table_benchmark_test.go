@@ -6,7 +6,7 @@ import (
 	"github.com/SaveTheRbtz/zstd-seekable-format-go/pkg/env"
 )
 
-var decoderBenchmarkSizes = []struct {
+var seekTableBenchmarkSizes = []struct {
 	name string
 	size int
 }{
@@ -16,9 +16,9 @@ var decoderBenchmarkSizes = []struct {
 }
 
 var (
-	benchmarkDecoderSink Decoder
-	benchmarkEntrySink   *env.FrameOffsetEntry
-	benchmarkIntSink     int64
+	benchmarkSeekTableSink SeekTable
+	benchmarkEntrySink     *env.FrameOffsetEntry
+	benchmarkIntSink       int64
 )
 
 func benchmarkSeekTable(b testing.TB, size int) []byte {
@@ -47,39 +47,39 @@ func benchmarkSeekTable(b testing.TB, size int) []byte {
 	return frame
 }
 
-func benchmarkDecoder(b *testing.B, size int) Decoder {
+func benchmarkParsedSeekTable(b *testing.B, size int) SeekTable {
 	b.Helper()
 
 	seekTable := benchmarkSeekTable(b, size)
-	d, err := NewDecoder(seekTable)
+	table, err := ParseSeekTable(seekTable)
 	if err != nil {
 		b.Fatal(err)
 	}
-	return d
+	return table
 }
 
-func BenchmarkDecoderIndexBuild(b *testing.B) {
-	for _, benchmarkSize := range decoderBenchmarkSizes {
+func BenchmarkSeekTableIndexBuild(b *testing.B) {
+	for _, benchmarkSize := range seekTableBenchmarkSizes {
 		b.Run(benchmarkSize.name, func(b *testing.B) {
 			seekTable := benchmarkSeekTable(b, benchmarkSize.size)
 
 			b.ReportAllocs()
 			b.ResetTimer()
 			for i := 0; i < b.N; i++ {
-				d, err := NewDecoder(seekTable)
+				table, err := ParseSeekTable(seekTable)
 				if err != nil {
 					b.Fatal(err)
 				}
-				benchmarkDecoderSink = d
+				benchmarkSeekTableSink = table
 			}
 		})
 	}
 }
 
-func BenchmarkDecoderGetIndexByDecompOffset(b *testing.B) {
-	for _, benchmarkSize := range decoderBenchmarkSizes {
+func BenchmarkSeekTableGetIndexByDecompOffset(b *testing.B) {
+	for _, benchmarkSize := range seekTableBenchmarkSizes {
 		b.Run(benchmarkSize.name, func(b *testing.B) {
-			d := benchmarkDecoder(b, benchmarkSize.size)
+			table := benchmarkParsedSeekTable(b, benchmarkSize.size)
 
 			cases := []struct {
 				name string
@@ -96,7 +96,7 @@ func BenchmarkDecoderGetIndexByDecompOffset(b *testing.B) {
 					b.ReportAllocs()
 					b.ResetTimer()
 					for i := 0; i < b.N; i++ {
-						benchmarkEntrySink = d.GetIndexByDecompOffset(tc.off)
+						benchmarkEntrySink = table.GetIndexByDecompOffset(tc.off)
 					}
 				})
 			}
@@ -108,7 +108,7 @@ func BenchmarkDecoderGetIndexByDecompOffset(b *testing.B) {
 				b.ReportAllocs()
 				b.ResetTimer()
 				for i := 0; i < b.N; i++ {
-					index := d.GetIndexByDecompOffset(uint64(i) & mask)
+					index := table.GetIndexByDecompOffset(uint64(i) & mask)
 					if index != nil {
 						ids += index.ID
 					}
@@ -125,7 +125,7 @@ func BenchmarkDecoderGetIndexByDecompOffset(b *testing.B) {
 				b.ResetTimer()
 				for i := 0; i < b.N; i++ {
 					x = x*6364136223846793005 + 1
-					index := d.GetIndexByDecompOffset(x & mask)
+					index := table.GetIndexByDecompOffset(x & mask)
 					if index != nil {
 						ids += index.ID
 					}
@@ -136,10 +136,10 @@ func BenchmarkDecoderGetIndexByDecompOffset(b *testing.B) {
 	}
 }
 
-func BenchmarkDecoderGetIndexByID(b *testing.B) {
-	for _, benchmarkSize := range decoderBenchmarkSizes {
+func BenchmarkSeekTableGetIndexByID(b *testing.B) {
+	for _, benchmarkSize := range seekTableBenchmarkSizes {
 		b.Run(benchmarkSize.name, func(b *testing.B) {
-			d := benchmarkDecoder(b, benchmarkSize.size)
+			table := benchmarkParsedSeekTable(b, benchmarkSize.size)
 
 			cases := []struct {
 				name string
@@ -157,7 +157,7 @@ func BenchmarkDecoderGetIndexByID(b *testing.B) {
 					b.ReportAllocs()
 					b.ResetTimer()
 					for i := 0; i < b.N; i++ {
-						benchmarkEntrySink = d.GetIndexByID(tc.id)
+						benchmarkEntrySink = table.GetIndexByID(tc.id)
 					}
 				})
 			}
@@ -169,7 +169,7 @@ func BenchmarkDecoderGetIndexByID(b *testing.B) {
 				b.ReportAllocs()
 				b.ResetTimer()
 				for i := 0; i < b.N; i++ {
-					index := d.GetIndexByID(int64(i) & mask)
+					index := table.GetIndexByID(int64(i) & mask)
 					if index != nil {
 						ids += index.ID
 					}
@@ -186,7 +186,7 @@ func BenchmarkDecoderGetIndexByID(b *testing.B) {
 				b.ResetTimer()
 				for i := 0; i < b.N; i++ {
 					x = x*6364136223846793005 + 1
-					index := d.GetIndexByID(int64(x & mask))
+					index := table.GetIndexByID(int64(x & mask))
 					if index != nil {
 						ids += index.ID
 					}
