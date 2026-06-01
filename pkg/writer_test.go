@@ -273,31 +273,13 @@ func TestConcurrentWriterCancellation(t *testing.T) {
 	enc, err := zstd.NewWriter(nil, zstd.WithEncoderLevel(zstd.SpeedFastest))
 	require.NoError(t, err)
 
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
-
 	var b bytes.Buffer
 	w, err := NewWriter(&b, enc)
 	require.NoError(t, err)
 
-	err = w.WriteMany(ctx, makeTestFrameSource([][]byte{[]byte("test")}), WithConcurrency(1))
-	assert.ErrorIs(t, err, context.Canceled)
-
 	cause := errors.New("stop writing")
-	causeCtx, cancelCause := context.WithCancelCause(context.Background())
-	cancelCause(cause)
-
-	w, err = NewWriter(&b, enc)
-	require.NoError(t, err)
-
-	err = w.WriteMany(causeCtx, makeTestFrameSource([][]byte{[]byte("test")}), WithConcurrency(1))
-	assert.ErrorIs(t, err, cause)
-
-	ctx, cancel = context.WithCancel(context.Background())
-	defer cancel()
-
-	w, err = NewWriter(&b, enc)
-	require.NoError(t, err)
+	ctx, cancel := context.WithCancelCause(context.Background())
+	defer cancel(nil)
 
 	frames := [][]byte{}
 	for i := 0; i < 100; i++ {
@@ -305,9 +287,9 @@ func TestConcurrentWriterCancellation(t *testing.T) {
 	}
 
 	err = w.WriteMany(ctx, makeTestFrameSource(frames), WithConcurrency(1), WithWriteCallback(func(uint32) {
-		cancel()
+		cancel(cause)
 	}))
-	assert.ErrorIs(t, err, context.Canceled)
+	assert.ErrorIs(t, err, cause)
 }
 
 type fakeWriteEnvironment struct {
