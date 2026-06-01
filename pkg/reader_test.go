@@ -194,6 +194,37 @@ func TestReader(t *testing.T) {
 	}
 }
 
+func TestGetFrameByIndexShortReaderAt(t *testing.T) {
+	t.Parallel()
+
+	r := &readSeekerEnvImpl{rs: bytes.NewReader([]byte{0})}
+
+	_, err := r.GetFrameByIndex(env.FrameOffsetEntry{CompSize: 2})
+	require.ErrorIs(t, err, io.ErrUnexpectedEOF)
+}
+
+type shortErrorReaderAt struct {
+	*bytes.Reader
+	err error
+}
+
+func (r *shortErrorReaderAt) ReadAt(p []byte, off int64) (int, error) {
+	return 1, r.err
+}
+
+func TestGetFrameByIndexPreservesReaderAtError(t *testing.T) {
+	t.Parallel()
+
+	expectedErr := errors.New("read failed")
+	r := &readSeekerEnvImpl{rs: &shortErrorReaderAt{
+		Reader: bytes.NewReader([]byte{0}),
+		err:    expectedErr,
+	}}
+
+	_, err := r.GetFrameByIndex(env.FrameOffsetEntry{CompSize: 2})
+	require.ErrorIs(t, err, expectedErr)
+}
+
 func TestReaderEdges(t *testing.T) {
 	dec, err := zstd.NewReader(nil)
 	require.NoError(t, err)
