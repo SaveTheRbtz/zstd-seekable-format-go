@@ -19,19 +19,14 @@ type SeekTable interface {
 	NumFrames() int64
 }
 
-// Decoder is a closable parsed seek table that is useful when wrapping io.ReadSeeker is not desirable.
-type Decoder interface {
-	SeekTable
-
-	// Close closes the decoder freeing up any resources.
-	Close() error
-}
+// Decoder is a parsed seek table for callers that do not need an io.ReadSeeker.
+type Decoder = SeekTable
 
 var _ Decoder = (*parsedSeekTable)(nil)
 
 // NewDecoder creates a metadata Decoder from a seek table.
 // The seek table can be produced by either Writer's WriteSeekTable or Encoder's EndStream.
-// Lookup methods can be used concurrently. Close should be called after lookups have finished.
+// Lookup methods can be used concurrently.
 func NewDecoder(seekTable []byte) (Decoder, error) {
 	table, err := parseSeekTable(seekTable)
 	if err != nil {
@@ -39,9 +34,4 @@ func NewDecoder(seekTable []byte) (Decoder, error) {
 	}
 
 	return &table, nil
-}
-
-func (t *parsedSeekTable) Close() error {
-	*t = parsedSeekTable{}
-	return nil
 }

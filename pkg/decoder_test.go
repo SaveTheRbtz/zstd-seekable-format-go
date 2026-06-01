@@ -17,7 +17,6 @@ func TestDecoder(t *testing.T) {
 
 	d, err := NewDecoder(checksum[17+18:])
 	require.NoError(t, err)
-	defer func() { require.NoError(t, d.Close()) }()
 
 	assert.Equal(t, int64(len(sourceString)), d.Size())
 	assert.Equal(t, int64(2), d.NumFrames())
@@ -65,29 +64,7 @@ func TestDecoderIsMetadataOnly(t *testing.T) {
 
 	d, err := NewDecoder(checksum[17+18:])
 	require.NoError(t, err)
-	defer func() { require.NoError(t, d.Close()) }()
 
 	_, ok := d.(Reader)
 	assert.False(t, ok)
-}
-
-func TestDecoderCloseReleasesIndex(t *testing.T) {
-	t.Parallel()
-
-	d, err := NewDecoder(checksum[17+18:])
-	require.NoError(t, err)
-
-	table := d.(*parsedSeekTable)
-	require.NotEmpty(t, table.entries)
-	require.NotZero(t, table.size)
-
-	require.NoError(t, d.Close())
-	assert.Equal(t, parsedSeekTable{}, *table)
-	assert.Zero(t, d.Size())
-	assert.Zero(t, d.NumFrames())
-	assert.Nil(t, d.GetIndexByID(0))
-	assert.Nil(t, d.GetIndexByDecompOffset(0))
-
-	require.NoError(t, d.Close())
-	assert.Equal(t, parsedSeekTable{}, *table)
 }

@@ -71,9 +71,6 @@ func BenchmarkDecoderIndexBuild(b *testing.B) {
 					b.Fatal(err)
 				}
 				benchmarkDecoderSink = d
-				if err := d.Close(); err != nil {
-					b.Fatal(err)
-				}
 			}
 		})
 	}
@@ -83,11 +80,6 @@ func BenchmarkDecoderGetIndexByDecompOffset(b *testing.B) {
 	for _, benchmarkSize := range decoderBenchmarkSizes {
 		b.Run(benchmarkSize.name, func(b *testing.B) {
 			d := benchmarkDecoder(b, benchmarkSize.size)
-			defer func() {
-				if err := d.Close(); err != nil {
-					b.Fatal(err)
-				}
-			}()
 
 			cases := []struct {
 				name string
@@ -148,11 +140,6 @@ func BenchmarkDecoderGetIndexByID(b *testing.B) {
 	for _, benchmarkSize := range decoderBenchmarkSizes {
 		b.Run(benchmarkSize.name, func(b *testing.B) {
 			d := benchmarkDecoder(b, benchmarkSize.size)
-			defer func() {
-				if err := d.Close(); err != nil {
-					b.Fatal(err)
-				}
-			}()
 
 			cases := []struct {
 				name string

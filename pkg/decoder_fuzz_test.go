@@ -52,7 +52,6 @@ func FuzzCorruptSeekTable(f *testing.F) {
 		if err != nil {
 			return
 		}
-		defer func() { require.NoError(t, d.Close()) }()
 
 		_ = d.Size()
 		_ = d.NumFrames()
