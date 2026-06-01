@@ -307,11 +307,14 @@ func TestWriterCloseSemantics(t *testing.T) {
 	var b bytes.Buffer
 	w, err := NewWriter(&b, enc)
 	require.NoError(t, err)
+	sw := w.(*writerImpl)
 
 	_, err = w.Write([]byte("foo"))
 	require.NoError(t, err)
+	require.NotEmpty(t, sw.frameEntries)
 
 	require.NoError(t, w.Close())
+	assert.Nil(t, sw.frameEntries)
 
 	// double close should return an error
 	err = w.Close()
