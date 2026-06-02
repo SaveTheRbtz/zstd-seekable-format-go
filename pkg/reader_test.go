@@ -581,6 +581,10 @@ func TestNoReaderAt(t *testing.T) {
 
 			_, err = r.Read(tmp)
 			require.ErrorIs(t, err, io.EOF)
+
+			m, err = r.Seek(0, io.SeekCurrent)
+			require.NoError(t, err)
+			assert.Equal(t, int64(999), m)
 		})
 	}
 }

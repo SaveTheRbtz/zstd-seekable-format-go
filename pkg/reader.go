@@ -218,9 +218,6 @@ func (r *Reader) ReadAt(p []byte, off int64) (n int, err error) {
 func (r *Reader) Read(p []byte) (n int, err error) {
 	offset, n, err := r.read(p, r.offset)
 	if err != nil {
-		if errors.Is(err, io.EOF) {
-			r.offset = int64(r.table.Size())
-		}
 		return
 	}
 	r.offset = offset
