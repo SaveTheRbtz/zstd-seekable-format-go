@@ -177,8 +177,8 @@ func main() {
 		return bytes.Clone(chunk.Data), nil
 	}
 
-	err = w.WriteMany(ctx, frameSource, seekable.WithWriteCallback(func(size uint32) {
-		_ = bar.Add(int(size))
+	err = w.WriteMany(ctx, frameSource, seekable.WithWriteCallback(func(entry seekable.FrameOffsetEntry) {
+		_ = bar.Add(int(entry.DecompressedSize))
 	}))
 	if err != nil {
 		fatal("failed to write data", slog.Any("error", err))
