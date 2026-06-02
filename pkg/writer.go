@@ -114,7 +114,7 @@ func NewWriter(w io.Writer, encoder ZSTDEncoder, opts ...WriterOption) (Concurre
 
 	sw.logger = discardLogger
 	for _, o := range opts {
-		err := o.applyWriter(&sw)
+		err := o(&sw)
 		if err != nil {
 			return nil, err
 		}

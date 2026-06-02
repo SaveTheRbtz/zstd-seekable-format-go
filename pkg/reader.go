@@ -160,7 +160,7 @@ func NewReader(rs io.ReadSeeker, decoder ZSTDDecoder, opts ...ReaderOption) (Rea
 
 	sr.logger = discardLogger
 	for _, o := range opts {
-		err := o.applyReader(&sr)
+		err := o(&sr)
 		if err != nil {
 			return nil, err
 		}
