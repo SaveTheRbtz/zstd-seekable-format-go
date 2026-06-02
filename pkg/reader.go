@@ -100,10 +100,16 @@ func (rs *readSeekerEnvImpl) ReadSkipFrame(skippableFrameOffset int64) ([]byte, 
 	return buf, nil
 }
 
-// Reader provides sequential and random access to a seekable Zstandard stream.
+// Reader provides sequential and random access to a seekable Zstandard stream
+// and exposes its parsed seek-table metadata.
 //
 // Offsets are expressed in the decompressed stream. Read and Seek use an
 // internal current offset; ReadAt does not.
+//
+// Before Close, ReadAt and SeekTable may be called concurrently if the supplied
+// decoder and read environment support concurrent use. Read and Seek share the
+// internal current offset and should be serialized by the caller. No other
+// Reader method should be called concurrently with Close.
 type Reader struct {
 	dec   ZSTDDecoder
 	table SeekTable
@@ -130,6 +136,9 @@ var (
 //
 // It is compatible with the DecodeAll method provided by
 // github.com/klauspost/compress/zstd.
+//
+// Reader may call DecodeAll concurrently from concurrent ReadAt calls. Decoders
+// used that way must support concurrent DecodeAll calls.
 type ZSTDDecoder interface {
 	DecodeAll(input, dst []byte) ([]byte, error)
 }
@@ -180,6 +189,8 @@ func NewReader(rs io.ReadSeeker, decoder ZSTDDecoder, opts ...ReaderOption) (*Re
 // SeekTable returns the parsed seek table for this Reader.
 //
 // The returned SeekTable is immutable. SeekTable returns ErrClosed after Close.
+// Before Close, SeekTable may be called concurrently with other Reader methods
+// except Close.
 func (r *Reader) SeekTable() (SeekTable, error) {
 	if r.closed.Load() {
 		return SeekTable{}, ErrClosed
@@ -190,6 +201,8 @@ func (r *Reader) SeekTable() (SeekTable, error) {
 // ReadAt reads len(p) decompressed bytes starting at off.
 //
 // ReadAt does not move the Reader's current offset.
+// Before Close, ReadAt may be called concurrently if the supplied decoder and
+// read environment support concurrent use.
 func (r *Reader) ReadAt(p []byte, off int64) (n int, err error) {
 	if r.closed.Load() {
 		return 0, ErrClosed

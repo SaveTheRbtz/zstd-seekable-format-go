@@ -56,12 +56,18 @@ var (
 //
 // When there are no more frames, it returns nil, nil. A non-nil error stops the
 // write. Empty frames are ignored by Writer.WriteMany.
+//
+// WriteMany may retain each returned slice until WriteMany returns. FrameSource
+// implementations must not mutate or reuse returned slices before then.
 type FrameSource func() ([]byte, error)
 
 // ZSTDEncoder is the compressor.
 //
 // It is compatible with the EncodeAll method provided by
 // github.com/klauspost/compress/zstd.
+//
+// Writer.WriteMany may call EncodeAll concurrently. Encoders used with
+// WriteMany must support concurrent EncodeAll calls.
 type ZSTDEncoder interface {
 	EncodeAll(src, dst []byte) []byte
 }

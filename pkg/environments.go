@@ -24,6 +24,10 @@ type ReaderEnvironment interface {
 	//
 	// The returned slice must contain exactly index.CompressedSize bytes starting
 	// at index.CompressedOffset in the compressed stream.
+	//
+	// Reader may call GetFrameByIndex concurrently from concurrent ReadAt calls.
+	// Implementations used that way must support concurrent calls and must not
+	// mutate returned slices after returning them.
 	GetFrameByIndex(index FrameOffsetEntry) ([]byte, error)
 
 	// ReadFooter returns bytes whose last 9 bytes are interpreted as a Seek_Table_Footer.

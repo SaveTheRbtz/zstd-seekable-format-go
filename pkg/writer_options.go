@@ -6,6 +6,7 @@ import (
 )
 
 // WriterOption configures NewWriter and NewEncoder.
+// Options that configure output environments apply only to NewWriter.
 type WriterOption func(*Writer) error
 
 // WithWriterLogger sets the logger used by Writer and Encoder internals.
@@ -20,8 +21,9 @@ func WithWriterLogger(l *slog.Logger) WriterOption {
 
 // WithWriterEnvironment sets a custom write environment for advanced storage implementations.
 //
-// When this option is supplied, NewWriter uses e instead of the io.Writer
-// argument for all frame and seek-table writes.
+// When this option is supplied to NewWriter, NewWriter uses e instead of the
+// io.Writer argument for all frame and seek-table writes. NewEncoder returns
+// compressed frames directly, so WithWriterEnvironment has no effect there.
 func WithWriterEnvironment(e WriterEnvironment) WriterOption {
 	return func(w *Writer) error { w.env = e; return nil }
 }
