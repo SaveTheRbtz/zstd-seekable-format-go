@@ -4,15 +4,20 @@ import "sort"
 
 // SeekTable is parsed random-access metadata from a Zstandard seek-table skippable frame.
 //
-// Use NewSeekTable to construct a SeekTable from bytes written by Writer.Close
-// or returned by Encoder.EndStream. Lookup methods can be used concurrently.
+// Use NewSeekTable to construct a SeekTable from bytes written through
+// WEnvironment.WriteSeekTable or returned by Encoder.EndStream. Lookup methods
+// can be used concurrently.
 type SeekTable struct {
 	entries   []FrameOffsetEntry
 	checksums bool
 }
 
-// NewSeekTable parses the seek-table skippable frame written by Writer.Close
-// or returned by Encoder.EndStream.
+// NewSeekTable parses a seek-table skippable frame.
+//
+// buf must contain the final seek-table skippable frame itself, including the
+// skippable-frame magic number and frame-size header. This is the byte sequence
+// returned by Encoder.EndStream or passed to WEnvironment.WriteSeekTable, not
+// the whole compressed stream.
 func NewSeekTable(buf []byte) (*SeekTable, error) {
 	table, err := parseSeekTableFrame(buf)
 	if err != nil {

@@ -42,11 +42,17 @@ var (
 	_ io.Closer = (*writerImpl)(nil)
 )
 
+// Writer writes a seekable Zstandard stream.
+//
+// Each non-empty Write call becomes one Zstandard frame in the output stream.
+// Close must be called to write the final seek-table skippable frame; without
+// it, Reader and NewSeekTable cannot find the random-access metadata.
 type Writer interface {
 	// Write writes a chunk of data as a separate frame into the data stream.
 	//
 	// Note that Write does not do any coalescing nor splitting of data,
-	// so each write will map to a separate Zstandard frame.
+	// so each non-empty write will map to a separate Zstandard frame.
+	// Empty writes do not add seek-table entries.
 	Write(src []byte) (int, error)
 
 	// Close implements io.Closer. It writes the seek table, releases the in-memory
@@ -57,7 +63,9 @@ type Writer interface {
 }
 
 // FrameSource returns one frame of data at a time.
-// When there are no more frames, returns nil.
+//
+// When there are no more frames, it returns nil, nil. A non-nil error stops the
+// write. Empty frames are ignored by ConcurrentWriter.WriteMany.
 type FrameSource func() ([]byte, error)
 
 // ConcurrentWriter allows writing many frames concurrently.
@@ -65,15 +73,28 @@ type ConcurrentWriter interface {
 	Writer
 
 	// WriteMany writes many frames concurrently.
+	//
+	// It reads frames from frameSource sequentially, compresses up to the
+	// configured concurrency in parallel, and writes compressed frames in the
+	// same order returned by frameSource. Close must still be called after a
+	// successful WriteMany call to write the final seek table.
 	WriteMany(ctx context.Context, frameSource FrameSource, options ...WriteManyOption) error
 }
 
-// ZSTDEncoder is the compressor.  Tested with github.com/klauspost/compress/zstd.
+// ZSTDEncoder is the compressor.
+//
+// It is compatible with the EncodeAll method provided by
+// github.com/klauspost/compress/zstd.
 type ZSTDEncoder interface {
 	EncodeAll(src, dst []byte) []byte
 }
 
 // NewWriter wraps w and encoder into an indexed Zstandard stream.
+//
+// w must be non-nil unless WithWEnvironment supplies a custom write
+// environment. The caller remains responsible for closing w and encoder, if
+// they require closing.
+//
 // The resulting stream can be randomly accessed through Reader or NewSeekTable.
 func NewWriter(w io.Writer, encoder ZSTDEncoder, opts ...wOption) (ConcurrentWriter, error) {
 	sw := writerImpl{
