@@ -204,11 +204,11 @@ func TestFrameWriteFailureAllowsClose(t *testing.T) {
 
 	for _, tc := range []struct {
 		name  string
-		write func(t *testing.T, w ConcurrentWriter, frames [][]byte) error
+		write func(t *testing.T, w *Writer, frames [][]byte) error
 	}{
 		{
 			name: "Write",
-			write: func(t *testing.T, w ConcurrentWriter, frames [][]byte) error {
+			write: func(t *testing.T, w *Writer, frames [][]byte) error {
 				t.Helper()
 
 				_, err := w.Write(frames[0])
@@ -219,7 +219,7 @@ func TestFrameWriteFailureAllowsClose(t *testing.T) {
 		},
 		{
 			name: "WriteMany",
-			write: func(t *testing.T, w ConcurrentWriter, frames [][]byte) error {
+			write: func(t *testing.T, w *Writer, frames [][]byte) error {
 				t.Helper()
 
 				return w.WriteMany(context.Background(), makeTestFrameSource(frames), WithConcurrency(1))
@@ -420,7 +420,7 @@ func TestWriterCloseSemantics(t *testing.T) {
 	var b bytes.Buffer
 	w, err := NewWriter(&b, enc)
 	require.NoError(t, err)
-	sw := w.(*writerImpl)
+	sw := w
 
 	_, err = w.Write([]byte("foo"))
 	require.NoError(t, err)

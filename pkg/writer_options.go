@@ -6,7 +6,7 @@ import (
 )
 
 // WriterOption configures NewWriter and NewEncoder.
-type WriterOption func(*writerImpl) error
+type WriterOption func(*Writer) error
 
 // WithWriterLogger sets the logger used by Writer and Encoder internals.
 //
@@ -15,7 +15,7 @@ func WithWriterLogger(l *slog.Logger) WriterOption {
 	if l == nil {
 		l = discardLogger
 	}
-	return func(w *writerImpl) error { w.logger = l; return nil }
+	return func(w *Writer) error { w.logger = l; return nil }
 }
 
 // WithWriterEnvironment sets a custom write environment for advanced storage implementations.
@@ -23,7 +23,7 @@ func WithWriterLogger(l *slog.Logger) WriterOption {
 // When this option is supplied, NewWriter uses e instead of the io.Writer
 // argument for all frame and seek-table writes.
 func WithWriterEnvironment(e WriterEnvironment) WriterOption {
-	return func(w *writerImpl) error { w.env = e; return nil }
+	return func(w *Writer) error { w.env = e; return nil }
 }
 
 type writeManyOptions struct {
@@ -31,7 +31,7 @@ type writeManyOptions struct {
 	writeCallback func(uint32)
 }
 
-// WriteManyOption configures ConcurrentWriter.WriteMany.
+// WriteManyOption configures Writer.WriteMany.
 type WriteManyOption func(options *writeManyOptions) error
 
 // WithConcurrency sets the maximum number of concurrent frame encoding operations.

@@ -29,7 +29,13 @@ func (w *writerEnvImpl) WriteSeekTable(p []byte) (n int, err error) {
 	return w.w.Write(p)
 }
 
-type writerImpl struct {
+// Writer writes a seekable Zstandard stream.
+//
+// Each non-empty Write call becomes one Zstandard frame in the output stream.
+// Close must be called to write the final seek-table skippable frame; without
+// it, Reader and NewSeekTable cannot find the random-access metadata.
+// Close is idempotent. Write and WriteMany return ErrClosed after Close.
+type Writer struct {
 	enc          ZSTDEncoder
 	frameEntries []seekTableEntry
 
@@ -42,55 +48,15 @@ type writerImpl struct {
 }
 
 var (
-	_ io.Writer = (*writerImpl)(nil)
-	_ io.Closer = (*writerImpl)(nil)
+	_ io.Writer = (*Writer)(nil)
+	_ io.Closer = (*Writer)(nil)
 )
-
-// Writer writes a seekable Zstandard stream.
-//
-// Each non-empty Write call becomes one Zstandard frame in the output stream.
-// Close must be called to write the final seek-table skippable frame; without
-// it, Reader and NewSeekTable cannot find the random-access metadata.
-// Close is idempotent. Write and WriteMany return ErrClosed after Close.
-type Writer interface {
-	// Write writes a chunk of data as a separate frame into the data stream.
-	//
-	// Note that Write does not do any coalescing nor splitting of data,
-	// so each non-empty write will map to a separate Zstandard frame.
-	// Empty writes do not add seek-table entries.
-	//
-	// If the underlying frame write fails or writes only part of the frame, the
-	// writer stops accepting more frames. Close may still be called to write the
-	// seek table for frames that were fully written. Bytes already accepted by
-	// the underlying writer are not rolled back.
-	Write(src []byte) (int, error)
-
-	// Close implements io.Closer. It writes the seek table, releases the in-memory
-	// frame index, and causes future Writer method calls to fail.
-	//
-	// The caller is still responsible for closing the underlying writer.
-	Close() (err error)
-}
 
 // FrameSource returns one frame of data at a time.
 //
 // When there are no more frames, it returns nil, nil. A non-nil error stops the
-// write. Empty frames are ignored by ConcurrentWriter.WriteMany.
+// write. Empty frames are ignored by Writer.WriteMany.
 type FrameSource func() ([]byte, error)
-
-// ConcurrentWriter allows writing many frames concurrently.
-type ConcurrentWriter interface {
-	Writer
-
-	// WriteMany writes many frames concurrently.
-	//
-	// It reads frames from frameSource sequentially, compresses up to the
-	// configured concurrency in parallel, and writes compressed frames in the
-	// same order returned by frameSource. Close must still be called after a
-	// successful WriteMany call to write the final seek table. Frame write
-	// failures have the same no-more-frames behavior as Writer.Write.
-	WriteMany(ctx context.Context, frameSource FrameSource, options ...WriteManyOption) error
-}
 
 // ZSTDEncoder is the compressor.
 //
@@ -107,8 +73,8 @@ type ZSTDEncoder interface {
 // they require closing.
 //
 // The resulting stream can be randomly accessed through Reader or NewSeekTable.
-func NewWriter(w io.Writer, encoder ZSTDEncoder, opts ...WriterOption) (ConcurrentWriter, error) {
-	sw := writerImpl{
+func NewWriter(w io.Writer, encoder ZSTDEncoder, opts ...WriterOption) (*Writer, error) {
+	sw := Writer{
 		enc: encoder,
 	}
 
@@ -129,7 +95,17 @@ func NewWriter(w io.Writer, encoder ZSTDEncoder, opts ...WriterOption) (Concurre
 	return &sw, nil
 }
 
-func (s *writerImpl) Write(src []byte) (int, error) {
+// Write writes a chunk of data as a separate frame into the data stream.
+//
+// Note that Write does not do any coalescing nor splitting of data, so each
+// non-empty write will map to a separate Zstandard frame. Empty writes do not
+// add seek-table entries.
+//
+// If the underlying frame write fails or writes only part of the frame, the
+// writer stops accepting more frames. Close may still be called to write the
+// seek table for frames that were fully written. Bytes already accepted by the
+// underlying writer are not rolled back.
+func (s *Writer) Write(src []byte) (int, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -163,7 +139,11 @@ func (s *writerImpl) Write(src []byte) (int, error) {
 	return len(src), nil
 }
 
-func (s *writerImpl) Close() error {
+// Close implements io.Closer. It writes the seek table, releases the in-memory
+// frame index, and causes future Writer method calls to fail.
+//
+// The caller is still responsible for closing the underlying writer.
+func (s *Writer) Close() error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -182,7 +162,7 @@ type encodeResult struct {
 	entry seekTableEntry
 }
 
-func (s *writerImpl) writeManyEncoder(ctx context.Context, ch chan<- encodeResult, frame []byte) func() error {
+func (s *Writer) writeManyEncoder(ctx context.Context, ch chan<- encodeResult, frame []byte) func() error {
 	return func() error {
 		dst, entry, err := s.encodeOne(frame)
 		if err != nil {
@@ -200,7 +180,7 @@ func (s *writerImpl) writeManyEncoder(ctx context.Context, ch chan<- encodeResul
 	}
 }
 
-func (s *writerImpl) writeManyProducer(ctx context.Context, frameSource FrameSource, g *errgroup.Group, queue chan<- chan encodeResult) func() error {
+func (s *Writer) writeManyProducer(ctx context.Context, frameSource FrameSource, g *errgroup.Group, queue chan<- chan encodeResult) func() error {
 	return func() error {
 		for {
 			frame, err := frameSource()
@@ -231,7 +211,7 @@ func (s *writerImpl) writeManyProducer(ctx context.Context, frameSource FrameSou
 	}
 }
 
-func (s *writerImpl) writeManyConsumer(ctx context.Context, callback func(uint32), queue <-chan chan encodeResult) func() error {
+func (s *Writer) writeManyConsumer(ctx context.Context, callback func(uint32), queue <-chan chan encodeResult) func() error {
 	return func() error {
 		for {
 			var ch <-chan encodeResult
@@ -270,7 +250,14 @@ func (s *writerImpl) writeManyConsumer(ctx context.Context, callback func(uint32
 	}
 }
 
-func (s *writerImpl) WriteMany(ctx context.Context, frameSource FrameSource, options ...WriteManyOption) error {
+// WriteMany writes many frames concurrently.
+//
+// It reads frames from frameSource sequentially, compresses up to the
+// configured concurrency in parallel, and writes compressed frames in the same
+// order returned by frameSource. Close must still be called after a successful
+// WriteMany call to write the final seek table. Frame write failures have the
+// same no-more-frames behavior as Writer.Write.
+func (s *Writer) WriteMany(ctx context.Context, frameSource FrameSource, options ...WriteManyOption) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -300,7 +287,7 @@ func (s *writerImpl) WriteMany(ctx context.Context, frameSource FrameSource, opt
 	return g.Wait()
 }
 
-func (s *writerImpl) writeSeekTableLocked() error {
+func (s *Writer) writeSeekTableLocked() error {
 	seekTableBytes, err := s.endStreamLocked()
 	if err != nil {
 		return err

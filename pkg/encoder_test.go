@@ -56,7 +56,7 @@ func TestEncoderEndStreamFinalizes(t *testing.T) {
 
 	e, err := NewEncoder(enc)
 	require.NoError(t, err)
-	se := e.(*writerImpl)
+	se := e.writer
 
 	_, err = e.Encode([]byte("foo"))
 	require.NoError(t, err)
