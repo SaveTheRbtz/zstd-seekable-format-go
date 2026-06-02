@@ -138,6 +138,19 @@ func TestSeekTableFooterParsing(t *testing.T) {
 	}
 }
 
+func TestParseSeekTableFooterErrorIsBounded(t *testing.T) {
+	t.Parallel()
+
+	buf := make([]byte, 64<<10)
+	copy(buf[len(buf)-seekTableFooterOffset:], []byte{0x00, 0x00, 0x00, 0x00, 0x80, 0xea, 0x92, 0x8f, 0x00})
+
+	_, _, err := parseSeekTableFooter(buf)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "input len=65536")
+	assert.Contains(t, err.Error(), "footer excerpt")
+	assert.Less(t, len(err.Error()), 512)
+}
+
 func seekTableFooterBytes(descriptor byte) []byte {
 	return []byte{
 		0x00, 0x00, 0x00, 0x00,
