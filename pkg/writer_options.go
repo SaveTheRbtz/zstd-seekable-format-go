@@ -5,23 +5,24 @@ import (
 	"log/slog"
 )
 
-type wOption func(*writerImpl) error
+// WriterOption configures NewWriter and NewEncoder.
+type WriterOption func(*writerImpl) error
 
-// WithWLogger sets the logger used by Writer and Encoder internals.
+// WithWriterLogger sets the logger used by Writer and Encoder internals.
 //
 // Passing nil restores the default discard logger.
-func WithWLogger(l *slog.Logger) wOption {
+func WithWriterLogger(l *slog.Logger) WriterOption {
 	if l == nil {
 		l = discardLogger
 	}
 	return func(w *writerImpl) error { w.logger = l; return nil }
 }
 
-// WithWEnvironment sets a custom write environment for advanced storage implementations.
+// WithWriterEnvironment sets a custom write environment for advanced storage implementations.
 //
 // When this option is supplied, NewWriter uses e instead of the io.Writer
 // argument for all frame and seek-table writes.
-func WithWEnvironment(e WEnvironment) wOption {
+func WithWriterEnvironment(e WriterEnvironment) WriterOption {
 	return func(w *writerImpl) error { w.env = e; return nil }
 }
 

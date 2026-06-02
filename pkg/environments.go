@@ -1,8 +1,8 @@
 package seekable
 
-// WEnvironment is an advanced hook for custom storage implementations.
+// WriterEnvironment is an advanced hook for custom storage implementations.
 // It can be used to write frames and seek tables somewhere other than a normal io.Writer.
-type WEnvironment interface {
+type WriterEnvironment interface {
 	// WriteFrame writes one complete compressed Zstandard frame.
 	//
 	// It is called once for each non-empty frame, in stream order. It should
@@ -17,13 +17,13 @@ type WEnvironment interface {
 	WriteSeekTable(p []byte) (n int, err error)
 }
 
-// REnvironment is an advanced hook for custom storage implementations.
+// ReaderEnvironment is an advanced hook for custom storage implementations.
 // It can be used to read frames and seek tables from somewhere other than a normal io.ReadSeeker.
-type REnvironment interface {
+type ReaderEnvironment interface {
 	// GetFrameByIndex returns one complete compressed frame by seek-table entry.
 	//
-	// The returned slice must contain exactly index.CompSize bytes starting at
-	// index.CompOffset in the compressed stream.
+	// The returned slice must contain exactly index.CompressedSize bytes starting
+	// at index.CompressedOffset in the compressed stream.
 	GetFrameByIndex(index FrameOffsetEntry) ([]byte, error)
 
 	// ReadFooter returns bytes whose last 9 bytes are interpreted as a Seek_Table_Footer.

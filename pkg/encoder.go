@@ -27,7 +27,7 @@ type Encoder interface {
 // NewEncoder returns a byte-oriented encoder that uses encoder for Zstandard compression.
 //
 // The caller remains responsible for closing encoder, if it requires closing.
-func NewEncoder(encoder ZSTDEncoder, opts ...wOption) (Encoder, error) {
+func NewEncoder(encoder ZSTDEncoder, opts ...WriterOption) (Encoder, error) {
 	sw, err := NewWriter(nil, encoder, opts...)
 	if err != nil {
 		return nil, err

@@ -50,8 +50,8 @@ func TestParseSeekTableZeroSizeEntries(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			index, ok := table.EntryByID(int64(id))
 			require.True(t, ok)
-			assert.Equal(t, tc.decompOffset, index.DecompOffset)
-			assert.Equal(t, tc.decompSize, index.DecompSize)
+			assert.Equal(t, tc.decompOffset, index.DecompressedOffset)
+			assert.Equal(t, tc.decompSize, index.DecompressedSize)
 		})
 	}
 

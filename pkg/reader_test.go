@@ -229,7 +229,7 @@ func TestGetFrameByIndexShortReaderAt(t *testing.T) {
 
 	r := &readSeekerEnvImpl{rs: bytes.NewReader([]byte{0})}
 
-	_, err := r.GetFrameByIndex(FrameOffsetEntry{CompSize: 2})
+	_, err := r.GetFrameByIndex(FrameOffsetEntry{CompressedSize: 2})
 	require.ErrorIs(t, err, io.ErrUnexpectedEOF)
 }
 
@@ -251,7 +251,7 @@ func TestGetFrameByIndexPreservesReaderAtError(t *testing.T) {
 		err:    expectedErr,
 	}}
 
-	_, err := r.GetFrameByIndex(FrameOffsetEntry{CompSize: 2})
+	_, err := r.GetFrameByIndex(FrameOffsetEntry{CompressedSize: 2})
 	require.ErrorIs(t, err, expectedErr)
 }
 
@@ -459,7 +459,7 @@ func TestReadEnvironment(t *testing.T) {
 	require.NoError(t, err)
 	defer dec.Close()
 
-	r, err := NewReader(nil, dec, WithREnvironment(&fakeReadEnvironment{}))
+	r, err := NewReader(nil, dec, WithReaderEnvironment(&fakeReadEnvironment{}))
 	require.NoError(t, err)
 	defer func() { require.NoError(t, r.Close()) }()
 

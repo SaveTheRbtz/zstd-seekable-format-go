@@ -183,7 +183,7 @@ func TestConcurrentWriterErrors(t *testing.T) {
 
 	var b bytes.Buffer
 	w, err = NewWriter(&b, enc,
-		WithWEnvironment(failingWriteEnvironment{0, errors.New("test error")}))
+		WithWriterEnvironment(failingWriteEnvironment{0, errors.New("test error")}))
 	require.NoError(t, err)
 	err = w.WriteMany(ctx, makeTestFrameSource(manyFrames), WithConcurrency(1))
 	assert.ErrorContains(t, err, "failed to write compressed data")
@@ -191,7 +191,7 @@ func TestConcurrentWriterErrors(t *testing.T) {
 	assert.ErrorIs(t, err, errWriterFailed)
 
 	w, err = NewWriter(&b, enc,
-		WithWEnvironment(failingWriteEnvironment{1, nil}))
+		WithWriterEnvironment(failingWriteEnvironment{1, nil}))
 	require.NoError(t, err)
 	err = w.WriteMany(ctx, makeTestFrameSource(manyFrames), WithConcurrency(1))
 	assert.ErrorContains(t, err, "partial write")
@@ -236,7 +236,7 @@ func TestFrameWriteFailureAllowsClose(t *testing.T) {
 			defer dec.Close()
 
 			env := &partialSecondFrameEnvironment{}
-			w, err := NewWriter(nil, enc, WithWEnvironment(env))
+			w, err := NewWriter(nil, enc, WithWriterEnvironment(env))
 			require.NoError(t, err)
 
 			frames := [][]byte{[]byte("first"), []byte("second")}
@@ -312,7 +312,7 @@ func TestWriteEnvironment(t *testing.T) {
 	enc, err := zstd.NewWriter(nil, zstd.WithEncoderLevel(zstd.SpeedFastest))
 	require.NoError(t, err)
 
-	w, err := NewWriter(nil, enc, WithWEnvironment(&fakeWriteEnvironment{
+	w, err := NewWriter(nil, enc, WithWriterEnvironment(&fakeWriteEnvironment{
 		bw: io.Writer(&b),
 	}))
 	require.NoError(t, err)
@@ -399,13 +399,13 @@ func TestCloseErrors(t *testing.T) {
 
 	// environment returns error on WriteSeekTable
 	w, err := NewWriter(nil, enc,
-		WithWEnvironment(failingWriteEnvironment{0, errors.New("test error")}))
+		WithWriterEnvironment(failingWriteEnvironment{0, errors.New("test error")}))
 	require.NoError(t, err)
 	err = w.Close()
 	assert.ErrorContains(t, err, "test error")
 
 	// environment reports partial write
-	w, err = NewWriter(nil, enc, WithWEnvironment(failingWriteEnvironment{1, nil}))
+	w, err = NewWriter(nil, enc, WithWriterEnvironment(failingWriteEnvironment{1, nil}))
 	require.NoError(t, err)
 	err = w.Close()
 	assert.ErrorContains(t, err, "partial write")

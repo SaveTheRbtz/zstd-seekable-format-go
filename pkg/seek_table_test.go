@@ -33,10 +33,10 @@ func TestNewSeekTable(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			indexByID, ok := table.EntryByID(int64(id))
 			require.True(t, ok)
-			assert.Equal(t, uint32(len(tc.data)), indexByID.DecompSize)
+			assert.Equal(t, uint32(len(tc.data)), indexByID.DecompressedSize)
 
 			decomp, err := dec.DecodeAll(
-				checksum[indexByID.CompOffset:indexByID.CompOffset+uint64(indexByID.CompSize)], nil,
+				checksum[indexByID.CompressedOffset:indexByID.CompressedOffset+uint64(indexByID.CompressedSize)], nil,
 			)
 			require.NoError(t, err)
 			assert.Equal(t, tc.data, decomp)
