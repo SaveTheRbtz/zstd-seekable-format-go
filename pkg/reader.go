@@ -177,6 +177,16 @@ func NewReader(rs io.ReadSeeker, decoder ZSTDDecoder, opts ...ReaderOption) (*Re
 	return &sr, nil
 }
 
+// SeekTable returns the parsed seek table for this Reader.
+//
+// The returned SeekTable is immutable. SeekTable returns ErrClosed after Close.
+func (r *Reader) SeekTable() (SeekTable, error) {
+	if r.closed.Load() {
+		return SeekTable{}, ErrClosed
+	}
+	return r.table, nil
+}
+
 // ReadAt reads len(p) decompressed bytes starting at off.
 //
 // ReadAt does not move the Reader's current offset.
@@ -204,8 +214,8 @@ func (r *Reader) Read(p []byte) (n int, err error) {
 	return
 }
 
-// Close releases reader-owned memory and causes future Reader method calls to fail.
-// Close is idempotent. Read, ReadAt, and Seek return ErrClosed after Close.
+// Close releases reader-owned memory.
+// Close is idempotent. Read, ReadAt, Seek, and SeekTable return ErrClosed after Close.
 func (r *Reader) Close() error {
 	if !r.closed.Swap(true) {
 		r.cachedFrame.replace(math.MaxUint64, nil)
