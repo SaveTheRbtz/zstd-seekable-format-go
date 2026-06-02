@@ -97,12 +97,24 @@ func TestConcurrentWriter(t *testing.T) {
 	concurrentWriter, err := NewWriter(bw, enc)
 	require.NoError(t, err)
 
+	var compressedWritten uint64
 	var totalWritten int
+	var callbackErr error
 	err = concurrentWriter.WriteMany(ctx, makeTestFrameSource(frames), WithConcurrency(5),
-		WithWriteCallback(func(size uint32) {
-			totalWritten += int(size)
+		WithWriteCallback(func(entry FrameOffsetEntry) {
+			if entry.CompressedOffset != compressedWritten {
+				callbackErr = fmt.Errorf("unexpected compressed offset: %d != %d", entry.CompressedOffset, compressedWritten)
+				return
+			}
+			if entry.DecompressedOffset != uint64(totalWritten) {
+				callbackErr = fmt.Errorf("unexpected decompressed offset: %d != %d", entry.DecompressedOffset, totalWritten)
+				return
+			}
+			compressedWritten += uint64(entry.CompressedSize)
+			totalWritten += int(entry.DecompressedSize)
 		}))
 	require.NoError(t, err)
+	require.NoError(t, callbackErr)
 	require.Equal(t, len(concat), totalWritten)
 
 	// Write one at a time
@@ -286,7 +298,7 @@ func TestConcurrentWriterCancellation(t *testing.T) {
 		frames = append(frames, []byte(fmt.Sprintf("test%d", i)))
 	}
 
-	err = w.WriteMany(ctx, makeTestFrameSource(frames), WithConcurrency(1), WithWriteCallback(func(uint32) {
+	err = w.WriteMany(ctx, makeTestFrameSource(frames), WithConcurrency(1), WithWriteCallback(func(FrameOffsetEntry) {
 		cancel(cause)
 	}))
 	assert.ErrorIs(t, err, cause)

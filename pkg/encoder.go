@@ -81,8 +81,8 @@ func (e *Encoder) Encode(src []byte) ([]byte, error) {
 		return nil, err
 	}
 
-	w.logger.Debug("appending frame", slog.Any("frame", &entry))
-	w.frameEntries = append(w.frameEntries, entry)
+	frame := w.appendFrameEntry(entry)
+	w.logger.Debug("appended frame", slog.Any("frame", frame))
 	return dst, nil
 }
 
@@ -127,5 +127,7 @@ func (s *Writer) endStreamLocked() ([]byte, error) {
 
 	s.closed = true
 	s.frameEntries = nil
+	s.compressedOffset = 0
+	s.decompressedOffset = 0
 	return frame, nil
 }
