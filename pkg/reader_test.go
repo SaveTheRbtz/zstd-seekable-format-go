@@ -163,6 +163,17 @@ func TestReader(t *testing.T) {
 		_, err = r.Read(tmp)
 		require.ErrorIs(t, err, io.EOF)
 
+		offset, err := r.Seek(0, io.SeekCurrent)
+		require.NoError(t, err)
+
+		n, err = r.Read(nil)
+		require.NoError(t, err)
+		assert.Equal(t, 0, n)
+
+		newOffset, err := r.Seek(0, io.SeekCurrent)
+		require.NoError(t, err)
+		assert.Equal(t, offset, newOffset)
+
 		err = r.Close()
 		require.NoError(t, err)
 
@@ -336,6 +347,13 @@ func TestReaderEdges(t *testing.T) {
 
 						tmp := make([]byte, m)
 						k, err := r.Read(tmp)
+						if m == 0 {
+							require.NoErrorf(t, err,
+								"%d: should not error on zero-length read at %d, len(source): %d, whence: %d",
+								i, n, len(source), whence)
+							assert.Equal(t, 0, k)
+							continue
+						}
 						if n >= int64(len(source)) {
 							require.ErrorIsf(t, err, io.EOF,
 								"%d: should return EOF at %d, len(source): %d, len(tmp): %d, k: %d, whence: %d",
