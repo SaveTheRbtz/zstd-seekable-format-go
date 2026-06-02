@@ -16,7 +16,7 @@ var (
 	errWriterFailed = errors.New("writer has failed")
 )
 
-// writerEnvImpl is the environment implementation of for the underlying WriteCloser.
+// writerEnvImpl is the environment implementation for the underlying WriteCloser.
 type writerEnvImpl struct {
 	w io.Writer
 }
@@ -34,7 +34,7 @@ type writerImpl struct {
 	frameEntries []seekTableEntry
 
 	logger *slog.Logger
-	env    WEnvironment
+	env    WriterEnvironment
 	failed bool
 	closed bool
 
@@ -102,19 +102,19 @@ type ZSTDEncoder interface {
 
 // NewWriter wraps w and encoder into an indexed Zstandard stream.
 //
-// w must be non-nil unless WithWEnvironment supplies a custom write
+// w must be non-nil unless WithWriterEnvironment supplies a custom write
 // environment. The caller remains responsible for closing w and encoder, if
 // they require closing.
 //
 // The resulting stream can be randomly accessed through Reader or NewSeekTable.
-func NewWriter(w io.Writer, encoder ZSTDEncoder, opts ...wOption) (ConcurrentWriter, error) {
+func NewWriter(w io.Writer, encoder ZSTDEncoder, opts ...WriterOption) (ConcurrentWriter, error) {
 	sw := writerImpl{
 		enc: encoder,
 	}
 
 	sw.logger = discardLogger
 	for _, o := range opts {
-		err := o(&sw)
+		err := o.applyWriter(&sw)
 		if err != nil {
 			return nil, err
 		}

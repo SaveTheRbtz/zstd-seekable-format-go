@@ -7,14 +7,14 @@ type FrameOffsetEntry struct {
 	// ID is the sequence number of the frame in the index.
 	ID int64
 
-	// CompOffset is the offset within the compressed stream.
-	CompOffset uint64
-	// DecompOffset is the offset within the decompressed stream.
-	DecompOffset uint64
-	// CompSize is the size of the compressed frame.
-	CompSize uint32
-	// DecompSize is the size of the frame's decompressed data.
-	DecompSize uint32
+	// CompressedOffset is the offset within the compressed stream.
+	CompressedOffset uint64
+	// DecompressedOffset is the offset within the decompressed stream.
+	DecompressedOffset uint64
+	// CompressedSize is the size of the compressed frame.
+	CompressedSize uint32
+	// DecompressedSize is the size of the frame's decompressed data.
+	DecompressedSize uint32
 
 	// Checksum is the lower 32 bits of the XXH64 hash of the uncompressed data.
 	Checksum uint32
@@ -23,10 +23,10 @@ type FrameOffsetEntry struct {
 func (o FrameOffsetEntry) LogValue() slog.Value {
 	return slog.GroupValue(
 		slog.Int64("ID", o.ID),
-		slog.Uint64("CompOffset", o.CompOffset),
-		slog.Uint64("DecompOffset", o.DecompOffset),
-		slog.Uint64("CompSize", uint64(o.CompSize)),
-		slog.Uint64("DecompSize", uint64(o.DecompSize)),
+		slog.Uint64("CompressedOffset", o.CompressedOffset),
+		slog.Uint64("DecompressedOffset", o.DecompressedOffset),
+		slog.Uint64("CompressedSize", uint64(o.CompressedSize)),
+		slog.Uint64("DecompressedSize", uint64(o.DecompressedSize)),
 		slog.Uint64("Checksum", uint64(o.Checksum)),
 	)
 }

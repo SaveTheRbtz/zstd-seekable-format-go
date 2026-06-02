@@ -7,7 +7,7 @@ import (
 
 const skippableFrameHeaderSize = frameSizeFieldSize + skippableMagicNumberFieldSize
 
-func readSeekTable(renv REnvironment) (SeekTable, error) {
+func readSeekTable(renv ReaderEnvironment) (SeekTable, error) {
 	footerBuf, err := renv.ReadFooter()
 	if err != nil {
 		return SeekTable{}, fmt.Errorf("failed to read footer: %w", err)
@@ -126,7 +126,7 @@ func parseSeekTableEntries(p []byte, entrySize uint64, numberOfFrames uint32) ([
 
 	entries := make([]FrameOffsetEntry, 0, int(parsedEntries))
 	entry := seekTableEntry{}
-	var compOffset, decompOffset uint64
+	var compressedOffset, decompressedOffset uint64
 
 	var i int64
 	for indexOffset := uint64(0); indexOffset < uint64(len(p)); indexOffset += entrySize {
@@ -137,15 +137,15 @@ func parseSeekTableEntries(p []byte, entrySize uint64, numberOfFrames uint32) ([
 		}
 
 		entries = append(entries, FrameOffsetEntry{
-			ID:           i,
-			CompOffset:   compOffset,
-			DecompOffset: decompOffset,
-			CompSize:     entry.CompressedSize,
-			DecompSize:   entry.DecompressedSize,
-			Checksum:     entry.Checksum,
+			ID:                 i,
+			CompressedOffset:   compressedOffset,
+			DecompressedOffset: decompressedOffset,
+			CompressedSize:     entry.CompressedSize,
+			DecompressedSize:   entry.DecompressedSize,
+			Checksum:           entry.Checksum,
 		})
-		compOffset += uint64(entry.CompressedSize)
-		decompOffset += uint64(entry.DecompressedSize)
+		compressedOffset += uint64(entry.CompressedSize)
+		decompressedOffset += uint64(entry.DecompressedSize)
 		i++
 	}
 

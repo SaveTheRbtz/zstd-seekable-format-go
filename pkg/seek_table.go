@@ -5,7 +5,7 @@ import "sort"
 // SeekTable is parsed random-access metadata from a Zstandard seek-table skippable frame.
 //
 // Use NewSeekTable to construct a SeekTable from bytes written through
-// WEnvironment.WriteSeekTable or returned by Encoder.EndStream. Lookup methods
+// WriterEnvironment.WriteSeekTable or returned by Encoder.EndStream. Lookup methods
 // can be used concurrently.
 type SeekTable struct {
 	entries   []FrameOffsetEntry
@@ -16,7 +16,7 @@ type SeekTable struct {
 //
 // buf must contain the final seek-table skippable frame itself, including the
 // skippable-frame magic number and frame-size header. This is the byte sequence
-// returned by Encoder.EndStream or passed to WEnvironment.WriteSeekTable, not
+// returned by Encoder.EndStream or passed to WriterEnvironment.WriteSeekTable, not
 // the whole compressed stream.
 func NewSeekTable(buf []byte) (*SeekTable, error) {
 	table, err := parseSeekTableFrame(buf)
@@ -34,7 +34,7 @@ func (t SeekTable) Size() uint64 {
 	}
 
 	last := t.entries[len(t.entries)-1]
-	return last.DecompOffset + uint64(last.DecompSize)
+	return last.DecompressedOffset + uint64(last.DecompressedSize)
 }
 
 // NumFrames returns the number of frames in the seek table.
@@ -57,9 +57,9 @@ func (t SeekTable) EntryByDecompressedOffset(off uint64) (FrameOffsetEntry, bool
 	// Find the first frame whose decompressed range contains off; this skips
 	// zero-size entries that share an offset with a following non-empty frame.
 	n := sort.Search(len(t.entries), func(n int) bool {
-		return t.entries[n].DecompOffset+uint64(t.entries[n].DecompSize) > off
+		return t.entries[n].DecompressedOffset+uint64(t.entries[n].DecompressedSize) > off
 	})
-	if n == len(t.entries) || t.entries[n].DecompOffset > off {
+	if n == len(t.entries) || t.entries[n].DecompressedOffset > off {
 		return FrameOffsetEntry{}, false
 	}
 	return t.entries[n], true

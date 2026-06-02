@@ -43,8 +43,8 @@ type readSeekerEnvImpl struct {
 }
 
 func (rs *readSeekerEnvImpl) GetFrameByIndex(index FrameOffsetEntry) ([]byte, error) {
-	p := make([]byte, index.CompSize)
-	off := int64(index.CompOffset)
+	p := make([]byte, index.CompressedSize)
+	off := int64(index.CompressedOffset)
 
 	switch v := rs.rs.(type) {
 	case io.ReaderAt:
@@ -107,7 +107,7 @@ type readerImpl struct {
 	offset int64
 
 	logger *slog.Logger
-	env    REnvironment
+	env    ReaderEnvironment
 
 	closed atomic.Bool
 
@@ -148,19 +148,19 @@ type ZSTDDecoder interface {
 // NewReader returns a Zstandard stream reader that can be randomly accessed by uncompressed offset.
 //
 // The stream must contain a final seek-table skippable frame. rs must be
-// non-nil unless WithREnvironment supplies a custom read environment. If rs
+// non-nil unless WithReaderEnvironment supplies a custom read environment. If rs
 // also implements io.ReaderAt, frame reads do not move rs's current offset.
 //
 // NewReader reads and validates the seek table during construction. The caller
 // remains responsible for closing rs and decoder, if they require closing.
-func NewReader(rs io.ReadSeeker, decoder ZSTDDecoder, opts ...rOption) (Reader, error) {
+func NewReader(rs io.ReadSeeker, decoder ZSTDDecoder, opts ...ReaderOption) (Reader, error) {
 	sr := readerImpl{
 		dec: decoder,
 	}
 
 	sr.logger = discardLogger
 	for _, o := range opts {
-		err := o(&sr)
+		err := o.applyReader(&sr)
 		if err != nil {
 			return nil, err
 		}
@@ -235,54 +235,54 @@ func (r *readerImpl) read(dst []byte, off int64) (int64, int, error) {
 	if !ok {
 		return 0, 0, fmt.Errorf("failed to get index by offset: %d", off)
 	}
-	if off < int64(index.DecompOffset) || off > int64(index.DecompOffset)+int64(index.DecompSize) {
+	if off < int64(index.DecompressedOffset) || off > int64(index.DecompressedOffset)+int64(index.DecompressedSize) {
 		return 0, 0, fmt.Errorf("offset outside of index bounds: %d: min: %d, max: %d",
-			off, int64(index.DecompOffset), int64(index.DecompOffset)+int64(index.DecompSize))
+			off, int64(index.DecompressedOffset), int64(index.DecompressedOffset)+int64(index.DecompressedSize))
 	}
 
 	var decompressed []byte
 
 	cachedOffset, cachedData := r.cachedFrame.get()
-	if cachedOffset == index.DecompOffset && cachedData != nil {
+	if cachedOffset == index.DecompressedOffset && cachedData != nil {
 		// fastpath
 		decompressed = cachedData
 	} else {
 		// slowpath
-		if index.CompSize > maxDecoderFrameSize {
-			return 0, 0, fmt.Errorf("index.CompSize is too big: %d > %d",
-				index.CompSize, maxDecoderFrameSize)
+		if index.CompressedSize > maxDecoderFrameSize {
+			return 0, 0, fmt.Errorf("index.CompressedSize is too big: %d > %d",
+				index.CompressedSize, maxDecoderFrameSize)
 		}
 
 		src, err := r.env.GetFrameByIndex(index)
 		if err != nil {
-			return 0, 0, fmt.Errorf("failed to read compressed data at: %d, %w", index.CompOffset, err)
+			return 0, 0, fmt.Errorf("failed to read compressed data at: %d, %w", index.CompressedOffset, err)
 		}
 
-		if len(src) != int(index.CompSize) {
+		if len(src) != int(index.CompressedSize) {
 			return 0, 0, fmt.Errorf("compressed size does not match index at: %d: expected: %d, index: %+v",
 				off, len(src), index)
 		}
 
 		decompressed, err = r.dec.DecodeAll(src, nil)
 		if err != nil {
-			return 0, 0, fmt.Errorf("failed to decompress data data at: %d, %w", index.CompOffset, err)
+			return 0, 0, fmt.Errorf("failed to decompress data data at: %d, %w", index.CompressedOffset, err)
 		}
 
 		if r.checksums {
 			checksum := uint32(xxhash.Sum64(decompressed))
 			if index.Checksum != checksum {
 				return 0, 0, fmt.Errorf("checksum verification failed at: %d: expected: %d, actual: %d",
-					index.CompOffset, index.Checksum, checksum)
+					index.CompressedOffset, index.Checksum, checksum)
 			}
 		}
-		r.cachedFrame.replace(index.DecompOffset, decompressed)
+		r.cachedFrame.replace(index.DecompressedOffset, decompressed)
 	}
 
-	if len(decompressed) != int(index.DecompSize) {
-		return 0, 0, fmt.Errorf("index corruption: len: %d, expected: %d", len(decompressed), int(index.DecompSize))
+	if len(decompressed) != int(index.DecompressedSize) {
+		return 0, 0, fmt.Errorf("index corruption: len: %d, expected: %d", len(decompressed), int(index.DecompressedSize))
 	}
 
-	offsetWithinFrame := uint64(off) - index.DecompOffset
+	offsetWithinFrame := uint64(off) - index.DecompressedOffset
 
 	size := uint64(len(decompressed)) - offsetWithinFrame
 	if size > uint64(len(dst)) {

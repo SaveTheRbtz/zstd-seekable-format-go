@@ -2,27 +2,26 @@ package seekable
 
 import (
 	"fmt"
-	"log/slog"
 )
 
-type wOption func(*writerImpl) error
-
-// WithWLogger sets the logger used by Writer and Encoder internals.
-//
-// Passing nil restores the default discard logger.
-func WithWLogger(l *slog.Logger) wOption {
-	if l == nil {
-		l = discardLogger
-	}
-	return func(w *writerImpl) error { w.logger = l; return nil }
+// WriterOption configures NewWriter and NewEncoder.
+// Use WithLogger and WithWriterEnvironment to create WriterOptions.
+type WriterOption interface {
+	applyWriter(*writerImpl) error
 }
 
-// WithWEnvironment sets a custom write environment for advanced storage implementations.
+type writerOptionFunc func(*writerImpl) error
+
+func (f writerOptionFunc) applyWriter(w *writerImpl) error {
+	return f(w)
+}
+
+// WithWriterEnvironment sets a custom write environment for advanced storage implementations.
 //
 // When this option is supplied, NewWriter uses e instead of the io.Writer
 // argument for all frame and seek-table writes.
-func WithWEnvironment(e WEnvironment) wOption {
-	return func(w *writerImpl) error { w.env = e; return nil }
+func WithWriterEnvironment(e WriterEnvironment) WriterOption {
+	return writerOptionFunc(func(w *writerImpl) error { w.env = e; return nil })
 }
 
 type writeManyOptions struct {
