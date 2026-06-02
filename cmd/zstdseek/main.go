@@ -144,7 +144,7 @@ func main() {
 		logger.Fatal("failed to create zstd encoder", zap.Error(err))
 	}
 
-	w, err := seekable.NewWriter(output, enc, seekable.WithWriterLogger(seekableLogger.WithGroup("writer")))
+	w, err := seekable.NewWriter(output, enc, seekable.WithWLogger(seekableLogger.WithGroup("writer")))
 	if err != nil {
 		logger.Fatal("failed to create compressed writer", zap.Error(err))
 	}
@@ -202,7 +202,7 @@ func main() {
 		}
 		defer dec.Close()
 
-		reader, err := seekable.NewReader(verify, dec, seekable.WithReaderLogger(seekableLogger.WithGroup("reader")))
+		reader, err := seekable.NewReader(verify, dec, seekable.WithRLogger(seekableLogger.WithGroup("reader")))
 		if err != nil {
 			logger.Fatal("failed to create new seekable reader", zap.Error(err))
 		}
