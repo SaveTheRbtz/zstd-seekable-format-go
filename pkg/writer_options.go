@@ -30,7 +30,7 @@ func WithWriterEnvironment(e WriterEnvironment) WriterOption {
 
 type writeManyOptions struct {
 	concurrency   int
-	writeCallback func(uint32)
+	frameCallback func(FrameOffsetEntry)
 }
 
 // WriteManyOption configures Writer.WriteMany.
@@ -49,13 +49,17 @@ func WithConcurrency(concurrency int) WriteManyOption {
 	}
 }
 
-// WithWriteCallback calls cb after each frame is written.
+// WithWriteCallback calls cb after each non-empty frame is written.
 //
-// cb receives the decompressed size of the frame that was just written. It is
-// called in stream order from the WriteMany writer goroutine.
-func WithWriteCallback(cb func(size uint32)) WriteManyOption {
+// cb receives the seek-table entry for the frame that was just written. It is
+// called in stream order from the WriteMany writer goroutine, after the frame
+// has been written and added to the Writer's in-memory seek table.
+//
+// cb must not call methods on the same Writer. To stop WriteMany from cb,
+// cancel the WriteMany context or make the FrameSource return an error.
+func WithWriteCallback(cb func(entry FrameOffsetEntry)) WriteManyOption {
 	return func(options *writeManyOptions) error {
-		options.writeCallback = cb
+		options.frameCallback = cb
 		return nil
 	}
 }

@@ -39,6 +39,9 @@ type Writer struct {
 	enc          ZSTDEncoder
 	frameEntries []seekTableEntry
 
+	compressedOffset   uint64
+	decompressedOffset uint64
+
 	logger *slog.Logger
 	env    WriterEnvironment
 	failed bool
@@ -101,6 +104,23 @@ func NewWriter(w io.Writer, encoder ZSTDEncoder, opts ...WriterOption) (*Writer,
 	return &sw, nil
 }
 
+func (s *Writer) appendFrameEntry(entry seekTableEntry) FrameOffsetEntry {
+	frame := FrameOffsetEntry{
+		ID:                 int64(len(s.frameEntries)),
+		CompressedOffset:   s.compressedOffset,
+		DecompressedOffset: s.decompressedOffset,
+		CompressedSize:     entry.CompressedSize,
+		DecompressedSize:   entry.DecompressedSize,
+		Checksum:           entry.Checksum,
+	}
+
+	s.frameEntries = append(s.frameEntries, entry)
+	s.compressedOffset += uint64(entry.CompressedSize)
+	s.decompressedOffset += uint64(entry.DecompressedSize)
+
+	return frame
+}
+
 // Write writes a chunk of data as a separate frame into the data stream.
 //
 // Note that Write does not do any coalescing nor splitting of data, so each
@@ -140,8 +160,8 @@ func (s *Writer) Write(src []byte) (int, error) {
 		return 0, fmt.Errorf("partial write: %d out of %d", n, len(dst))
 	}
 
-	s.logger.Debug("appending frame", slog.Any("frame", &entry))
-	s.frameEntries = append(s.frameEntries, entry)
+	frame := s.appendFrameEntry(entry)
+	s.logger.Debug("appended frame", slog.Any("frame", frame))
 	return len(src), nil
 }
 
@@ -159,6 +179,8 @@ func (s *Writer) Close() error {
 
 	err := s.writeSeekTableLocked()
 	s.frameEntries = nil
+	s.compressedOffset = 0
+	s.decompressedOffset = 0
 	s.env = nil
 	return err
 }
@@ -217,7 +239,7 @@ func (s *Writer) writeManyProducer(ctx context.Context, frameSource FrameSource,
 	}
 }
 
-func (s *Writer) writeManyConsumer(ctx context.Context, callback func(uint32), queue <-chan chan encodeResult) func() error {
+func (s *Writer) writeManyConsumer(ctx context.Context, callback func(FrameOffsetEntry), queue <-chan chan encodeResult) func() error {
 	return func() error {
 		for {
 			var ch <-chan encodeResult
@@ -247,10 +269,10 @@ func (s *Writer) writeManyConsumer(ctx context.Context, callback func(uint32), q
 				s.failed = true
 				return fmt.Errorf("partial write: %d out of %d", n, len(result.buf))
 			}
-			s.frameEntries = append(s.frameEntries, result.entry)
+			frame := s.appendFrameEntry(result.entry)
 
 			if callback != nil {
-				callback(result.entry.DecompressedSize)
+				callback(frame)
 			}
 		}
 	}
@@ -289,7 +311,7 @@ func (s *Writer) WriteMany(ctx context.Context, frameSource FrameSource, options
 	// Add extra room in the queue, so we can keep throughput high even if blocks finish out of order
 	queue := make(chan chan encodeResult, opts.concurrency*2)
 	g.Go(s.writeManyProducer(gCtx, frameSource, g, queue))
-	g.Go(s.writeManyConsumer(gCtx, opts.writeCallback, queue))
+	g.Go(s.writeManyConsumer(gCtx, opts.frameCallback, queue))
 	return g.Wait()
 }
 

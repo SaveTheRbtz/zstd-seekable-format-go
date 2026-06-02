@@ -212,8 +212,8 @@ func ExampleWriter_WriteMany() {
 
 	err = w.WriteMany(context.Background(), next,
 		seekable.WithConcurrency(2),
-		seekable.WithWriteCallback(func(size uint32) {
-			fmt.Println(size)
+		seekable.WithWriteCallback(func(entry seekable.FrameOffsetEntry) {
+			fmt.Printf("%d %d\n", entry.ID, entry.DecompressedSize)
 		}),
 	)
 	if err != nil {
@@ -224,7 +224,7 @@ func ExampleWriter_WriteMany() {
 	}
 
 	// Output:
-	// 5
-	// 1
-	// 6
+	// 0 5
+	// 1 1
+	// 2 6
 }
