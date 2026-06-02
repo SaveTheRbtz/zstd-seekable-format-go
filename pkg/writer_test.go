@@ -428,18 +428,20 @@ func TestWriterCloseSemantics(t *testing.T) {
 
 	require.NoError(t, w.Close())
 	assert.Nil(t, sw.frameEntries)
+	sizeAfterClose := b.Len()
 
-	// double close should return an error
+	// double close should be a no-op
 	err = w.Close()
-	assert.ErrorIs(t, err, errWriterClosed)
+	assert.NoError(t, err)
+	assert.Equal(t, sizeAfterClose, b.Len())
 
 	// write after close should return an error
 	_, err = w.Write([]byte("bar"))
-	assert.ErrorIs(t, err, errWriterClosed)
+	assert.ErrorIs(t, err, ErrClosed)
 
 	// write many after close should return an error
 	err = w.WriteMany(context.Background(), makeTestFrameSource([][]byte{[]byte("baz")}))
-	assert.ErrorIs(t, err, errWriterClosed)
+	assert.ErrorIs(t, err, ErrClosed)
 }
 
 func makeRepeatingFrameSource(frame []byte, count int) FrameSource {
