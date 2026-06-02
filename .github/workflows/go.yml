@@ -33,16 +33,6 @@ jobs:
         working-directory: ./${{ matrix.dir }}
         run: |
           go get .
-      - name: go work
-        run: |
-          if [ "${{ matrix.dir }}" == "pkg" ]; then
-            echo "Skipping go workspace for ${{ matrix.dir }}"
-            rm -f go.work*
-            exit 0
-          fi
-          go work init
-          go work use pkg
-          go work use ${{ matrix.dir }}
       - name: Build (${{ matrix.dir }})
         working-directory: ./${{ matrix.dir }}
         run: |
