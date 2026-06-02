@@ -5,6 +5,9 @@ on:
     branches: [main]
     types: [opened, synchronize, closed]
 
+permissions:
+  contents: read
+
 jobs:
   coverage:
     name: coverage
