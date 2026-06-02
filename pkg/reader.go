@@ -150,10 +150,15 @@ type ZSTDDecoder interface {
 // The stream must contain a final seek-table skippable frame. rs must be
 // non-nil unless WithREnvironment supplies a custom read environment. If rs
 // also implements io.ReaderAt, frame reads do not move rs's current offset.
+// decoder must be non-nil.
 //
 // NewReader reads and validates the seek table during construction. The caller
 // remains responsible for closing rs and decoder, if they require closing.
 func NewReader(rs io.ReadSeeker, decoder ZSTDDecoder, opts ...rOption) (Reader, error) {
+	if decoder == nil {
+		return nil, fmt.Errorf("nil decoder")
+	}
+
 	sr := readerImpl{
 		dec: decoder,
 	}

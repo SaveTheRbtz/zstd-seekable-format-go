@@ -51,6 +51,25 @@ func TestWriter(t *testing.T) {
 	assert.Equal(t, concat, readBuf[:n])
 }
 
+func TestNewWriterRejectsNilInputs(t *testing.T) {
+	t.Parallel()
+
+	enc, err := zstd.NewWriter(nil, zstd.WithEncoderLevel(zstd.SpeedFastest))
+	require.NoError(t, err)
+
+	w, err := NewWriter(nil, enc)
+	assert.Nil(t, w)
+	assert.ErrorContains(t, err, "nil Writer")
+
+	w, err = NewWriter(io.Discard, nil)
+	assert.Nil(t, w)
+	assert.ErrorContains(t, err, "nil encoder")
+
+	w, err = NewWriter(nil, enc, WithWEnvironment(&fakeWriteEnvironment{bw: io.Discard}))
+	require.NoError(t, err)
+	require.NoError(t, w.Close())
+}
+
 func makeTestFrame(t *testing.T, idx int) []byte {
 	var b bytes.Buffer
 	for i := 0; i < 100; i++ {
@@ -168,7 +187,7 @@ func TestConcurrentWriterErrors(t *testing.T) {
 	ctx := context.Background()
 	enc, err := zstd.NewWriter(nil, zstd.WithEncoderLevel(zstd.SpeedFastest))
 	require.NoError(t, err)
-	w, err := NewWriter(nil, enc)
+	w, err := NewWriter(io.Discard, enc)
 	require.NoError(t, err)
 
 	frameSource := makeTestFrameSource([][]byte{})

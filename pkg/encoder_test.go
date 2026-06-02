@@ -75,3 +75,11 @@ func TestEncoderEndStreamFinalizes(t *testing.T) {
 	assert.Nil(t, encoded)
 	assert.ErrorIs(t, err, ErrClosed)
 }
+
+func TestNewEncoderRejectsNilEncoder(t *testing.T) {
+	t.Parallel()
+
+	e, err := NewEncoder(nil)
+	assert.Nil(t, e)
+	assert.ErrorContains(t, err, "nil encoder")
+}

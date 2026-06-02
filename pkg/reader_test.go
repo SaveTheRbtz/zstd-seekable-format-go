@@ -628,7 +628,7 @@ func TestEmptyWriteRead(t *testing.T) {
 	assert.Equal(t, 0, n)
 }
 
-func TestNilReaderNoEnvironment(t *testing.T) {
+func TestNewReaderRejectsNilInputs(t *testing.T) {
 	t.Parallel()
 
 	dec, err := zstd.NewReader(nil)
@@ -638,4 +638,13 @@ func TestNilReaderNoEnvironment(t *testing.T) {
 	r, err := NewReader(nil, dec)
 	require.Error(t, err)
 	assert.Nil(t, r)
+	assert.ErrorContains(t, err, "nil ReadSeeker")
+
+	r, err = NewReader(&seekableBufferReaderAt{buf: checksum}, nil)
+	assert.Nil(t, r)
+	assert.ErrorContains(t, err, "nil decoder")
+
+	r, err = NewReader(nil, dec, WithREnvironment(&fakeReadEnvironment{}))
+	require.NoError(t, err)
+	require.NoError(t, r.Close())
 }

@@ -103,11 +103,33 @@ type ZSTDEncoder interface {
 // NewWriter wraps w and encoder into an indexed Zstandard stream.
 //
 // w must be non-nil unless WithWEnvironment supplies a custom write
-// environment. The caller remains responsible for closing w and encoder, if
-// they require closing.
+// environment. encoder must be non-nil. The caller remains responsible for
+// closing w and encoder, if they require closing.
 //
 // The resulting stream can be randomly accessed through Reader or NewSeekTable.
 func NewWriter(w io.Writer, encoder ZSTDEncoder, opts ...wOption) (ConcurrentWriter, error) {
+	sw, err := newWriterImpl(encoder, opts...)
+	if err != nil {
+		return nil, err
+	}
+
+	if sw.env == nil {
+		if w == nil {
+			return nil, fmt.Errorf("nil Writer and no custom environment supplied")
+		}
+		sw.env = &writerEnvImpl{
+			w: w,
+		}
+	}
+
+	return sw, nil
+}
+
+func newWriterImpl(encoder ZSTDEncoder, opts ...wOption) (*writerImpl, error) {
+	if encoder == nil {
+		return nil, fmt.Errorf("nil encoder")
+	}
+
 	sw := writerImpl{
 		enc: encoder,
 	}
@@ -117,12 +139,6 @@ func NewWriter(w io.Writer, encoder ZSTDEncoder, opts ...wOption) (ConcurrentWri
 		err := o(&sw)
 		if err != nil {
 			return nil, err
-		}
-	}
-
-	if sw.env == nil {
-		sw.env = &writerEnvImpl{
-			w: w,
 		}
 	}
 
