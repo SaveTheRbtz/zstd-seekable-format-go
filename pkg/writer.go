@@ -12,7 +12,10 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
-var errWriterClosed = errors.New("writer is closed")
+var (
+	errWriterClosed = errors.New("writer is closed")
+	errWriterFailed = errors.New("writer has failed")
+)
 
 // writerEnvImpl is the environment implementation of for the underlying WriteCloser.
 type writerEnvImpl struct {
@@ -33,6 +36,7 @@ type writerImpl struct {
 
 	logger *slog.Logger
 	env    WEnvironment
+	failed bool
 
 	mu sync.Mutex
 }
@@ -53,6 +57,11 @@ type Writer interface {
 	// Note that Write does not do any coalescing nor splitting of data,
 	// so each non-empty write will map to a separate Zstandard frame.
 	// Empty writes do not add seek-table entries.
+	//
+	// If the underlying frame write fails or writes only part of the frame, the
+	// writer stops accepting more frames. Close may still be called to write the
+	// seek table for frames that were fully written. Bytes already accepted by
+	// the underlying writer are not rolled back.
 	Write(src []byte) (int, error)
 
 	// Close implements io.Closer. It writes the seek table, releases the in-memory
@@ -77,7 +86,8 @@ type ConcurrentWriter interface {
 	// It reads frames from frameSource sequentially, compresses up to the
 	// configured concurrency in parallel, and writes compressed frames in the
 	// same order returned by frameSource. Close must still be called after a
-	// successful WriteMany call to write the final seek table.
+	// successful WriteMany call to write the final seek table. Frame write
+	// failures have the same no-more-frames behavior as Writer.Write.
 	WriteMany(ctx context.Context, frameSource FrameSource, options ...WriteManyOption) error
 }
 
@@ -125,20 +135,30 @@ func (s *writerImpl) Write(src []byte) (int, error) {
 	if s.env == nil {
 		return 0, errWriterClosed
 	}
+	if s.failed {
+		return 0, errWriterFailed
+	}
 
-	dst, err := s.Encode(src)
+	dst, entry, err := s.encodeOne(src)
 	if err != nil {
 		return 0, err
+	}
+	if len(src) == 0 {
+		return 0, nil
 	}
 
 	n, err := s.env.WriteFrame(dst)
 	if err != nil {
+		s.failed = true
 		return 0, err
 	}
 	if n != len(dst) {
+		s.failed = true
 		return 0, fmt.Errorf("partial write: %d out of %d", n, len(dst))
 	}
 
+	s.logger.Debug("appending frame", slog.Any("frame", &entry))
+	s.frameEntries = append(s.frameEntries, entry)
 	return len(src), nil
 }
 
@@ -233,9 +253,11 @@ func (s *writerImpl) writeManyConsumer(ctx context.Context, callback func(uint32
 
 			n, err := s.env.WriteFrame(result.buf)
 			if err != nil {
+				s.failed = true
 				return fmt.Errorf("failed to write compressed data: %w", err)
 			}
 			if n != len(result.buf) {
+				s.failed = true
 				return fmt.Errorf("partial write: %d out of %d", n, len(result.buf))
 			}
 			s.frameEntries = append(s.frameEntries, result.entry)
@@ -253,6 +275,9 @@ func (s *writerImpl) WriteMany(ctx context.Context, frameSource FrameSource, opt
 
 	if s.env == nil {
 		return errWriterClosed
+	}
+	if s.failed {
+		return errWriterFailed
 	}
 
 	opts := writeManyOptions{concurrency: runtime.GOMAXPROCS(0)}

@@ -140,6 +140,23 @@ func (e failingWriteEnvironment) WriteSeekTable(p []byte) (n int, err error) {
 	return e.n, e.err
 }
 
+type partialSecondFrameEnvironment struct {
+	b           bytes.Buffer
+	frameWrites int
+}
+
+func (e *partialSecondFrameEnvironment) WriteFrame(p []byte) (n int, err error) {
+	e.frameWrites++
+	if e.frameWrites == 2 {
+		return e.b.Write(p[:1])
+	}
+	return e.b.Write(p)
+}
+
+func (e *partialSecondFrameEnvironment) WriteSeekTable(p []byte) (n int, err error) {
+	return e.b.Write(p)
+}
+
 func TestConcurrentWriterErrors(t *testing.T) {
 	t.Parallel()
 
@@ -168,15 +185,86 @@ func TestConcurrentWriterErrors(t *testing.T) {
 	w, err = NewWriter(&b, enc,
 		WithWEnvironment(failingWriteEnvironment{0, errors.New("test error")}))
 	require.NoError(t, err)
-	frameSource = makeTestFrameSource(manyFrames) // enough that we have to wait on ctx
-	err = w.WriteMany(ctx, frameSource, WithConcurrency(1))
+	err = w.WriteMany(ctx, makeTestFrameSource(manyFrames), WithConcurrency(1))
 	assert.ErrorContains(t, err, "failed to write compressed data")
+	_, err = w.Write([]byte("again"))
+	assert.ErrorIs(t, err, errWriterFailed)
 
 	w, err = NewWriter(&b, enc,
 		WithWEnvironment(failingWriteEnvironment{1, nil}))
 	require.NoError(t, err)
-	err = w.WriteMany(ctx, frameSource, WithConcurrency(1))
+	err = w.WriteMany(ctx, makeTestFrameSource(manyFrames), WithConcurrency(1))
 	assert.ErrorContains(t, err, "partial write")
+	_, err = w.Write([]byte("again"))
+	assert.ErrorIs(t, err, errWriterFailed)
+}
+
+func TestFrameWriteFailureAllowsClose(t *testing.T) {
+	t.Parallel()
+
+	for _, tc := range []struct {
+		name  string
+		write func(t *testing.T, w ConcurrentWriter, frames [][]byte) error
+	}{
+		{
+			name: "Write",
+			write: func(t *testing.T, w ConcurrentWriter, frames [][]byte) error {
+				t.Helper()
+
+				_, err := w.Write(frames[0])
+				require.NoError(t, err)
+				_, err = w.Write(frames[1])
+				return err
+			},
+		},
+		{
+			name: "WriteMany",
+			write: func(t *testing.T, w ConcurrentWriter, frames [][]byte) error {
+				t.Helper()
+
+				return w.WriteMany(context.Background(), makeTestFrameSource(frames), WithConcurrency(1))
+			},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			enc, err := zstd.NewWriter(nil, zstd.WithEncoderLevel(zstd.SpeedFastest))
+			require.NoError(t, err)
+			dec, err := zstd.NewReader(nil)
+			require.NoError(t, err)
+			defer dec.Close()
+
+			env := &partialSecondFrameEnvironment{}
+			w, err := NewWriter(nil, enc, WithWEnvironment(env))
+			require.NoError(t, err)
+
+			frames := [][]byte{[]byte("first"), []byte("second")}
+			err = tc.write(t, w, frames)
+			require.ErrorContains(t, err, "partial write")
+
+			_, err = w.Write([]byte("again"))
+			assert.ErrorIs(t, err, errWriterFailed)
+
+			err = w.Close()
+			require.NoError(t, err)
+
+			table, err := readSeekTable(&readSeekerEnvImpl{rs: bytes.NewReader(env.b.Bytes())})
+			require.NoError(t, err)
+			assert.Equal(t, uint64(len(frames[0])), table.Size())
+			assert.Equal(t, int64(1), table.NumFrames())
+
+			r, err := NewReader(bytes.NewReader(env.b.Bytes()), dec)
+			require.NoError(t, err)
+			defer func() { require.NoError(t, r.Close()) }()
+
+			got := make([]byte, len(frames[0]))
+			n, err := r.ReadAt(got, 0)
+			require.NoError(t, err)
+			assert.Equal(t, len(got), n)
+			assert.Equal(t, frames[0], got)
+		})
+	}
 }
 
 type fakeWriteEnvironment struct {
