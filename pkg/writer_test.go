@@ -267,6 +267,31 @@ func TestFrameWriteFailureAllowsClose(t *testing.T) {
 	}
 }
 
+func TestConcurrentWriterCancellation(t *testing.T) {
+	t.Parallel()
+
+	enc, err := zstd.NewWriter(nil, zstd.WithEncoderLevel(zstd.SpeedFastest))
+	require.NoError(t, err)
+
+	var b bytes.Buffer
+	w, err := NewWriter(&b, enc)
+	require.NoError(t, err)
+
+	cause := errors.New("stop writing")
+	ctx, cancel := context.WithCancelCause(context.Background())
+	defer cancel(nil)
+
+	frames := [][]byte{}
+	for i := 0; i < 100; i++ {
+		frames = append(frames, []byte(fmt.Sprintf("test%d", i)))
+	}
+
+	err = w.WriteMany(ctx, makeTestFrameSource(frames), WithConcurrency(1), WithWriteCallback(func(uint32) {
+		cancel(cause)
+	}))
+	assert.ErrorIs(t, err, cause)
+}
+
 type fakeWriteEnvironment struct {
 	bw io.Writer
 }
