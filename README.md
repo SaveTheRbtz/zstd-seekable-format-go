@@ -1,4 +1,4 @@
-  [![License][license-img]][license] [![OpenSSF Scorecard][scorecard-img]][scorecard] [![GoDoc][doc-img]][doc] [![Build Status][ci-img]][ci] [![Go Report][report-img]][report]
+   [![GoDoc][doc-img]][doc] [![License][license-img]][license] [![OpenSSF Scorecard][scorecard-img]][scorecard] [![Build Status][ci-img]][ci] [![Go Report][report-img]][report]
 # ZSTD seekable compression format implementation in Go
 [Seekable ZSTD compression format](https://github.com/facebook/zstd/blob/dev/contrib/seekable_format/zstd_seekable_compression_format.md) implemented in Golang.
 
