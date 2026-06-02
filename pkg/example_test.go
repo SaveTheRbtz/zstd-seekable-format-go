@@ -105,6 +105,40 @@ func ExampleNewReader() {
 	// World
 }
 
+func ExampleReader_SeekTable() {
+	compressed := exampleSeekableStream()
+
+	dec, err := zstd.NewReader(nil)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer dec.Close()
+
+	r, err := seekable.NewReader(bytes.NewReader(compressed), dec)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer func() {
+		_ = r.Close()
+	}()
+
+	table, err := r.SeekTable()
+	if err != nil {
+		log.Fatal(err)
+	}
+	entry, ok := table.EntryByDecompressedOffset(6)
+	if !ok {
+		log.Fatal("missing seek-table entry")
+	}
+
+	fmt.Printf("frames=%d size=%d checksums=%t\n", table.NumFrames(), table.Size(), table.HasChecksums())
+	fmt.Printf("offset 6 is in frame %d\n", entry.ID)
+
+	// Output:
+	// frames=3 size=12 checksums=true
+	// offset 6 is in frame 2
+}
+
 func ExampleNewSeekTable() {
 	enc, err := zstd.NewWriter(nil, zstd.WithEncoderLevel(zstd.SpeedFastest))
 	if err != nil {

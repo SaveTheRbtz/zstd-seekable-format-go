@@ -17,9 +17,11 @@ type FrameOffsetEntry struct {
 	DecompressedSize uint32
 
 	// Checksum is the lower 32 bits of the XXH64 hash of the uncompressed data.
+	// It is meaningful only when SeekTable.HasChecksums reports true.
 	Checksum uint32
 }
 
+// LogValue implements slog.LogValuer.
 func (o FrameOffsetEntry) LogValue() slog.Value {
 	return slog.GroupValue(
 		slog.Int64("ID", o.ID),

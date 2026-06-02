@@ -7,7 +7,8 @@
 // compressed frames followed by a final skippable frame containing a seek table.
 // Standard Zstandard decoders can read the stream from the beginning, while
 // Reader uses the seek table to serve Read, ReadAt, and Seek calls by
-// uncompressed byte offset.
+// uncompressed byte offset and exposes the parsed metadata through
+// Reader.SeekTable.
 //
 // Writer and Encoder produce seekable streams by storing each non-empty input
 // chunk as a separate Zstandard frame. Close or EndStream must be called to
