@@ -211,6 +211,12 @@ func (s *Writer) writeManyEncoder(ctx context.Context, ch chan<- encodeResult, f
 func (s *Writer) writeManyProducer(ctx context.Context, frameSource FrameSource, g *errgroup.Group, queue chan<- chan encodeResult) func() error {
 	return func() error {
 		for {
+			select {
+			case <-ctx.Done():
+				return context.Cause(ctx)
+			default:
+			}
+
 			frame, err := frameSource()
 			if err != nil {
 				return fmt.Errorf("frame source failed: %w", err)

@@ -304,6 +304,39 @@ func TestConcurrentWriterCancellation(t *testing.T) {
 	assert.ErrorIs(t, err, cause)
 }
 
+func TestWriteManyEmptyFramesObserveCancellation(t *testing.T) {
+	t.Parallel()
+
+	enc, err := zstd.NewWriter(nil, zstd.WithEncoderLevel(zstd.SpeedFastest))
+	require.NoError(t, err)
+
+	var b bytes.Buffer
+	w, err := NewWriter(&b, enc)
+	require.NoError(t, err)
+
+	cause := errors.New("stop after empty frame")
+	ignored := errors.New("frame source kept running after cancellation")
+	ctx, cancel := context.WithCancelCause(context.Background())
+	defer cancel(nil)
+
+	calls := 0
+	frameSource := func() ([]byte, error) {
+		calls++
+		if calls == 1 {
+			cancel(cause)
+			return []byte{}, nil
+		}
+		if calls > 10 {
+			return nil, ignored
+		}
+		return []byte{}, nil
+	}
+
+	err = w.WriteMany(ctx, frameSource, WithConcurrency(1))
+	require.ErrorIs(t, err, cause)
+	assert.Equal(t, 1, calls)
+}
+
 type fakeWriteEnvironment struct {
 	bw io.Writer
 }
