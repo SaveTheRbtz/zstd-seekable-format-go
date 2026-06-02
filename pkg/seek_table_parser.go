@@ -82,8 +82,10 @@ func parseSeekTableFooter(buf []byte) (seekTableFooter, int64, error) {
 	}
 
 	footer := seekTableFooter{}
-	if err := footer.UnmarshalBinary(buf[len(buf)-seekTableFooterOffset:]); err != nil {
-		return seekTableFooter{}, 0, fmt.Errorf("failed to parse footer %+v: %w", buf, err)
+	footerBuf := buf[len(buf)-seekTableFooterOffset:]
+	if err := footer.UnmarshalBinary(footerBuf); err != nil {
+		return seekTableFooter{}, 0, fmt.Errorf("failed to parse footer: input len=%d footer excerpt=%+v: %w",
+			len(buf), footerBuf, err)
 	}
 
 	return footer, seekTableEntrySize(footer.SeekTableDescriptor.ChecksumFlag), nil
