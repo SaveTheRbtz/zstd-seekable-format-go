@@ -13,7 +13,6 @@ import (
 )
 
 var (
-	errWriterClosed = errors.New("writer is closed")
 	errWriterFailed = errors.New("writer has failed")
 )
 
@@ -37,6 +36,7 @@ type writerImpl struct {
 	logger *slog.Logger
 	env    WEnvironment
 	failed bool
+	closed bool
 
 	mu sync.Mutex
 }
@@ -51,6 +51,7 @@ var (
 // Each non-empty Write call becomes one Zstandard frame in the output stream.
 // Close must be called to write the final seek-table skippable frame; without
 // it, Reader and NewSeekTable cannot find the random-access metadata.
+// Close is idempotent. Write and WriteMany return ErrClosed after Close.
 type Writer interface {
 	// Write writes a chunk of data as a separate frame into the data stream.
 	//
@@ -132,8 +133,8 @@ func (s *writerImpl) Write(src []byte) (int, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	if s.env == nil {
-		return 0, errWriterClosed
+	if s.env == nil || s.closed {
+		return 0, ErrClosed
 	}
 	if s.failed {
 		return 0, errWriterFailed
@@ -167,10 +168,10 @@ func (s *writerImpl) Close() error {
 	defer s.mu.Unlock()
 
 	if s.env == nil {
-		return errWriterClosed
+		return nil
 	}
 
-	err := s.writeSeekTable()
+	err := s.writeSeekTableLocked()
 	s.frameEntries = nil
 	s.env = nil
 	return err
@@ -273,8 +274,8 @@ func (s *writerImpl) WriteMany(ctx context.Context, frameSource FrameSource, opt
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	if s.env == nil {
-		return errWriterClosed
+	if s.env == nil || s.closed {
+		return ErrClosed
 	}
 	if s.failed {
 		return errWriterFailed
@@ -299,8 +300,8 @@ func (s *writerImpl) WriteMany(ctx context.Context, frameSource FrameSource, opt
 	return g.Wait()
 }
 
-func (s *writerImpl) writeSeekTable() error {
-	seekTableBytes, err := s.EndStream()
+func (s *writerImpl) writeSeekTableLocked() error {
+	seekTableBytes, err := s.endStreamLocked()
 	if err != nil {
 		return err
 	}

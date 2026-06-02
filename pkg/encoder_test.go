@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/klauspost/compress/zstd"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -45,4 +46,32 @@ func TestEncoder(t *testing.T) {
 
 	require.Equal(t, uint64(len(sourceString)), table.Size())
 	require.Equal(t, int64(len(chunks)), table.NumFrames())
+}
+
+func TestEncoderEndStreamFinalizes(t *testing.T) {
+	t.Parallel()
+
+	enc, err := zstd.NewWriter(nil)
+	require.NoError(t, err)
+
+	e, err := NewEncoder(enc)
+	require.NoError(t, err)
+	se := e.(*writerImpl)
+
+	_, err = e.Encode([]byte("foo"))
+	require.NoError(t, err)
+	require.NotEmpty(t, se.frameEntries)
+
+	footer, err := e.EndStream()
+	require.NoError(t, err)
+	require.NotEmpty(t, footer)
+	assert.Nil(t, se.frameEntries)
+
+	footer, err = e.EndStream()
+	assert.Nil(t, footer)
+	assert.ErrorIs(t, err, ErrClosed)
+
+	encoded, err := e.Encode([]byte("bar"))
+	assert.Nil(t, encoded)
+	assert.ErrorIs(t, err, ErrClosed)
 }

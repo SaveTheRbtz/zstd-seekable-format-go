@@ -12,6 +12,8 @@
 // Writer and Encoder produce seekable streams by storing each non-empty input
 // chunk as a separate Zstandard frame. Close or EndStream must be called to
 // append or retrieve the final seek-table skippable frame.
+// Close is idempotent; EndStream finalizes the Encoder and must be called once.
+// Operations after Close or EndStream return ErrClosed.
 //
 // The package accepts small encoder and decoder interfaces and is tested with
 // github.com/klauspost/compress/zstd.

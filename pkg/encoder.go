@@ -12,13 +12,15 @@ import (
 // Each non-empty Encode call returns one compressed Zstandard frame and appends
 // one entry to the in-memory seek table. EndStream returns the final seek-table
 // skippable frame, which must be appended after all encoded frames to form a
-// complete seekable stream.
+// complete seekable stream. EndStream finalizes the encoder. After EndStream,
+// Encode and EndStream return ErrClosed.
 type Encoder interface {
 	// Encode returns compressed data and appends a frame to in-memory seek table.
 	// Empty inputs return an empty slice and do not add seek-table entries.
 	Encode(src []byte) ([]byte, error)
 
-	// EndStream returns the in-memory seek table as a Zstandard skippable frame.
+	// EndStream returns the in-memory seek table as a Zstandard skippable frame
+	// and finalizes the encoder.
 	EndStream() ([]byte, error)
 }
 
@@ -61,6 +63,12 @@ func (s *writerImpl) encodeOne(src []byte) ([]byte, seekTableEntry, error) {
 }
 
 func (s *writerImpl) Encode(src []byte) ([]byte, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if s.closed {
+		return nil, ErrClosed
+	}
 	if len(src) == 0 {
 		return []byte{}, nil
 	}
@@ -76,6 +84,17 @@ func (s *writerImpl) Encode(src []byte) ([]byte, error) {
 }
 
 func (s *writerImpl) EndStream() ([]byte, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	return s.endStreamLocked()
+}
+
+func (s *writerImpl) endStreamLocked() ([]byte, error) {
+	if s.closed {
+		return nil, ErrClosed
+	}
+
 	if int64(len(s.frameEntries)) > maxNumberOfFrames {
 		return nil, fmt.Errorf("number of frames for seekable format: %d > %d",
 			len(s.frameEntries), maxNumberOfFrames)
@@ -95,5 +114,12 @@ func (s *writerImpl) EndStream() ([]byte, error) {
 	}
 
 	footer.marshalBinaryInline(seekTable[len(s.frameEntries)*12 : len(s.frameEntries)*12+9])
-	return createSkippableFrame(seekableTag, seekTable)
+	frame, err := createSkippableFrame(seekableTag, seekTable)
+	if err != nil {
+		return nil, err
+	}
+
+	s.closed = true
+	s.frameEntries = nil
+	return frame, nil
 }

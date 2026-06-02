@@ -219,7 +219,7 @@ func TestReaderPostCloseContract(t *testing.T) {
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			require.ErrorIs(t, tc.call(), errReaderClosed)
+			require.ErrorIs(t, tc.call(), ErrClosed)
 		})
 	}
 }

@@ -115,8 +115,6 @@ type readerImpl struct {
 	cachedFrame cachedFrame
 }
 
-var errReaderClosed = errors.New("reader is closed")
-
 var (
 	_ Reader      = (*readerImpl)(nil)
 	_ io.Seeker   = (*readerImpl)(nil)
@@ -135,6 +133,7 @@ type Reader interface {
 	io.Seeker
 
 	// Close releases reader-owned memory and causes future Reader method calls to fail.
+	// Close is idempotent. Read, ReadAt, and Seek return ErrClosed after Close.
 	Close() error
 }
 
@@ -191,7 +190,7 @@ func NewReader(rs io.ReadSeeker, decoder ZSTDDecoder, opts ...rOption) (Reader, 
 
 func (r *readerImpl) ReadAt(p []byte, off int64) (n int, err error) {
 	if r.closed.Load() {
-		return 0, errReaderClosed
+		return 0, ErrClosed
 	}
 
 	for m := 0; n < len(p) && err == nil; n += m {
@@ -222,7 +221,7 @@ func (r *readerImpl) Close() error {
 
 func (r *readerImpl) read(dst []byte, off int64) (int64, int, error) {
 	if r.closed.Load() {
-		return 0, 0, errReaderClosed
+		return 0, 0, ErrClosed
 	}
 
 	if off < 0 {
@@ -299,7 +298,7 @@ func (r *readerImpl) read(dst []byte, off int64) (int64, int, error) {
 
 func (r *readerImpl) Seek(offset int64, whence int) (int64, error) {
 	if r.closed.Load() {
-		return 0, errReaderClosed
+		return 0, ErrClosed
 	}
 
 	newOffset := r.offset
