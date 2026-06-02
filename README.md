@@ -1,4 +1,4 @@
-  [![License][license-img]][license] [![GoDoc][doc-img]][doc] [![Build Status][ci-img]][ci] [![Go Report][report-img]][report]
+  [![License][license-img]][license] [![OpenSSF Scorecard][scorecard-img]][scorecard] [![GoDoc][doc-img]][doc] [![Build Status][ci-img]][ci] [![Go Report][report-img]][report]
 # ZSTD seekable compression format implementation in Go
 [Seekable ZSTD compression format](https://github.com/facebook/zstd/blob/dev/contrib/seekable_format/zstd_seekable_compression_format.md) implemented in Golang.
 
@@ -106,3 +106,5 @@ if !bytes.Equal(all, []byte("Hello World!")) {
 [report]: https://goreportcard.com/report/github.com/SaveTheRbtz/zstd-seekable-format-go/pkg
 [license-img]: https://img.shields.io/badge/License-MIT-blue.svg
 [license]: https://opensource.org/licenses/MIT
+[scorecard-img]: https://api.scorecard.dev/projects/github.com/SaveTheRbtz/zstd-seekable-format-go/badge
+[scorecard]: https://scorecard.dev/viewer/?uri=github.com/SaveTheRbtz/zstd-seekable-format-go
