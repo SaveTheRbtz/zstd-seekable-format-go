@@ -238,6 +238,9 @@ func (r *Reader) read(dst []byte, off int64) (int64, int, error) {
 	if r.closed.Load() {
 		return 0, 0, ErrClosed
 	}
+	if len(dst) == 0 {
+		return off, 0, nil
+	}
 
 	if off < 0 {
 		return 0, 0, fmt.Errorf("offset before the start of the file: %d", off)
