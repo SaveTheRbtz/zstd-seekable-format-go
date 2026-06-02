@@ -16,7 +16,7 @@ func exampleFrames() [][]byte {
 	return [][]byte{[]byte("Hello"), []byte(" "), []byte("World!")}
 }
 
-func writeExampleFrames(w seekable.Writer) {
+func writeExampleFrames(w *seekable.Writer) {
 	for _, frame := range exampleFrames() {
 		if _, err := w.Write(frame); err != nil {
 			log.Fatal(err)
@@ -148,7 +148,7 @@ func ExampleNewSeekTable() {
 	// offset 7 is in frame 1
 }
 
-func ExampleConcurrentWriter_WriteMany() {
+func ExampleWriter_WriteMany() {
 	var buf bytes.Buffer
 
 	enc, err := zstd.NewWriter(nil, zstd.WithEncoderLevel(zstd.SpeedFastest))

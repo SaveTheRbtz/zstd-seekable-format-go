@@ -9,7 +9,7 @@ This library provides a random access reader (using uncompressed file offsets) f
 
 ## Using the seekable format
 
-Writing is done through the `Writer` interface:
+Writing is done through the `Writer` type:
 ```go
 import (
 	"github.com/klauspost/compress/zstd"

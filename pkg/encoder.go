@@ -14,29 +14,29 @@ import (
 // skippable frame, which must be appended after all encoded frames to form a
 // complete seekable stream. EndStream finalizes the encoder. After EndStream,
 // Encode and EndStream return ErrClosed.
-type Encoder interface {
-	// Encode returns compressed data and appends a frame to in-memory seek table.
-	// Empty inputs return an empty slice and do not add seek-table entries.
-	Encode(src []byte) ([]byte, error)
-
-	// EndStream returns the in-memory seek table as a Zstandard skippable frame
-	// and finalizes the encoder.
-	EndStream() ([]byte, error)
+type Encoder struct {
+	writer *Writer
 }
 
 // NewEncoder returns a byte-oriented encoder that uses encoder for Zstandard compression.
 //
 // The caller remains responsible for closing encoder, if it requires closing.
-func NewEncoder(encoder ZSTDEncoder, opts ...WriterOption) (Encoder, error) {
-	sw, err := NewWriter(nil, encoder, opts...)
-	if err != nil {
-		return nil, err
+func NewEncoder(encoder ZSTDEncoder, opts ...WriterOption) (*Encoder, error) {
+	writer := Writer{
+		enc:    encoder,
+		logger: discardLogger,
+	}
+	for _, o := range opts {
+		err := o(&writer)
+		if err != nil {
+			return nil, err
+		}
 	}
 
-	return sw.(*writerImpl), err
+	return &Encoder{writer: &writer}, nil
 }
 
-func (s *writerImpl) encodeOne(src []byte) ([]byte, seekTableEntry, error) {
+func (w *Writer) encodeOne(src []byte) ([]byte, seekTableEntry, error) {
 	if int64(len(src)) > maxChunkSize {
 		return nil, seekTableEntry{},
 			fmt.Errorf("chunk size too big for seekable format: %d > %d",
@@ -47,7 +47,7 @@ func (s *writerImpl) encodeOne(src []byte) ([]byte, seekTableEntry, error) {
 		return nil, seekTableEntry{}, nil
 	}
 
-	dst := s.enc.EncodeAll(src, nil)
+	dst := w.enc.EncodeAll(src, nil)
 
 	if int64(len(dst)) > maxChunkSize {
 		return nil, seekTableEntry{},
@@ -62,35 +62,41 @@ func (s *writerImpl) encodeOne(src []byte) ([]byte, seekTableEntry, error) {
 	}, nil
 }
 
-func (s *writerImpl) Encode(src []byte) ([]byte, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
+// Encode returns compressed data and appends a frame to the in-memory seek table.
+// Empty inputs return an empty slice and do not add seek-table entries.
+func (e *Encoder) Encode(src []byte) ([]byte, error) {
+	w := e.writer
+	w.mu.Lock()
+	defer w.mu.Unlock()
 
-	if s.closed {
+	if w.closed {
 		return nil, ErrClosed
 	}
 	if len(src) == 0 {
 		return []byte{}, nil
 	}
 
-	dst, entry, err := s.encodeOne(src)
+	dst, entry, err := w.encodeOne(src)
 	if err != nil {
 		return nil, err
 	}
 
-	s.logger.Debug("appending frame", slog.Any("frame", &entry))
-	s.frameEntries = append(s.frameEntries, entry)
+	w.logger.Debug("appending frame", slog.Any("frame", &entry))
+	w.frameEntries = append(w.frameEntries, entry)
 	return dst, nil
 }
 
-func (s *writerImpl) EndStream() ([]byte, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
+// EndStream returns the in-memory seek table as a Zstandard skippable frame
+// and finalizes the encoder.
+func (e *Encoder) EndStream() ([]byte, error) {
+	w := e.writer
+	w.mu.Lock()
+	defer w.mu.Unlock()
 
-	return s.endStreamLocked()
+	return w.endStreamLocked()
 }
 
-func (s *writerImpl) endStreamLocked() ([]byte, error) {
+func (s *Writer) endStreamLocked() ([]byte, error) {
 	if s.closed {
 		return nil, ErrClosed
 	}

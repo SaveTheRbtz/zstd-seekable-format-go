@@ -100,9 +100,13 @@ func (rs *readSeekerEnvImpl) ReadSkipFrame(skippableFrameOffset int64) ([]byte, 
 	return buf, nil
 }
 
-type readerImpl struct {
-	dec ZSTDDecoder
-	SeekTable
+// Reader provides sequential and random access to a seekable Zstandard stream.
+//
+// Offsets are expressed in the decompressed stream. Read and Seek use an
+// internal current offset; ReadAt does not.
+type Reader struct {
+	dec   ZSTDDecoder
+	table SeekTable
 
 	offset int64
 
@@ -116,26 +120,11 @@ type readerImpl struct {
 }
 
 var (
-	_ Reader      = (*readerImpl)(nil)
-	_ io.Seeker   = (*readerImpl)(nil)
-	_ io.Reader   = (*readerImpl)(nil)
-	_ io.ReaderAt = (*readerImpl)(nil)
-	_ io.Closer   = (*readerImpl)(nil)
+	_ io.Seeker   = (*Reader)(nil)
+	_ io.Reader   = (*Reader)(nil)
+	_ io.ReaderAt = (*Reader)(nil)
+	_ io.Closer   = (*Reader)(nil)
 )
-
-// Reader provides sequential and random access to a seekable Zstandard stream.
-//
-// Offsets are expressed in the decompressed stream. Read and Seek use an
-// internal current offset; ReadAt does not.
-type Reader interface {
-	io.Reader
-	io.ReaderAt
-	io.Seeker
-
-	// Close releases reader-owned memory and causes future Reader method calls to fail.
-	// Close is idempotent. Read, ReadAt, and Seek return ErrClosed after Close.
-	Close() error
-}
 
 // ZSTDDecoder is the decompressor.
 //
@@ -153,8 +142,8 @@ type ZSTDDecoder interface {
 //
 // NewReader reads and validates the seek table during construction. The caller
 // remains responsible for closing rs and decoder, if they require closing.
-func NewReader(rs io.ReadSeeker, decoder ZSTDDecoder, opts ...ReaderOption) (Reader, error) {
-	sr := readerImpl{
+func NewReader(rs io.ReadSeeker, decoder ZSTDDecoder, opts ...ReaderOption) (*Reader, error) {
+	sr := Reader{
 		dec: decoder,
 	}
 
@@ -183,12 +172,15 @@ func NewReader(rs io.ReadSeeker, decoder ZSTDDecoder, opts ...ReaderOption) (Rea
 		return nil, fmt.Errorf("decompressed size is too large for Reader: %d > %d", table.Size(), maxReaderOffset)
 	}
 
-	sr.SeekTable = table
+	sr.table = table
 
 	return &sr, nil
 }
 
-func (r *readerImpl) ReadAt(p []byte, off int64) (n int, err error) {
+// ReadAt reads len(p) decompressed bytes starting at off.
+//
+// ReadAt does not move the Reader's current offset.
+func (r *Reader) ReadAt(p []byte, off int64) (n int, err error) {
 	if r.closed.Load() {
 		return 0, ErrClosed
 	}
@@ -199,11 +191,12 @@ func (r *readerImpl) ReadAt(p []byte, off int64) (n int, err error) {
 	return
 }
 
-func (r *readerImpl) Read(p []byte) (n int, err error) {
+// Read reads decompressed bytes from the Reader's current offset.
+func (r *Reader) Read(p []byte) (n int, err error) {
 	offset, n, err := r.read(p, r.offset)
 	if err != nil {
 		if errors.Is(err, io.EOF) {
-			r.offset = int64(r.Size())
+			r.offset = int64(r.table.Size())
 		}
 		return
 	}
@@ -211,15 +204,17 @@ func (r *readerImpl) Read(p []byte) (n int, err error) {
 	return
 }
 
-func (r *readerImpl) Close() error {
+// Close releases reader-owned memory and causes future Reader method calls to fail.
+// Close is idempotent. Read, ReadAt, and Seek return ErrClosed after Close.
+func (r *Reader) Close() error {
 	if !r.closed.Swap(true) {
 		r.cachedFrame.replace(math.MaxUint64, nil)
-		r.SeekTable = SeekTable{}
+		r.table = SeekTable{}
 	}
 	return nil
 }
 
-func (r *readerImpl) read(dst []byte, off int64) (int64, int, error) {
+func (r *Reader) read(dst []byte, off int64) (int64, int, error) {
 	if r.closed.Load() {
 		return 0, 0, ErrClosed
 	}
@@ -227,11 +222,11 @@ func (r *readerImpl) read(dst []byte, off int64) (int64, int, error) {
 	if off < 0 {
 		return 0, 0, fmt.Errorf("offset before the start of the file: %d", off)
 	}
-	if uint64(off) >= r.Size() {
+	if uint64(off) >= r.table.Size() {
 		return 0, 0, io.EOF
 	}
 
-	index, ok := r.EntryByDecompressedOffset(uint64(off))
+	index, ok := r.table.EntryByDecompressedOffset(uint64(off))
 	if !ok {
 		return 0, 0, fmt.Errorf("failed to get index by offset: %d", off)
 	}
@@ -268,7 +263,7 @@ func (r *readerImpl) read(dst []byte, off int64) (int64, int, error) {
 			return 0, 0, fmt.Errorf("failed to decompress data data at: %d, %w", index.CompressedOffset, err)
 		}
 
-		if r.checksums {
+		if r.table.HasChecksums() {
 			checksum := uint32(xxhash.Sum64(decompressed))
 			if index.Checksum != checksum {
 				return 0, 0, fmt.Errorf("checksum verification failed at: %d: expected: %d, actual: %d",
@@ -296,7 +291,8 @@ func (r *readerImpl) read(dst []byte, off int64) (int64, int, error) {
 	return off + int64(size), int(size), nil
 }
 
-func (r *readerImpl) Seek(offset int64, whence int) (int64, error) {
+// Seek updates the Reader's current offset and returns the new offset.
+func (r *Reader) Seek(offset int64, whence int) (int64, error) {
 	if r.closed.Load() {
 		return 0, ErrClosed
 	}
@@ -308,7 +304,7 @@ func (r *readerImpl) Seek(offset int64, whence int) (int64, error) {
 	case io.SeekStart:
 		newOffset = offset
 	case io.SeekEnd:
-		newOffset = int64(r.Size()) + offset
+		newOffset = int64(r.table.Size()) + offset
 	default:
 		return 0, fmt.Errorf("unknown whence: %d", whence)
 	}
