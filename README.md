@@ -1,102 +1,117 @@
-   [![GoDoc][doc-img]][doc] [![License][license-img]][license] [![OpenSSF Scorecard][scorecard-img]][scorecard] [![Build Status][ci-img]][ci] [![Go Report][report-img]][report]
-# ZSTD seekable compression format implementation in Go
-[Seekable ZSTD compression format](https://github.com/facebook/zstd/blob/dev/contrib/seekable_format/zstd_seekable_compression_format.md) implemented in Golang.
+[![GoDoc][doc-img]][doc] [![License][license-img]][license] [![OpenSSF Scorecard][scorecard-img]][scorecard] [![Build Status][ci-img]][ci] [![Go Report][report-img]][report]
 
-This library provides a random access reader (using uncompressed file offsets) for ZSTD-compressed streams.  This can be used for creating transparent compression layers.  Coupled with Content Defined Chunking (CDC) it can also be used as a robust de-duplication layer.
-## Installation
+# zstd-seekable-format-go
 
-`go get -u github.com/SaveTheRbtz/zstd-seekable-format-go/pkg`
+Package `seekable` adds random-access reads to compressed Zstandard data.
 
-## Using the seekable format
+It writes compressed streams with a seek table and reads them by decompressed
+byte offset through `Reader`, `ReadAt`, and `Seek`. The resulting stream remains
+valid Zstandard data, so standard Zstandard readers can still decode it
+sequentially.
 
-Writing is done through the `Writer` type:
+The wire format is the [Zstandard seekable format][format]: compressed frames
+followed by a seek table in a skippable frame.
+
+The package uses small encoder/decoder interfaces and is tested with
+[`github.com/klauspost/compress/zstd`][klauspost-zstd].
+
+## Install
+
+```sh
+go get github.com/SaveTheRbtz/zstd-seekable-format-go/pkg
+```
+
 ```go
-import (
-	"github.com/klauspost/compress/zstd"
-	seekable "github.com/SaveTheRbtz/zstd-seekable-format-go/pkg"
-)
+import seekable "github.com/SaveTheRbtz/zstd-seekable-format-go/pkg"
+```
 
-enc, err := zstd.NewWriter(nil, zstd.WithEncoderLevel(zstd.SpeedFastest))
-if err != nil {
-	log.Fatal(err)
-}
-defer enc.Close()
+## Write
 
-w, err := seekable.NewWriter(f, enc)
-if err != nil {
-	log.Fatal(err)
-}
-
-// Write data in chunks.
-for _, b := range [][]byte{[]byte("Hello"), []byte(" "), []byte("World!")} {
-	_, err = w.Write(b)
+```go
+func writeSeekable(dst io.Writer, chunks [][]byte) error {
+	enc, err := zstd.NewWriter(nil, zstd.WithEncoderLevel(zstd.SpeedFastest))
 	if err != nil {
-		log.Fatal(err)
+		return err
 	}
-}
+	defer enc.Close()
 
-// Close and flush seek table.
-err = w.Close()
-if err != nil {
-	log.Fatal(err)
+	w, err := seekable.NewWriter(dst, enc)
+	if err != nil {
+		return err
+	}
+	for _, chunk := range chunks {
+		if _, err := w.Write(chunk); err != nil {
+			return err
+		}
+	}
+	return w.Close()
 }
 ```
-NB! Do not forget to call `Close` since it is responsible for flushing the seek table.
 
-Reading can either be done through `ReaderAt` interface:
+`Writer.Close` writes the final seek table. Without it, `Reader` and
+`NewSeekTable` cannot find the random-access metadata.
+
+## Read
 
 ```go
-dec, err := zstd.NewReader(nil)
-if err != nil {
-	log.Fatal(err)
-}
-defer dec.Close()
+func readAt(src io.ReadSeeker, off int64, p []byte) error {
+	dec, err := zstd.NewReader(nil)
+	if err != nil {
+		return err
+	}
+	defer dec.Close()
 
-r, err := seekable.NewReader(f, dec)
-if err != nil {
-	log.Fatal(err)
-}
-defer r.Close()
+	r, err := seekable.NewReader(src, dec)
+	if err != nil {
+		return err
+	}
+	defer r.Close()
 
-ello := make([]byte, 4)
-// ReaderAt
-r.ReadAt(ello, 1)
-if !bytes.Equal(ello, []byte("ello")) {
-	log.Fatalf("%+v != ello", ello)
+	_, err = r.ReadAt(p, off)
+	return err
 }
 ```
 
-Or through the `ReadSeeker`:
-```go
-world := make([]byte, 5)
-// Seeker
-r.Seek(-6, io.SeekEnd)
-// Reader
-r.Read(world)
-if !bytes.Equal(world, []byte("World")) {
-	log.Fatalf("%+v != World", world)
-}
-```
+Offsets are decompressed byte offsets. `Reader` implements `io.Reader`,
+`io.ReaderAt`, `io.Seeker`, and `io.Closer`.
 
-Seekable format utilizes [ZSTD skippable frames](https://github.com/facebook/zstd/blob/release/doc/zstd_compression_format.md#skippable-frames) so it is a valid ZSTD stream:
+## Metadata
 
 ```go
-// Standard ZSTD Reader
-f.Seek(0, io.SeekStart)
-dec, err := zstd.NewReader(f)
-if err != nil {
-	log.Fatal(err)
-}
-defer dec.Close()
-
-all, err := io.ReadAll(dec)
-if err != nil {
-	log.Fatal(err)
-}
-if !bytes.Equal(all, []byte("Hello World!")) {
-	log.Fatalf("%+v != Hello World!", all)
+func frameForOffset(r *seekable.Reader, off uint64) (seekable.FrameOffsetEntry, error) {
+	table, err := r.SeekTable()
+	if err != nil {
+		return seekable.FrameOffsetEntry{}, err
+	}
+	entry, ok := table.EntryByDecompressedOffset(off)
+	if !ok {
+		return seekable.FrameOffsetEntry{}, io.EOF
+	}
+	return entry, nil
 }
 ```
+
+`SeekTable` exposes the decompressed size, frame count, checksum flag, and frame
+lookup by id or decompressed offset.
+
+## Compatibility
+
+Seekable streams are valid Zstandard streams:
+
+```go
+func readSequential(src io.Reader) ([]byte, error) {
+	zr, err := zstd.NewReader(src)
+	if err != nil {
+		return nil, err
+	}
+	defer zr.Close()
+
+	return io.ReadAll(zr)
+}
+```
+
+[format]: https://github.com/facebook/zstd/blob/dev/contrib/seekable_format/zstd_seekable_compression_format.md
+[klauspost-zstd]: https://pkg.go.dev/github.com/klauspost/compress/zstd
 
 [doc-img]: https://pkg.go.dev/badge/github.com/SaveTheRbtz/zstd-seekable-format-go/pkg
 [doc]: https://pkg.go.dev/github.com/SaveTheRbtz/zstd-seekable-format-go/pkg
