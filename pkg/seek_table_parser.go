@@ -57,7 +57,7 @@ func parseSeekTableFrame(buf []byte) (SeekTable, error) {
 			expectedFrameSize, frameSize)
 	}
 
-	if frameSize > maxDecoderFrameSize {
+	if frameSize > int64(maxDecoderFrameSize) {
 		return SeekTable{}, fmt.Errorf("frame is too big: %d > %d", frameSize, maxDecoderFrameSize)
 	}
 
@@ -93,7 +93,7 @@ func seekTableFrameOffset(footer seekTableFooter, entrySize int64) (int64, error
 	frameOffset := seekTableFooterOffset + entrySize*int64(footer.NumberOfFrames)
 	frameOffset += skippableFrameHeaderSize
 
-	if frameOffset > maxDecoderFrameSize {
+	if frameOffset > int64(maxDecoderFrameSize) {
 		return 0, fmt.Errorf("frame offset is too big: %d > %d",
 			frameOffset, maxDecoderFrameSize)
 	}

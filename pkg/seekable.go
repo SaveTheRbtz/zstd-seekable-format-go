@@ -45,7 +45,7 @@ const (
 	skippableMagicNumberFieldSize = 4
 
 	// maxDecoderFrameSize is the maximum frame size representable by the seekable format's 32-bit size fields.
-	maxDecoderFrameSize = math.MaxUint32
+	maxDecoderFrameSize uint32 = math.MaxUint32
 
 	seekableTag = 0xE
 
