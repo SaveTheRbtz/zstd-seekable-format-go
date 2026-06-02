@@ -172,6 +172,51 @@ func TestReader(t *testing.T) {
 	}
 }
 
+func TestReaderSeekTable(t *testing.T) {
+	t.Parallel()
+
+	dec, err := zstd.NewReader(nil)
+	require.NoError(t, err)
+	defer dec.Close()
+
+	for _, tc := range []struct {
+		name         string
+		buf          []byte
+		hasChecksums bool
+	}{
+		{name: "checksum", buf: checksum, hasChecksums: true},
+		{name: "no checksum", buf: noChecksum, hasChecksums: false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			r, err := NewReader(&seekableBufferReaderAt{buf: tc.buf}, dec)
+			require.NoError(t, err)
+
+			table, err := r.SeekTable()
+			require.NoError(t, err)
+			assert.Equal(t, uint64(len(sourceString)), table.Size())
+			assert.Equal(t, int64(2), table.NumFrames())
+			assert.Equal(t, tc.hasChecksums, table.HasChecksums())
+
+			entry, ok := table.EntryByID(1)
+			require.True(t, ok)
+			assert.Equal(t, int64(1), entry.ID)
+			assert.Equal(t, uint64(4), entry.DecompressedOffset)
+			assert.Equal(t, uint32(5), entry.DecompressedSize)
+
+			entry, ok = table.EntryByDecompressedOffset(4)
+			require.True(t, ok)
+			assert.Equal(t, int64(1), entry.ID)
+
+			err = r.Close()
+			require.NoError(t, err)
+
+			table, err = r.SeekTable()
+			require.ErrorIs(t, err, ErrClosed)
+			assert.Equal(t, SeekTable{}, table)
+		})
+	}
+}
+
 func TestReaderPostCloseContract(t *testing.T) {
 	t.Parallel()
 
