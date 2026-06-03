@@ -16,6 +16,11 @@ type FIFO struct {
 	bytes  uint64
 }
 
+type fifoEntry struct {
+	key  Key
+	data []byte
+}
+
 // NewFIFO returns a FIFO cache with the provided limits.
 func NewFIFO(limits Limits) *FIFO {
 	return &FIFO{
@@ -33,7 +38,7 @@ func (c *FIFO) Get(key Key) ([]byte, bool) {
 	if !ok {
 		return nil, false
 	}
-	return elem.Value.(*cacheEntry).data, true
+	return elem.Value.(*fifoEntry).data, true
 }
 
 // Put stores data for key, replacing any existing entry.
@@ -52,9 +57,9 @@ func (c *FIFO) Put(key Key, data []byte) {
 	}
 
 	c.evictFor(1, size)
-	entry := newCacheEntry(key, data)
+	entry := &fifoEntry{key: key, data: data}
 	c.items[key] = c.order.PushBack(entry)
-	c.bytes += entry.size
+	c.bytes += uint64(len(entry.data))
 }
 
 // Clear removes all cached frames.
@@ -76,9 +81,9 @@ func (c *FIFO) remove(key Key) {
 }
 
 func (c *FIFO) removeElement(elem *list.Element) {
-	entry := elem.Value.(*cacheEntry)
+	entry := elem.Value.(*fifoEntry)
 	delete(c.items, entry.key)
-	c.bytes -= entry.size
+	c.bytes -= uint64(len(entry.data))
 	c.order.Remove(elem)
 }
 

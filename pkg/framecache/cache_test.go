@@ -260,24 +260,34 @@ func assertCacheInvariants(t *testing.T, c Cache) {
 	var sum uint64
 	seen := make(map[Key]bool, order.Len())
 	for elem := order.Front(); elem != nil; elem = elem.Next() {
-		entry, ok := elem.Value.(*cacheEntry)
-		if !ok {
-			t.Fatalf("list entry has type %T", elem.Value)
+		key, data := cacheElement(t, elem)
+		if seen[key] {
+			t.Fatalf("duplicate key %+v", key)
 		}
-		if seen[entry.key] {
-			t.Fatalf("duplicate key %+v", entry.key)
+		seen[key] = true
+		if items[key] != elem {
+			t.Fatalf("map element mismatch for key %+v", key)
 		}
-		seen[entry.key] = true
-		if items[entry.key] != elem {
-			t.Fatalf("map element mismatch for key %+v", entry.key)
-		}
-		if uint64(len(entry.data)) != entry.size {
-			t.Fatalf("key %+v size = %d, len(data) = %d", entry.key, entry.size, len(entry.data))
-		}
-		sum += entry.size
+		sum += uint64(len(data))
 	}
 	if sum != bytes {
 		t.Fatalf("byte accounting = %d, want %d", bytes, sum)
+	}
+}
+
+func cacheElement(t *testing.T, elem *list.Element) (Key, []byte) {
+	t.Helper()
+
+	switch entry := elem.Value.(type) {
+	case *fifoEntry:
+		return entry.key, entry.data
+	case *lruEntry:
+		return entry.key, entry.data
+	case *sieveEntry:
+		return entry.key, entry.data
+	default:
+		t.Fatalf("list entry has type %T", elem.Value)
+		return Key{}, nil
 	}
 }
 

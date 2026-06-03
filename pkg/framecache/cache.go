@@ -27,21 +27,6 @@ type Limits struct {
 	MaxBytes uint64
 }
 
-type cacheEntry struct {
-	key     Key
-	data    []byte
-	size    uint64
-	visited bool
-}
-
-func newCacheEntry(key Key, data []byte) *cacheEntry {
-	return &cacheEntry{
-		key:  key,
-		data: data,
-		size: uint64(len(data)),
-	}
-}
-
 func canStore(limits Limits, size uint64) bool {
 	if limits.MaxFrames <= 0 {
 		return false

@@ -16,6 +16,11 @@ type LRU struct {
 	bytes  uint64
 }
 
+type lruEntry struct {
+	key  Key
+	data []byte
+}
+
 // NewLRU returns an LRU cache with the provided limits.
 func NewLRU(limits Limits) *LRU {
 	return &LRU{
@@ -34,7 +39,7 @@ func (c *LRU) Get(key Key) ([]byte, bool) {
 		return nil, false
 	}
 	c.order.MoveToFront(elem)
-	return elem.Value.(*cacheEntry).data, true
+	return elem.Value.(*lruEntry).data, true
 }
 
 // Put stores data for key, replacing any existing entry.
@@ -49,19 +54,18 @@ func (c *LRU) Put(key Key, data []byte) {
 	}
 
 	if elem, ok := c.items[key]; ok {
-		entry := elem.Value.(*cacheEntry)
-		c.bytes -= entry.size
+		entry := elem.Value.(*lruEntry)
+		c.bytes -= uint64(len(entry.data))
 		entry.data = data
-		entry.size = size
 		c.bytes += size
 		c.order.MoveToFront(elem)
 		c.evict()
 		return
 	}
 
-	entry := newCacheEntry(key, data)
+	entry := &lruEntry{key: key, data: data}
 	c.items[key] = c.order.PushFront(entry)
-	c.bytes += entry.size
+	c.bytes += uint64(len(entry.data))
 	c.evict()
 }
 
@@ -84,9 +88,9 @@ func (c *LRU) remove(key Key) {
 }
 
 func (c *LRU) removeElement(elem *list.Element) {
-	entry := elem.Value.(*cacheEntry)
+	entry := elem.Value.(*lruEntry)
 	delete(c.items, entry.key)
-	c.bytes -= entry.size
+	c.bytes -= uint64(len(entry.data))
 	c.order.Remove(elem)
 }
 

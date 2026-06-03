@@ -18,6 +18,12 @@ type Sieve struct {
 	bytes  uint64
 }
 
+type sieveEntry struct {
+	key     Key
+	data    []byte
+	visited bool
+}
+
 // NewSieve returns a Sieve cache with the provided limits.
 func NewSieve(limits Limits) *Sieve {
 	return &Sieve{
@@ -35,7 +41,7 @@ func (c *Sieve) Get(key Key) ([]byte, bool) {
 	if !ok {
 		return nil, false
 	}
-	entry := elem.Value.(*cacheEntry)
+	entry := elem.Value.(*sieveEntry)
 	entry.visited = true
 	return entry.data, true
 }
@@ -58,11 +64,10 @@ func (c *Sieve) Put(key Key, data []byte) {
 	}
 
 	c.evictFor(1, size)
-	entry := newCacheEntry(key, data)
-	entry.visited = visited
+	entry := &sieveEntry{key: key, data: data, visited: visited}
 	elem := c.order.PushFront(entry)
 	c.items[key] = elem
-	c.bytes += entry.size
+	c.bytes += uint64(len(entry.data))
 	if c.hand == nil {
 		c.hand = c.order.Back()
 	}
@@ -89,9 +94,9 @@ func (c *Sieve) remove(key Key) {
 
 func (c *Sieve) removeElement(elem *list.Element) {
 	next := c.prevCircular(elem)
-	entry := elem.Value.(*cacheEntry)
+	entry := elem.Value.(*sieveEntry)
 	delete(c.items, entry.key)
-	c.bytes -= entry.size
+	c.bytes -= uint64(len(entry.data))
 	c.order.Remove(elem)
 
 	switch {
@@ -116,7 +121,7 @@ func (c *Sieve) evictFor(extraFrames int, extraBytes uint64) {
 		}
 
 		elem := c.hand
-		entry := elem.Value.(*cacheEntry)
+		entry := elem.Value.(*sieveEntry)
 		if entry.visited {
 			entry.visited = false
 			next := c.prevCircular(elem)
