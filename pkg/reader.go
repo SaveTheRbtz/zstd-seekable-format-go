@@ -8,7 +8,6 @@ import (
 	"sync"
 	"sync/atomic"
 
-	"github.com/SaveTheRbtz/zstd-seekable-format-go/pkg/framecache"
 	"github.com/cespare/xxhash/v2"
 )
 
@@ -100,8 +99,7 @@ type Reader struct {
 
 	closed atomic.Bool
 
-	frameCacheMu sync.Mutex
-	frameCache   framecache.Cache
+	frameCache *readerFrameCache
 }
 
 var (
@@ -149,7 +147,7 @@ func NewReader(rs io.ReadSeeker, decoder ZSTDDecoder, opts ...ReaderOption) (*Re
 		}
 	}
 	if sr.frameCache == nil {
-		sr.frameCache = defaultFrameCache()
+		sr.frameCache = newReaderFrameCache(nil)
 	}
 
 	if sr.env == nil {
@@ -226,7 +224,7 @@ func (r *Reader) Read(p []byte) (n int, err error) {
 // environment passed to NewReader. Close clears the Reader's frame cache.
 func (r *Reader) Close() error {
 	if !r.closed.Swap(true) {
-		r.clearFrameCache()
+		r.frameCache.Clear()
 		r.frameCache = nil
 		r.table = SeekTable{}
 	}
@@ -259,7 +257,7 @@ func (r *Reader) read(dst []byte, off int64) (int64, int, error) {
 
 	var decompressed []byte
 
-	cachedData, ok := r.getCachedFrame(index.ID)
+	cachedData, ok := r.frameCache.Get(index.ID)
 	if ok {
 		decompressed = cachedData
 	} else {
@@ -290,7 +288,7 @@ func (r *Reader) read(dst []byte, off int64) (int64, int, error) {
 					index.CompressedOffset, index.Checksum, checksum)
 			}
 		}
-		r.putCachedFrame(index.ID, decompressed)
+		r.frameCache.Put(index.ID, decompressed)
 	}
 
 	if len(decompressed) != int(index.DecompressedSize) {

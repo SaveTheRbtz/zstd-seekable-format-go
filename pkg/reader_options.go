@@ -37,11 +37,7 @@ func WithReaderEnvironment(e ReaderEnvironment) ReaderOption {
 // cache directly or pass it to another Reader.
 func WithReaderFrameCache(cache framecache.Cache) ReaderOption {
 	return func(r *Reader) error {
-		selected := cache
-		if selected == nil {
-			selected = defaultFrameCache()
-		}
-		r.frameCache = selected
+		r.frameCache = newReaderFrameCache(cache)
 		return nil
 	}
 }

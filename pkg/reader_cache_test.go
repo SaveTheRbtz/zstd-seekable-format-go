@@ -114,6 +114,21 @@ func TestReaderFrameCacheOptionUsesCallerCache(t *testing.T) {
 	assert.Equal(t, 2, cache.clears)
 }
 
+func TestReaderFrameCacheOptionDoesNotClearCacheOnNewReaderFailure(t *testing.T) {
+	t.Parallel()
+
+	dec, err := zstd.NewReader(nil)
+	require.NoError(t, err)
+	defer dec.Close()
+	cache := newSpyFrameCache()
+	cache.items[0] = []byte("stale frame")
+
+	_, err = NewReader(bytes.NewReader([]byte("not a seekable stream")), dec, WithReaderFrameCache(cache))
+	require.Error(t, err)
+	assert.Equal(t, 0, cache.clears)
+	assert.Equal(t, []byte("stale frame"), cache.items[0])
+}
+
 func TestReaderNoStorageFrameCacheDisablesCaching(t *testing.T) {
 	t.Parallel()
 
