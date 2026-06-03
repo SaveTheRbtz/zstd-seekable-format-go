@@ -19,8 +19,6 @@
 // The package accepts small encoder and decoder interfaces and is tested with
 // github.com/klauspost/compress/zstd.
 //
-// Reader caches one decoded frame by default using
-// framecache.NewFIFO(framecache.Limits{MaxFrames: 1}). Use WithReaderFrameCache
-// with the framecache package to choose another replacement policy. Disable
-// caching with framecache.NewFIFO(framecache.Limits{MaxFrames: 0}).
+// Reader caches one decoded frame by default. Use WithReaderFrameCache to
+// select, share, or disable the decoded-frame cache.
 package seekable

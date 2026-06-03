@@ -133,8 +133,8 @@ type ZSTDDecoder interface {
 // not move rs's current offset.
 //
 // decoder must be non-nil. NewReader reads and validates the seek table during
-// construction. By default, Reader caches one decoded frame using a FIFO cache;
-// use WithReaderFrameCache to select, share, or disable the decoded-frame cache.
+// construction. By default, Reader caches one decoded frame; use
+// WithReaderFrameCache to change or disable caching.
 //
 // The caller remains responsible for closing rs and decoder, if they require
 // closing.
@@ -195,7 +195,7 @@ func (r *Reader) SeekTable() (SeekTable, error) {
 //
 // If off is at or beyond the decompressed stream size, ReadAt returns io.EOF. If
 // p extends beyond the end of the stream, ReadAt returns the bytes available and
-// io.EOF. A zero-length p returns 0, nil.
+// io.EOF.
 //
 // Before Close, ReadAt may be called concurrently if the supplied decoder, read
 // environment, and frame cache support concurrent use.
@@ -221,7 +221,7 @@ func (r *Reader) Read(p []byte) (n int, err error) {
 	return
 }
 
-// Close releases reader-owned memory.
+// Close releases resources held by the Reader.
 //
 // Close is idempotent. Read, ReadAt, Seek, and SeekTable return ErrClosed after
 // Close. Close does not close the io.ReadSeeker, decoder, or custom read

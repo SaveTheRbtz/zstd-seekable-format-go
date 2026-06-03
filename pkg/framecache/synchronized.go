@@ -2,7 +2,7 @@ package framecache
 
 import "sync"
 
-// Synchronized serializes calls to another cache.
+// Synchronized wraps a Cache so its operations are safe for concurrent use.
 type Synchronized struct {
 	mu    sync.Mutex
 	cache Cache
@@ -13,14 +13,11 @@ var (
 	_ Clearer = (*Synchronized)(nil)
 )
 
-// NewSynchronized returns a cache wrapper that serializes calls to cache.
+// NewSynchronized returns a concurrent-safe wrapper around cache.
 //
 // It is intended for simple custom caches that are used with concurrent
 // seekable.Reader.ReadAt calls or shared by multiple Readers. Built-in caches
 // are already safe for concurrent use and do not need this wrapper.
-//
-// The returned wrapper's Clear method calls the wrapped cache's Clear method if
-// it implements Clearer. Otherwise Clear is a no-op.
 //
 // NewSynchronized panics if cache is nil.
 func NewSynchronized(cache Cache) *Synchronized {
@@ -30,7 +27,7 @@ func NewSynchronized(cache Cache) *Synchronized {
 	return &Synchronized{cache: cache}
 }
 
-// Get calls the wrapped cache's Get method while holding c's lock.
+// Get returns the cached frame for key from the wrapped cache.
 func (c *Synchronized) Get(key Key) ([]byte, bool) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -38,7 +35,7 @@ func (c *Synchronized) Get(key Key) ([]byte, bool) {
 	return c.cache.Get(key)
 }
 
-// Put calls the wrapped cache's Put method while holding c's lock.
+// Put stores data for key in the wrapped cache.
 func (c *Synchronized) Put(key Key, data []byte) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -46,8 +43,8 @@ func (c *Synchronized) Put(key Key, data []byte) {
 	c.cache.Put(key, data)
 }
 
-// Clear calls the wrapped cache's Clear method while holding c's lock if the
-// wrapped cache implements Clearer. Otherwise Clear is a no-op.
+// Clear clears the wrapped cache if it implements Clearer. Otherwise Clear does
+// nothing.
 func (c *Synchronized) Clear() {
 	c.mu.Lock()
 	defer c.mu.Unlock()

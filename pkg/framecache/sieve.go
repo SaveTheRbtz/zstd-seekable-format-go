@@ -7,9 +7,9 @@ import (
 
 // Sieve is a decoded-frame cache using the Sieve replacement policy.
 //
-// Hits set a visited bit. During eviction, a hand scans resident entries: a
-// visited entry gets a second chance and has its bit cleared; the first
-// unvisited entry is evicted. Sieve is safe for concurrent use.
+// Hits and replacements mark entries visited. During eviction, visited entries
+// get one second chance; the first unvisited entry is evicted. Sieve is safe for
+// concurrent use.
 type Sieve struct {
 	limits Limits
 	mu     sync.Mutex

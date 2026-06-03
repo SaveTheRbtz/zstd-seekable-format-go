@@ -84,7 +84,7 @@ func ExampleCache_customReplacementPolicy() {
 	cache.Put(first, []byte("first"))
 	cache.Put(second, []byte("second"))
 
-	// Touch first so CLOCK gives it a second chance during replacement.
+	// Mark first as used so the custom cache evicts second.
 	_, _ = cache.Get(first)
 	cache.Put(third, []byte("third"))
 
@@ -96,16 +96,6 @@ func ExampleCache_customReplacementPolicy() {
 	// first: first
 	// second: miss
 	// third: third
-}
-
-func ExampleLimits_disabled() {
-	cache := framecache.NewFIFO(framecache.Limits{MaxFrames: 0})
-	cache.Put(framecache.NewKey(1, 1), []byte("decoded frame"))
-	_, ok := cache.Get(framecache.NewKey(1, 1))
-	fmt.Println(ok)
-
-	// Output:
-	// false
 }
 
 func printFrame(label string, cache framecache.Cache, key framecache.Key) {

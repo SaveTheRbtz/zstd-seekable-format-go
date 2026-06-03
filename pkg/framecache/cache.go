@@ -9,9 +9,7 @@ package framecache
 // Cache implementations passed to a concurrently used seekable.Reader must be
 // safe for concurrent use. The built-in caches satisfy that requirement.
 type Cache interface {
-	// Get returns the frame stored for key.
-	//
-	// ok reports whether key was found.
+	// Get returns the frame stored for key, if any.
 	//
 	// Implementations may return the same []byte supplied to Put. Callers must
 	// not mutate the returned slice.
@@ -26,6 +24,7 @@ type Cache interface {
 
 // Clearer is implemented by caches that support explicit clearing.
 type Clearer interface {
+	// Clear removes all cached frames.
 	Clear()
 }
 
@@ -35,8 +34,8 @@ type Limits struct {
 	MaxFrames int
 
 	// MaxBytes caps decoded bytes stored in the cache. MaxBytes == 0 means no
-	// byte limit. When MaxBytes > 0, entries larger than MaxBytes are ignored;
-	// an oversized Put for an existing key removes the existing entry.
+	// byte limit. Entries larger than MaxBytes are not stored; if the key
+	// already exists, the existing entry is removed.
 	MaxBytes uint64
 }
 

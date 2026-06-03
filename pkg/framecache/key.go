@@ -16,28 +16,24 @@ var (
 
 // Key identifies one decoded frame in one cache namespace.
 //
-// seekable.Reader assigns process-local namespaces to Reader instances. Those
-// namespaces prevent collisions in shared caches, but they are not persistent
-// stream IDs and must not be used as durable cache identity.
+// Use distinct namespaces when one cache may hold frames from different streams
+// or Readers. seekable.Reader assigns process-local namespaces to Reader
+// instances. Namespaces are not persistent stream IDs and must not be used as
+// durable cache identity.
 type Key struct {
 	namespace uint64
 	frameID   int64
 }
 
-// NewKey returns a cache key for direct cache use.
-//
-// Most callers do not need this; seekable.Reader creates keys for configured
-// caches. Use distinct namespace values when one cache may hold frames from
-// different streams or Readers. namespace must not be treated as a stable stream
-// identity.
+// NewKey returns a key for namespace and frameID.
 func NewKey(namespace uint64, frameID int64) Key {
 	return Key{namespace: namespace, frameID: frameID}
 }
 
-// ParseKey returns the key encoded by Key.MarshalBinary or Key.AppendBinary.
+// ParseKey decodes one key from data.
 //
-// data must contain exactly one key encoding. If AppendBinary was called with a
-// non-empty dst, pass only the appended key bytes to ParseKey.
+// data must be exactly the bytes returned by MarshalBinary, or exactly the bytes
+// appended by AppendBinary.
 func ParseKey(data []byte) (Key, error) {
 	var key Key
 	if err := key.UnmarshalBinary(data); err != nil {
@@ -53,9 +49,8 @@ func (k Key) FrameID() int64 {
 
 // AppendBinary appends k's opaque binary encoding to dst and returns the result.
 //
-// The encoding is useful for ephemeral external caches that need byte keys. It
-// must not be used as persistent cache identity across Reader or process
-// lifetimes.
+// The encoding is suitable for byte-keyed caches. It is not stable across
+// Reader or process lifetimes.
 func (k Key) AppendBinary(dst []byte) ([]byte, error) {
 	var data [keyBinarySize]byte
 	binary.BigEndian.PutUint64(data[:8], k.namespace)
@@ -65,9 +60,8 @@ func (k Key) AppendBinary(dst []byte) ([]byte, error) {
 
 // MarshalBinary returns k's opaque binary encoding.
 //
-// The encoding is useful for ephemeral external caches that need byte keys. It
-// must not be used as persistent cache identity across Reader or process
-// lifetimes.
+// The encoding is suitable for byte-keyed caches. It is not stable across
+// Reader or process lifetimes.
 func (k Key) MarshalBinary() ([]byte, error) {
 	return k.AppendBinary(nil)
 }
