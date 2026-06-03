@@ -42,12 +42,15 @@ func (k Key) FrameID() int64 {
 }
 
 // AppendBinary appends k's opaque binary encoding to dst and returns the result.
+//
+// The encoding is useful for ephemeral external caches that need byte keys. It
+// must not be used as persistent cache identity across Reader or process
+// lifetimes.
 func (k Key) AppendBinary(dst []byte) []byte {
-	n := len(dst)
-	dst = append(dst, make([]byte, keyBinarySize)...)
-	binary.BigEndian.PutUint64(dst[n:n+8], k.namespace)
-	binary.BigEndian.PutUint64(dst[n+8:n+keyBinarySize], uint64(k.frameID))
-	return dst
+	var data [keyBinarySize]byte
+	binary.BigEndian.PutUint64(data[:8], k.namespace)
+	binary.BigEndian.PutUint64(data[8:], uint64(k.frameID))
+	return append(dst, data[:]...)
 }
 
 // MarshalBinary returns k's opaque binary encoding.
