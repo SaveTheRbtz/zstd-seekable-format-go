@@ -90,7 +90,7 @@ func ExampleCache_customReplacementPolicy() {
 	cache.Put(first, []byte("first"))
 	cache.Put(second, []byte("second"))
 
-	// Mark first as used so the custom cache evicts second.
+	// Touch first so the clock cache gives it a second chance and evicts second.
 	_, _ = cache.Get(first)
 	cache.Put(third, []byte("third"))
 

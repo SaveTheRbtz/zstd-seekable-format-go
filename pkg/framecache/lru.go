@@ -4,7 +4,7 @@ import "container/list"
 
 // LRU is a decoded-frame cache using the least-recently-used replacement policy.
 //
-// Hits and replacements mark entries recently used.
+// Stored or retrieved frames become the most recently used entry.
 type LRU struct {
 	limits Limits
 	items  map[int64]*list.Element

@@ -18,7 +18,4 @@
 //
 // The package accepts small encoder and decoder interfaces and is tested with
 // github.com/klauspost/compress/zstd.
-//
-// Reader caches one decoded frame by default. Use WithReaderFrameCache to
-// select or disable the decoded-frame cache.
 package seekable
