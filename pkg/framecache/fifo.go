@@ -2,9 +2,9 @@ package framecache
 
 import "container/list"
 
-// FIFO is a first-in, first-out decoded-frame cache.
+// FIFO is a decoded-frame cache using first-in, first-out replacement.
 //
-// Hits do not affect eviction order.
+// Calls to Get do not affect eviction order.
 type FIFO struct {
 	limits Limits
 	items  map[int64]*list.Element
@@ -25,7 +25,7 @@ func NewFIFO(limits Limits) *FIFO {
 	}
 }
 
-// Get returns the cached frame for frameID.
+// Get returns the frame stored for frameID, if any.
 func (c *FIFO) Get(frameID int64) ([]byte, bool) {
 	elem, ok := c.items[frameID]
 	if !ok {
@@ -34,10 +34,8 @@ func (c *FIFO) Get(frameID int64) ([]byte, bool) {
 	return elem.Value.(*fifoEntry).data, true
 }
 
-// Put stores data for frameID, replacing any existing entry.
-//
-// Replacing an existing frame resets its FIFO position as if it were newly
-// inserted.
+// Put stores data for frameID as a new FIFO insertion, replacing any existing
+// entry.
 func (c *FIFO) Put(frameID int64, data []byte) {
 	size := uint64(len(data))
 	if !c.limits.canStore(size) {

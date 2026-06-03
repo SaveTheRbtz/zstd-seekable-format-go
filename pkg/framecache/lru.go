@@ -2,9 +2,9 @@ package framecache
 
 import "container/list"
 
-// LRU is a decoded-frame cache using the least-recently-used replacement policy.
+// LRU is a decoded-frame cache that evicts the least recently used frame.
 //
-// Stored or retrieved frames become the most recently used entry.
+// Put and successful Get calls mark frames most recently used.
 type LRU struct {
 	limits Limits
 	items  map[int64]*list.Element
@@ -25,7 +25,8 @@ func NewLRU(limits Limits) *LRU {
 	}
 }
 
-// Get returns the cached frame for frameID and marks it recently used.
+// Get returns the frame stored for frameID, if any. On a hit, Get marks the
+// frame most recently used.
 func (c *LRU) Get(frameID int64) ([]byte, bool) {
 	elem, ok := c.items[frameID]
 	if !ok {
@@ -35,7 +36,8 @@ func (c *LRU) Get(frameID int64) ([]byte, bool) {
 	return elem.Value.(*lruEntry).data, true
 }
 
-// Put stores data for frameID, replacing any existing entry.
+// Put stores data for frameID, replacing any existing frame and marking it most
+// recently used.
 func (c *LRU) Put(frameID int64, data []byte) {
 	size := uint64(len(data))
 	if !c.limits.canStore(size) {

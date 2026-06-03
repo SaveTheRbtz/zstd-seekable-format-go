@@ -83,11 +83,11 @@ func (rs *readSeekerEnvImpl) ReadSkipFrame(skippableFrameOffset int64) ([]byte, 
 // Offsets are expressed in the decompressed stream. Read and Seek use an
 // internal current offset; ReadAt does not.
 //
-// Before Close, SeekTable may be called concurrently with other Reader methods.
-// ReadAt may also be called concurrently if the supplied decoder and read
-// environment support concurrent use. Read and Seek share the internal current
-// offset and should be serialized by the caller. No Reader method should be
-// called concurrently with Close.
+// SeekTable may be called concurrently with any Reader method except Close.
+// ReadAt may be called concurrently with other Reader methods when the decoder
+// and read environment support concurrent use. Read and Seek share the current
+// offset and must be serialized by the caller. Do not call Close concurrently
+// with any Reader method.
 type Reader struct {
 	dec   ZSTDDecoder
 	table SeekTable
@@ -123,13 +123,13 @@ type ZSTDDecoder interface {
 // NewReader returns a Zstandard stream reader that supports random access by
 // decompressed offset.
 //
-// The stream must contain a final seek-table skippable frame. rs must be
-// non-nil unless WithReaderEnvironment supplies a custom read environment. When
+// The stream must end with a seek-table skippable frame. Unless
+// WithReaderEnvironment supplies a read environment, rs must be non-nil. When
 // NewReader uses rs directly and rs also implements io.ReaderAt, frame reads do
 // not move rs's current offset.
 //
 // The decoder must be non-nil. NewReader reads and validates the seek table
-// during construction. By default, Reader caches one decoded frame; use
+// during construction. Reader caches one decoded frame by default; use
 // WithReaderFrameCache to change or disable caching.
 //
 // The caller remains responsible for closing rs and decoder, if they require
@@ -189,10 +189,9 @@ func (r *Reader) SeekTable() (SeekTable, error) {
 //
 // ReadAt does not move the Reader's current offset.
 //
-// For non-empty p, if off is at or beyond the decompressed stream size, ReadAt
-// returns io.EOF. If p extends beyond the end of the stream, ReadAt returns the
-// bytes available and io.EOF. Before Close, a zero-length p returns 0, nil for
-// any offset.
+// ReadAt follows io.ReaderAt EOF behavior. For non-empty p, it returns io.EOF
+// when off is at or past the decompressed size, or with the bytes read when p
+// extends past the end. Before Close, a zero-length p returns 0, nil.
 //
 // Before Close, ReadAt may be called concurrently if the supplied decoder and
 // read environment support concurrent use.
@@ -218,10 +217,10 @@ func (r *Reader) Read(p []byte) (n int, err error) {
 	return
 }
 
-// Close releases resources held by the Reader.
+// Close releases Reader-owned resources.
 //
-// Close is idempotent. Read, ReadAt, Seek, and SeekTable return ErrClosed after
-// Close. Close does not close the io.ReadSeeker, decoder, or custom read
+// Close is idempotent. After Close, Read, ReadAt, Seek, and SeekTable return
+// ErrClosed. Close does not close the io.ReadSeeker, decoder, or custom read
 // environment passed to NewReader.
 func (r *Reader) Close() error {
 	if !r.closed.Swap(true) {

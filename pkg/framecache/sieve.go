@@ -2,10 +2,10 @@ package framecache
 
 import "container/list"
 
-// Sieve is a decoded-frame cache using the SIEVE-k replacement policy with k=16.
+// Sieve is a decoded-frame cache using the SIEVE-k replacement policy.
 //
-// Hits and replacements increment a small counter. During eviction, entries
-// with a positive counter are decremented and get another chance; the first
+// Hits and updates increment a per-entry counter, capped at 16. During
+// eviction, entries with positive counters are decremented and kept; the first
 // entry with a zero counter is evicted.
 type Sieve struct {
 	limits Limits
@@ -31,7 +31,8 @@ func NewSieve(limits Limits) *Sieve {
 	}
 }
 
-// Get returns the cached frame for frameID and marks it used.
+// Get returns the frame stored for frameID, if any. On a hit, Get increments
+// the frame's counter.
 func (c *Sieve) Get(frameID int64) ([]byte, bool) {
 	elem, ok := c.items[frameID]
 	if !ok {

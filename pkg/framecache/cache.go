@@ -1,22 +1,17 @@
 // Package framecache provides decoded-frame cache implementations for seekable readers.
 //
-// When a cache is used by a seekable.Reader, the reader owns it and serializes
-// access, so Cache implementations used only that way need not be safe for
-// concurrent use.
+// A Cache used by seekable.Reader need not be safe for concurrent use; the
+// reader serializes access.
 package framecache
 
 // Cache stores decoded frames by seek-table frame ID.
 type Cache interface {
-	// Get returns the frame stored for frameID, if any.
-	//
-	// Implementations may return the same []byte supplied to Put. Callers must
-	// not mutate the returned slice.
+	// Get returns the frame for frameID, if present. The returned slice must not
+	// be modified and may alias data passed to Put.
 	Get(frameID int64) ([]byte, bool)
 
-	// Put stores data for frameID, replacing any existing value.
-	//
-	// Implementations may retain data directly. Callers must not mutate data
-	// after passing it to Put.
+	// Put stores data for frameID, replacing any existing value. The caller must
+	// not modify data after Put returns.
 	Put(frameID int64, data []byte)
 
 	// Clear removes all cached frames.
@@ -25,7 +20,7 @@ type Cache interface {
 
 // Limits configures cache capacity.
 type Limits struct {
-	// MaxFrames caps the number of stored frames. MaxFrames <= 0 disables storage.
+	// MaxFrames caps the number of stored frames. Values <= 0 disable storage.
 	MaxFrames int
 
 	// MaxBytes caps decoded bytes stored in the cache. A zero value applies no
