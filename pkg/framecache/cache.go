@@ -4,11 +4,17 @@
 package framecache
 
 // Cache stores decoded frames by key.
-//
-// Values returned by Get are immutable by convention. Callers must not mutate
-// them after putting them in a cache or after getting them back from a cache.
 type Cache interface {
+	// Get returns the frame stored for key.
+	//
+	// Implementations may return the same []byte supplied to Put. Callers must
+	// not mutate the returned slice.
 	Get(key Key) ([]byte, bool)
+
+	// Put stores data for key, replacing any existing value.
+	//
+	// Implementations may retain data directly. Callers must not mutate data
+	// after passing it to Put.
 	Put(key Key, data []byte)
 }
 
@@ -19,11 +25,12 @@ type Clearer interface {
 
 // Limits configures cache capacity.
 type Limits struct {
-	// MaxFrames is the required capacity knob. MaxFrames <= 0 means cache nothing.
+	// MaxFrames caps the number of stored frames. MaxFrames <= 0 disables storage.
 	MaxFrames int
 
 	// MaxBytes caps decoded bytes stored in the cache. MaxBytes == 0 means no
-	// byte limit. When MaxBytes > 0, entries larger than MaxBytes are ignored.
+	// byte limit. When MaxBytes > 0, entries larger than MaxBytes are ignored;
+	// an oversized Put for an existing key removes the existing entry.
 	MaxBytes uint64
 }
 

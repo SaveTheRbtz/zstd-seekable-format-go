@@ -42,6 +42,9 @@ func (c *FIFO) Get(key Key) ([]byte, bool) {
 }
 
 // Put stores data for key, replacing any existing entry.
+//
+// Replacing an existing key resets its FIFO position as if it were newly
+// inserted.
 func (c *FIFO) Put(key Key, data []byte) {
 	c.mu.Lock()
 	defer c.mu.Unlock()

@@ -52,7 +52,7 @@ func (c *spyFrameCache) Counts() (int, int) {
 	return c.gets, c.puts
 }
 
-func TestReaderDefaultFrameCacheIsOneFrameFIFO(t *testing.T) {
+func TestReaderDefaultFrameCacheKeepsOneDecodedFrame(t *testing.T) {
 	t.Parallel()
 
 	compressed, frames, _ := cacheTestStream(t, 2)
@@ -78,7 +78,7 @@ func TestReaderDefaultFrameCacheIsOneFrameFIFO(t *testing.T) {
 	assert.Equal(t, 3, counting.Count())
 }
 
-func TestReaderFrameCacheOption(t *testing.T) {
+func TestReaderFrameCacheOptionUsesCallerCache(t *testing.T) {
 	t.Parallel()
 
 	compressed, frames, _ := cacheTestStream(t, 1)
@@ -105,7 +105,7 @@ func TestReaderFrameCacheOption(t *testing.T) {
 	assert.Equal(t, 1, puts)
 }
 
-func TestReaderFIFOZeroDisablesFrameCache(t *testing.T) {
+func TestReaderNoStorageFrameCacheDisablesCaching(t *testing.T) {
 	t.Parallel()
 
 	compressed, frames, _ := cacheTestStream(t, 1)
@@ -125,7 +125,7 @@ func TestReaderFIFOZeroDisablesFrameCache(t *testing.T) {
 	}
 }
 
-func TestReaderFrameCacheConcurrent(t *testing.T) {
+func TestReaderFrameCacheConcurrentReadAt(t *testing.T) {
 	t.Parallel()
 
 	compressed, frames, source := cacheTestStream(t, 8)
@@ -175,7 +175,7 @@ func TestReaderFrameCacheConcurrent(t *testing.T) {
 	}
 }
 
-func TestReaderFrameCacheSharedCacheConcurrentReaders(t *testing.T) {
+func TestReaderFrameCacheSharedCacheUsesReaderNamespaces(t *testing.T) {
 	t.Parallel()
 
 	caches := []struct {

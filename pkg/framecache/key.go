@@ -14,10 +14,11 @@ var (
 	_ encoding.BinaryUnmarshaler = (*Key)(nil)
 )
 
-// Key identifies one decoded frame in one Reader namespace.
+// Key identifies one decoded frame in one cache namespace.
 //
-// Namespace is assigned by seekable.Reader. It is unique to one Reader instance
-// and is not a stable stream fingerprint.
+// seekable.Reader assigns process-local namespaces to Reader instances. Those
+// namespaces prevent collisions in shared caches, but they are not persistent
+// stream IDs and must not be used as durable cache identity.
 type Key struct {
 	namespace uint64
 	frameID   int64
@@ -32,6 +33,9 @@ func NewKey(namespace uint64, frameID int64) Key {
 }
 
 // ParseKey returns the key encoded by Key.MarshalBinary or Key.AppendBinary.
+//
+// data must contain exactly one key encoding. If AppendBinary was called with a
+// non-empty dst, pass only the appended key bytes to ParseKey.
 func ParseKey(data []byte) (Key, error) {
 	var key Key
 	if err := key.UnmarshalBinary(data); err != nil {

@@ -52,13 +52,13 @@ func BenchmarkReaderFrameCache(b *testing.B) {
 		name   string
 		newSeq func() []int
 	}{
-		{name: "Random", newSeq: func() []int {
+		{name: "Uniform", newSeq: func() []int {
 			return readerCacheRandomAccesses(frameCount, accessCount, 1)
 		}},
-		{name: "Zipf", newSeq: func() []int {
+		{name: "Zipf_s=1.2_v=1", newSeq: func() []int {
 			return readerCacheZipfAccesses(frameCount, accessCount, 2)
 		}},
-		{name: "Normal", newSeq: func() []int {
+		{name: "Normal_mu=mid_sigma=n/6", newSeq: func() []int {
 			return readerCacheNormalAccesses(frameCount, accessCount, 3)
 		}},
 	}
@@ -66,13 +66,13 @@ func BenchmarkReaderFrameCache(b *testing.B) {
 		name string
 		new  func() *benchmarkCountingCache
 	}{
-		{name: "FIFO10000", new: func() *benchmarkCountingCache {
+		{name: "FIFO_MaxFrames=10000", new: func() *benchmarkCountingCache {
 			return &benchmarkCountingCache{cache: framecache.NewFIFO(framecache.Limits{MaxFrames: cacheFrames})}
 		}},
-		{name: "LRU10000", new: func() *benchmarkCountingCache {
+		{name: "LRU_MaxFrames=10000", new: func() *benchmarkCountingCache {
 			return &benchmarkCountingCache{cache: framecache.NewLRU(framecache.Limits{MaxFrames: cacheFrames})}
 		}},
-		{name: "Sieve10000", new: func() *benchmarkCountingCache {
+		{name: "Sieve_MaxFrames=10000", new: func() *benchmarkCountingCache {
 			return &benchmarkCountingCache{cache: framecache.NewSieve(framecache.Limits{MaxFrames: cacheFrames})}
 		}},
 	}
@@ -119,7 +119,7 @@ func BenchmarkReaderFrameCache(b *testing.B) {
 
 				runtime.KeepAlive(total)
 				runtime.KeepAlive(sink)
-				b.ReportMetric(countingCache.HitRate()*100, "hit_rate_%")
+				b.ReportMetric(countingCache.HitRate()*100, "cache_hit_percent")
 			})
 		}
 	}

@@ -124,14 +124,19 @@ type ZSTDDecoder interface {
 	DecodeAll(input, dst []byte) ([]byte, error)
 }
 
-// NewReader returns a Zstandard stream reader that can be randomly accessed by uncompressed offset.
+// NewReader returns a Zstandard stream reader that can be randomly accessed by
+// uncompressed offset.
 //
 // The stream must contain a final seek-table skippable frame. rs must be
 // non-nil unless WithReaderEnvironment supplies a custom read environment. If rs
 // also implements io.ReaderAt, frame reads do not move rs's current offset.
 //
-// NewReader reads and validates the seek table during construction. The caller
-// remains responsible for closing rs and decoder, if they require closing.
+// decoder must be non-nil. NewReader reads and validates the seek table during
+// construction. By default, Reader caches one decoded frame using a FIFO cache;
+// use WithReaderFrameCache to select, share, or disable the decoded-frame cache.
+//
+// The caller remains responsible for closing rs and decoder, if they require
+// closing.
 func NewReader(rs io.ReadSeeker, decoder ZSTDDecoder, opts ...ReaderOption) (*Reader, error) {
 	sr := Reader{
 		dec:     decoder,
@@ -186,6 +191,11 @@ func (r *Reader) SeekTable() (SeekTable, error) {
 // ReadAt reads len(p) decompressed bytes starting at off.
 //
 // ReadAt does not move the Reader's current offset.
+//
+// If off is at or beyond the decompressed stream size, ReadAt returns io.EOF. If
+// p extends beyond the end of the stream, ReadAt returns the bytes available and
+// io.EOF. A zero-length p returns 0, nil.
+//
 // Before Close, ReadAt may be called concurrently if the supplied decoder and
 // read environment support concurrent use.
 func (r *Reader) ReadAt(p []byte, off int64) (n int, err error) {
@@ -210,7 +220,11 @@ func (r *Reader) Read(p []byte) (n int, err error) {
 }
 
 // Close releases reader-owned memory.
-// Close is idempotent. Read, ReadAt, Seek, and SeekTable return ErrClosed after Close.
+//
+// Close is idempotent. Read, ReadAt, Seek, and SeekTable return ErrClosed after
+// Close. Close does not close the io.ReadSeeker, decoder, or custom read
+// environment passed to NewReader, and it does not clear a caller-supplied frame
+// cache.
 func (r *Reader) Close() error {
 	if !r.closed.Swap(true) {
 		r.dropFrameCache()

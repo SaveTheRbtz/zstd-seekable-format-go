@@ -203,8 +203,15 @@ func testFrames(n int) [][]byte {
 	return frames
 }
 
-func assertCacheInvariants(t *testing.T, c Cache) {
+func assertCacheInvariants(t *testing.T, c Cache, context string) {
 	t.Helper()
+	fail := func(format string, args ...any) {
+		t.Helper()
+		if context != "" {
+			format += " (" + context + ")"
+		}
+		t.Fatalf(format, args...)
+	}
 
 	var (
 		order  *list.List
@@ -238,44 +245,44 @@ func assertCacheInvariants(t *testing.T, c Cache) {
 		hand = v.hand
 		limits = v.limits
 	default:
-		t.Fatalf("unsupported cache type %T", c)
+		fail("unsupported cache type %T", c)
 	}
 
 	if len(items) != order.Len() {
-		t.Fatalf("map length = %d, list length = %d", len(items), order.Len())
+		fail("map length = %d, list length = %d", len(items), order.Len())
 	}
 	if limits.MaxFrames <= 0 && order.Len() != 0 {
-		t.Fatalf("disabled cache holds %d frames", order.Len())
+		fail("disabled cache holds %d frames", order.Len())
 	}
 	if limits.MaxFrames > 0 && order.Len() > limits.MaxFrames {
-		t.Fatalf("cache holds %d frames, limit is %d", order.Len(), limits.MaxFrames)
+		fail("cache holds %d frames, limit is %d", order.Len(), limits.MaxFrames)
 	}
 	if limits.MaxBytes > 0 && bytes > limits.MaxBytes {
-		t.Fatalf("cache holds %d bytes, limit is %d", bytes, limits.MaxBytes)
+		fail("cache holds %d bytes, limit is %d", bytes, limits.MaxBytes)
 	}
 	if order.Len() == 0 && hand != nil {
-		t.Fatalf("empty Sieve cache has non-nil hand")
+		fail("empty Sieve cache has non-nil hand")
 	}
 
 	var sum uint64
 	seen := make(map[Key]bool, order.Len())
 	for elem := order.Front(); elem != nil; elem = elem.Next() {
-		key, data := cacheElement(t, elem)
+		key, data := cacheElement(t, elem, context)
 		if seen[key] {
-			t.Fatalf("duplicate key %+v", key)
+			fail("duplicate key %+v", key)
 		}
 		seen[key] = true
 		if items[key] != elem {
-			t.Fatalf("map element mismatch for key %+v", key)
+			fail("map element mismatch for key %+v", key)
 		}
 		sum += uint64(len(data))
 	}
 	if sum != bytes {
-		t.Fatalf("byte accounting = %d, want %d", bytes, sum)
+		fail("byte accounting = %d, want %d", bytes, sum)
 	}
 }
 
-func cacheElement(t *testing.T, elem *list.Element) (Key, []byte) {
+func cacheElement(t *testing.T, elem *list.Element, context string) (Key, []byte) {
 	t.Helper()
 
 	switch entry := elem.Value.(type) {
@@ -286,6 +293,9 @@ func cacheElement(t *testing.T, elem *list.Element) (Key, []byte) {
 	case *sieveEntry:
 		return entry.key, entry.data
 	default:
+		if context != "" {
+			t.Fatalf("list entry has type %T (%s)", elem.Value, context)
+		}
 		t.Fatalf("list entry has type %T", elem.Value)
 		return Key{}, nil
 	}

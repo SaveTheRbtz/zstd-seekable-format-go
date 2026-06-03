@@ -84,24 +84,25 @@ func ExampleCache_customReplacementPolicy() {
 	cache.Put(first, []byte("first"))
 	cache.Put(second, []byte("second"))
 
+	// Touch first so CLOCK gives it a second chance during replacement.
 	_, _ = cache.Get(first)
 	cache.Put(third, []byte("third"))
 
-	printFrame(cache, first)
-	printFrame(cache, second)
-	printFrame(cache, third)
+	printFrame("first", cache, first)
+	printFrame("second", cache, second)
+	printFrame("third", cache, third)
 
 	// Output:
-	// first
-	// miss
-	// third
+	// first: first
+	// second: miss
+	// third: third
 }
 
-func printFrame(cache framecache.Cache, key framecache.Key) {
+func printFrame(label string, cache framecache.Cache, key framecache.Key) {
 	data, ok := cache.Get(key)
 	if !ok {
-		fmt.Println("miss")
+		fmt.Println(label + ": miss")
 		return
 	}
-	fmt.Println(string(data))
+	fmt.Println(label + ": " + string(data))
 }

@@ -5,9 +5,10 @@ import (
 	"sync"
 )
 
-// LRU is a least-recently-used decoded-frame cache.
+// LRU is a decoded-frame cache using the least-recently-used replacement policy.
 //
-// Hits move entries to the front of the cache. LRU is safe for concurrent use.
+// Hits and replacements mark entries recently used. LRU is safe for concurrent
+// use.
 type LRU struct {
 	limits Limits
 	mu     sync.Mutex

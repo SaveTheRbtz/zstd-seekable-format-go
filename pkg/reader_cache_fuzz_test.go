@@ -18,11 +18,12 @@ import (
 )
 
 func FuzzReaderFrameCacheConcurrent(f *testing.F) {
+	// Seed tuple: streamSeed, rawFrameCount, rawMaxFrameSize, rawStrategy, rawMaxFrames, rawOps.
 	f.Add(int64(1), uint8(4), uint8(16), uint8(0), uint8(2), []byte{0, 4, 4, 8, 8, 16})
 	f.Add(int64(2), uint8(8), uint8(32), uint8(1), uint8(4), []byte{3, 5, 7, 11, 13, 17})
 	f.Add(int64(3), uint8(16), uint8(64), uint8(2), uint8(0), []byte{1, 0, 2, 1, 3, 2})
 
-	f.Fuzz(func(t *testing.T, seed int64, frameCount uint8, maxFrameSize uint8, strategy uint8, maxFrames uint8, rawOps []byte) {
+	f.Fuzz(func(t *testing.T, streamSeed int64, rawFrameCount uint8, rawMaxFrameSize uint8, rawStrategy uint8, rawMaxFrames uint8, rawOps []byte) {
 		if len(rawOps) > 16 {
 			rawOps = rawOps[:16]
 		}
@@ -30,28 +31,34 @@ func FuzzReaderFrameCacheConcurrent(f *testing.F) {
 			rawOps = []byte{0, 1}
 		}
 
-		compressed, source := fuzzReaderCacheStream(t, seed, int(frameCount%8)+1, int(maxFrameSize%32)+1)
+		frameCount := int(rawFrameCount%8) + 1
+		maxFrameSize := int(rawMaxFrameSize%32) + 1
+		cacheMaxFrames := int(rawMaxFrames % 4)
+		strategy, cache := fuzzReaderCache(rawStrategy, cacheMaxFrames)
+		compressed, source := fuzzReaderCacheStream(t, streamSeed, frameCount, maxFrameSize)
 		dec, err := zstd.NewReader(nil)
 		require.NoError(t, err)
 		defer dec.Close()
 
-		r, err := NewReader(bytes.NewReader(compressed), dec,
-			WithReaderFrameCache(fuzzReaderCache(strategy, int(maxFrames%4))))
+		r, err := NewReader(bytes.NewReader(compressed), dec, WithReaderFrameCache(cache))
 		require.NoError(t, err)
 		defer func() { require.NoError(t, r.Close()) }()
 
 		var g errgroup.Group
 		for i := 0; i+1 < len(rawOps); i += 2 {
+			opIndex := i / 2
 			off := int(rawOps[i]) % len(source)
 			size := int(rawOps[i+1]) % 64
 			g.Go(func() error {
 				got := make([]byte, size)
 				n, err := r.ReadAt(got, int64(off))
 				if err != nil && !errors.Is(err, io.EOF) {
-					return err
+					return fmt.Errorf("ReadAt(%d, %d) failed: %w (seed=%d strategy=%s cacheMaxFrames=%d frameCount=%d maxFrameSize=%d sourceLen=%d opIndex=%d)",
+						off, size, err, streamSeed, strategy, cacheMaxFrames, frameCount, maxFrameSize, len(source), opIndex)
 				}
 				if !bytes.Equal(got[:n], source[off:off+n]) {
-					return fmt.Errorf("ReadAt(%d, %d) = %q, want %q", off, size, got[:n], source[off:off+n])
+					return fmt.Errorf("ReadAt(%d, %d) = %q, want %q (seed=%d strategy=%s cacheMaxFrames=%d frameCount=%d maxFrameSize=%d sourceLen=%d opIndex=%d)",
+						off, size, got[:n], source[off:off+n], streamSeed, strategy, cacheMaxFrames, frameCount, maxFrameSize, len(source), opIndex)
 				}
 				return nil
 			})
@@ -60,15 +67,15 @@ func FuzzReaderFrameCacheConcurrent(f *testing.F) {
 	})
 }
 
-func fuzzReaderCache(strategy uint8, maxFrames int) framecache.Cache {
+func fuzzReaderCache(rawStrategy uint8, maxFrames int) (string, framecache.Cache) {
 	limits := framecache.Limits{MaxFrames: maxFrames}
-	switch strategy % 3 {
+	switch rawStrategy % 3 {
 	case 0:
-		return framecache.NewFIFO(limits)
+		return "FIFO", framecache.NewFIFO(limits)
 	case 1:
-		return framecache.NewLRU(limits)
+		return "LRU", framecache.NewLRU(limits)
 	default:
-		return framecache.NewSieve(limits)
+		return "Sieve", framecache.NewSieve(limits)
 	}
 }
 
