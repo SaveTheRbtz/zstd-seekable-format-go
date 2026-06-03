@@ -185,6 +185,7 @@ func TestReaderFrameCacheSharedCacheUsesReaderNamespaces(t *testing.T) {
 		{name: "FIFO", cache: framecache.NewFIFO(framecache.Limits{MaxFrames: 1})},
 		{name: "LRU", cache: framecache.NewLRU(framecache.Limits{MaxFrames: 1})},
 		{name: "Sieve", cache: framecache.NewSieve(framecache.Limits{MaxFrames: 1})},
+		{name: "SynchronizedCustom", cache: framecache.NewSynchronized(newSpyFrameCache())},
 	}
 
 	for _, tc := range caches {

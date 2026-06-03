@@ -35,8 +35,9 @@ func WithReaderEnvironment(e ReaderEnvironment) ReaderOption {
 //
 // The caller retains ownership of the supplied cache. Reader borrows it and
 // does not clear it on Close. Built-in framecache caches are safe for concurrent
-// use. Custom caches shared between concurrently used Readers must be safe for
-// concurrent use or externally synchronized.
+// use. Custom caches used by concurrent ReadAt calls or shared between Readers
+// must be safe for concurrent use; use framecache.NewSynchronized to adapt a
+// simple custom cache.
 func WithReaderFrameCache(cache framecache.Cache) ReaderOption {
 	return func(r *Reader) error {
 		selected := cache

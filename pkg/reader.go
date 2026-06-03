@@ -85,9 +85,9 @@ func (rs *readSeekerEnvImpl) ReadSkipFrame(skippableFrameOffset int64) ([]byte, 
 // internal current offset; ReadAt does not.
 //
 // Before Close, ReadAt and SeekTable may be called concurrently if the supplied
-// decoder and read environment support concurrent use. Read and Seek share the
-// internal current offset and should be serialized by the caller. No other
-// Reader method should be called concurrently with Close.
+// decoder, read environment, and frame cache support concurrent use. Read and
+// Seek share the internal current offset and should be serialized by the
+// caller. No other Reader method should be called concurrently with Close.
 type Reader struct {
 	dec   ZSTDDecoder
 	table SeekTable
@@ -99,9 +99,8 @@ type Reader struct {
 
 	closed atomic.Bool
 
-	frameCacheMu sync.Mutex
-	frameCache   framecache.Cache
-	cacheNS      uint64
+	frameCache framecache.Cache
+	cacheNS    uint64
 }
 
 var (
@@ -196,8 +195,8 @@ func (r *Reader) SeekTable() (SeekTable, error) {
 // p extends beyond the end of the stream, ReadAt returns the bytes available and
 // io.EOF. A zero-length p returns 0, nil.
 //
-// Before Close, ReadAt may be called concurrently if the supplied decoder and
-// read environment support concurrent use.
+// Before Close, ReadAt may be called concurrently if the supplied decoder, read
+// environment, and frame cache support concurrent use.
 func (r *Reader) ReadAt(p []byte, off int64) (n int, err error) {
 	if r.closed.Load() {
 		return 0, ErrClosed
@@ -227,7 +226,7 @@ func (r *Reader) Read(p []byte) (n int, err error) {
 // cache.
 func (r *Reader) Close() error {
 	if !r.closed.Swap(true) {
-		r.dropFrameCache()
+		r.frameCache = nil
 		r.table = SeekTable{}
 	}
 	return nil
@@ -259,7 +258,7 @@ func (r *Reader) read(dst []byte, off int64) (int64, int, error) {
 
 	var decompressed []byte
 
-	cachedData, ok := r.getCachedFrame(framecache.NewKey(r.cacheNS, index.ID))
+	cachedData, ok := r.frameCache.Get(framecache.NewKey(r.cacheNS, index.ID))
 	if ok {
 		decompressed = cachedData
 	} else {
@@ -290,7 +289,7 @@ func (r *Reader) read(dst []byte, off int64) (int64, int, error) {
 					index.CompressedOffset, index.Checksum, checksum)
 			}
 		}
-		r.putCachedFrame(framecache.NewKey(r.cacheNS, index.ID), decompressed)
+		r.frameCache.Put(framecache.NewKey(r.cacheNS, index.ID), decompressed)
 	}
 
 	if len(decompressed) != int(index.DecompressedSize) {

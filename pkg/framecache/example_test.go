@@ -75,7 +75,7 @@ func (c *clockCache) advance() {
 }
 
 func ExampleCache_customReplacementPolicy() {
-	var cache framecache.Cache = newClockCache(2)
+	cache := framecache.NewSynchronized(newClockCache(2))
 
 	first := framecache.NewKey(1, 1)
 	second := framecache.NewKey(1, 2)

@@ -1,9 +1,13 @@
 // Package framecache provides decoded-frame cache implementations for seekable readers.
 //
 // Cache implementations in this package are safe for direct concurrent use.
+// Use NewSynchronized to adapt a simple custom cache for concurrent use.
 package framecache
 
 // Cache stores decoded frames by key.
+//
+// Cache implementations passed to a concurrently used seekable.Reader must be
+// safe for concurrent use. The built-in caches satisfy that requirement.
 type Cache interface {
 	// Get returns the frame stored for key.
 	//

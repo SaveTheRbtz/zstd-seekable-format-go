@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"container/list"
 	"fmt"
+	"sync"
 	"testing"
 )
 
@@ -319,6 +320,107 @@ func TestCacheByStrategyCoversAllCaches(t *testing.T) {
 			t.Fatalf("strategy %d = %s, want %s", strategy, got, name)
 		}
 	}
+}
+
+type unsynchronizedMapCache struct {
+	items map[Key][]byte
+}
+
+func newUnsynchronizedMapCache() *unsynchronizedMapCache {
+	return &unsynchronizedMapCache{items: make(map[Key][]byte)}
+}
+
+func (c *unsynchronizedMapCache) Get(key Key) ([]byte, bool) {
+	data, ok := c.items[key]
+	return data, ok
+}
+
+func (c *unsynchronizedMapCache) Put(key Key, data []byte) {
+	c.items[key] = data
+}
+
+func (c *unsynchronizedMapCache) Clear() {
+	c.items = make(map[Key][]byte)
+}
+
+type cacheWithoutClearer struct {
+	items map[Key][]byte
+}
+
+func newCacheWithoutClearer() *cacheWithoutClearer {
+	return &cacheWithoutClearer{items: make(map[Key][]byte)}
+}
+
+func (c *cacheWithoutClearer) Get(key Key) ([]byte, bool) {
+	data, ok := c.items[key]
+	return data, ok
+}
+
+func (c *cacheWithoutClearer) Put(key Key, data []byte) {
+	c.items[key] = data
+}
+
+func TestNewSynchronizedSerializesAccess(t *testing.T) {
+	base := newUnsynchronizedMapCache()
+	cache := NewSynchronized(base)
+
+	const (
+		workers = 8
+		entries = 64
+	)
+
+	var wg sync.WaitGroup
+	errCh := make(chan error, workers*entries)
+	for worker := 0; worker < workers; worker++ {
+		wg.Go(func() {
+			for entryID := 0; entryID < entries; entryID++ {
+				key := NewKey(uint64(worker), int64(entryID))
+				want := []byte{byte(worker), byte(entryID)}
+				cache.Put(key, want)
+				got, ok := cache.Get(key)
+				if !ok || !bytes.Equal(got, want) {
+					errCh <- fmt.Errorf("Get(%+v) = %q, %t; want %q, true", key, got, ok, want)
+				}
+			}
+		})
+	}
+	wg.Wait()
+	close(errCh)
+	for err := range errCh {
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	if got, want := len(base.items), workers*entries; got != want {
+		t.Fatalf("stored entries = %d, want %d", got, want)
+	}
+}
+
+func TestNewSynchronizedClear(t *testing.T) {
+	t.Run("DelegatesClear", func(t *testing.T) {
+		base := newUnsynchronizedMapCache()
+		cache := NewSynchronized(base)
+		cache.Put(testKey(1), []byte("one"))
+
+		cache.Clear()
+
+		if got := len(base.items); got != 0 {
+			t.Fatalf("stored entries = %d, want 0", got)
+		}
+	})
+
+	t.Run("NoOpWithoutClearer", func(t *testing.T) {
+		base := newCacheWithoutClearer()
+		cache := NewSynchronized(base)
+		cache.Put(testKey(1), []byte("one"))
+
+		cache.Clear()
+
+		got, ok := base.Get(testKey(1))
+		if !ok || !bytes.Equal(got, []byte("one")) {
+			t.Fatalf("Get(1) = %q, %t; want one, true", got, ok)
+		}
+	})
 }
 
 func ExampleNewFIFO_noCache() {
