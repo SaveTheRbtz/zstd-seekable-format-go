@@ -51,25 +51,21 @@ func (c *Sieve) Put(key Key, data []byte) {
 		return
 	}
 
+	visited := false
 	if elem, ok := c.items[key]; ok {
-		entry := elem.Value.(*cacheEntry)
-		c.bytes -= entry.size
-		entry.data = data
-		entry.size = size
-		entry.visited = true
-		c.bytes += size
-		c.evict()
-		return
+		visited = true
+		c.removeElement(elem)
 	}
 
+	c.evictFor(1, size)
 	entry := newCacheEntry(key, data)
+	entry.visited = visited
 	elem := c.order.PushFront(entry)
 	c.items[key] = elem
 	c.bytes += entry.size
 	if c.hand == nil {
 		c.hand = c.order.Back()
 	}
-	c.evict()
 }
 
 // Clear removes all cached frames.
@@ -110,8 +106,8 @@ func (c *Sieve) removeElement(elem *list.Element) {
 	}
 }
 
-func (c *Sieve) evict() {
-	for overLimits(c.limits, c.order.Len(), c.bytes) {
+func (c *Sieve) evictFor(extraFrames int, extraBytes uint64) {
+	for overLimits(c.limits, c.order.Len()+extraFrames, c.bytes+extraBytes) {
 		if c.hand == nil {
 			c.hand = c.order.Back()
 		}

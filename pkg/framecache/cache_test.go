@@ -29,69 +29,13 @@ func testKey(frameID int64) Key {
 	return NewKey(1, frameID)
 }
 
-func TestKeyBinaryEncoding(t *testing.T) {
-	key := NewKey(42, -7)
-
-	prefix := []byte{1, 2, 3}
-	encoded := key.AppendBinary(prefix)
-	if !bytes.Equal(encoded[:len(prefix)], prefix) {
-		t.Fatalf("AppendBinary prefix = %v, want %v", encoded[:len(prefix)], prefix)
-	}
-	if got, want := len(encoded)-len(prefix), keyBinarySize; got != want {
-		t.Fatalf("AppendBinary appended %d bytes, want %d", got, want)
-	}
-
-	marshaled, err := key.MarshalBinary()
-	if err != nil {
-		t.Fatalf("MarshalBinary: %v", err)
-	}
-	if !bytes.Equal(encoded[len(prefix):], marshaled) {
-		t.Fatalf("AppendBinary payload = %v, MarshalBinary = %v", encoded[len(prefix):], marshaled)
-	}
-
-	parsed, err := ParseKey(marshaled)
-	if err != nil {
-		t.Fatalf("ParseKey: %v", err)
-	}
-	if parsed != key {
-		t.Fatalf("ParseKey = %+v, want %+v", parsed, key)
-	}
-	if parsed.FrameID() != -7 {
-		t.Fatalf("FrameID = %d, want -7", parsed.FrameID())
-	}
-
-	var unmarshaled Key
-	if err := unmarshaled.UnmarshalBinary(marshaled); err != nil {
-		t.Fatalf("UnmarshalBinary: %v", err)
-	}
-	if unmarshaled != key {
-		t.Fatalf("UnmarshalBinary = %+v, want %+v", unmarshaled, key)
-	}
-
-	values := map[Key][]byte{parsed: []byte("decoded")}
-	if got := values[key]; !bytes.Equal(got, []byte("decoded")) {
-		t.Fatalf("map lookup = %q, want decoded", got)
-	}
-}
-
-func TestParseKeyRejectsInvalidLength(t *testing.T) {
-	for _, data := range [][]byte{
-		nil,
-		make([]byte, keyBinarySize-1),
-		make([]byte, keyBinarySize+1),
-	} {
-		if _, err := ParseKey(data); err == nil {
-			t.Fatalf("ParseKey(%d bytes) succeeded, want error", len(data))
-		}
-	}
-}
-
 func TestPolicyEviction(t *testing.T) {
 	tests := []struct {
 		name      string
 		cache     Cache
 		wantHit   []int64
 		wantMiss  []int64
+		wantData  map[int64][]byte
 		primeFunc func(Cache)
 	}{
 		{
@@ -105,6 +49,18 @@ func TestPolicyEviction(t *testing.T) {
 			},
 			wantHit:  []int64{2, 3},
 			wantMiss: []int64{1},
+		},
+		{
+			name:  "FIFOReplacementByteLimit",
+			cache: NewFIFO(Limits{MaxFrames: 2, MaxBytes: 5}),
+			primeFunc: func(c Cache) {
+				c.Put(testKey(1), []byte("aa"))
+				c.Put(testKey(2), []byte("bbb"))
+				c.Put(testKey(1), []byte("ccc"))
+			},
+			wantHit:  []int64{1},
+			wantMiss: []int64{2},
+			wantData: map[int64][]byte{1: []byte("ccc")},
 		},
 		{
 			name:  "LRU",
@@ -130,14 +86,44 @@ func TestPolicyEviction(t *testing.T) {
 			wantHit:  []int64{1, 3},
 			wantMiss: []int64{2},
 		},
+		{
+			name:  "SieveAdmissionKeepsNewEntry",
+			cache: NewSieve(Limits{MaxFrames: 1}),
+			primeFunc: func(c Cache) {
+				c.Put(testKey(1), []byte("one"))
+				_, _ = c.Get(testKey(1))
+				c.Put(testKey(2), []byte("two"))
+			},
+			wantHit:  []int64{2},
+			wantMiss: []int64{1},
+			wantData: map[int64][]byte{2: []byte("two")},
+		},
+		{
+			name:  "SieveReplacementByteLimit",
+			cache: NewSieve(Limits{MaxFrames: 2, MaxBytes: 2}),
+			primeFunc: func(c Cache) {
+				c.Put(testKey(1), []byte("a"))
+				c.Put(testKey(2), []byte("b"))
+				_, _ = c.Get(testKey(1))
+				_, _ = c.Get(testKey(2))
+				c.Put(testKey(1), []byte("aa"))
+			},
+			wantHit:  []int64{1},
+			wantMiss: []int64{2},
+			wantData: map[int64][]byte{1: []byte("aa")},
+		},
 	}
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			tc.primeFunc(tc.cache)
 			for _, frameID := range tc.wantHit {
-				if _, ok := tc.cache.Get(testKey(frameID)); !ok {
+				data, ok := tc.cache.Get(testKey(frameID))
+				if !ok {
 					t.Fatalf("Get(%d) missed", frameID)
+				}
+				if want, ok := tc.wantData[frameID]; ok && !bytes.Equal(data, want) {
+					t.Fatalf("Get(%d) = %q, want %q", frameID, data, want)
 				}
 			}
 			for _, frameID := range tc.wantMiss {

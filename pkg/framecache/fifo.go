@@ -48,19 +48,13 @@ func (c *FIFO) Put(key Key, data []byte) {
 	}
 
 	if elem, ok := c.items[key]; ok {
-		entry := elem.Value.(*cacheEntry)
-		c.bytes -= entry.size
-		entry.data = data
-		entry.size = size
-		c.bytes += size
-		c.evict()
-		return
+		c.removeElement(elem)
 	}
 
+	c.evictFor(1, size)
 	entry := newCacheEntry(key, data)
 	c.items[key] = c.order.PushBack(entry)
 	c.bytes += entry.size
-	c.evict()
 }
 
 // Clear removes all cached frames.
@@ -88,8 +82,8 @@ func (c *FIFO) removeElement(elem *list.Element) {
 	c.order.Remove(elem)
 }
 
-func (c *FIFO) evict() {
-	for overLimits(c.limits, c.order.Len(), c.bytes) {
+func (c *FIFO) evictFor(extraFrames int, extraBytes uint64) {
+	for overLimits(c.limits, c.order.Len()+extraFrames, c.bytes+extraBytes) {
 		elem := c.order.Front()
 		if elem == nil {
 			return
