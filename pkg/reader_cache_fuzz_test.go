@@ -17,7 +17,7 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
-func FuzzReaderFrameCacheConcurrent(f *testing.F) {
+func FuzzReaderFrameCacheConcurrentReadAt(f *testing.F) {
 	// Seed tuple: streamSeed, rawFrameCount, rawMaxFrameSize, rawStrategy, rawMaxFrames, rawOps.
 	f.Add(int64(1), uint8(4), uint8(16), uint8(0), uint8(2), []byte{0, 4, 4, 8, 8, 16})
 	f.Add(int64(2), uint8(8), uint8(32), uint8(1), uint8(4), []byte{3, 5, 7, 11, 13, 17})
@@ -53,11 +53,11 @@ func FuzzReaderFrameCacheConcurrent(f *testing.F) {
 				got := make([]byte, size)
 				n, err := r.ReadAt(got, int64(off))
 				if err != nil && !errors.Is(err, io.EOF) {
-					return fmt.Errorf("ReadAt(%d, %d) failed: %w (seed=%d strategy=%s cacheMaxFrames=%d frameCount=%d maxFrameSize=%d sourceLen=%d opIndex=%d)",
+					return fmt.Errorf("ReadAt(off=%d, len=%d) failed: %w (seed=%d strategy=%s cacheMaxFrames=%d frameCount=%d maxFrameSize=%d sourceLen=%d opIndex=%d)",
 						off, size, err, streamSeed, strategy, cacheMaxFrames, frameCount, maxFrameSize, len(source), opIndex)
 				}
 				if !bytes.Equal(got[:n], source[off:off+n]) {
-					return fmt.Errorf("ReadAt(%d, %d) = %q, want %q (seed=%d strategy=%s cacheMaxFrames=%d frameCount=%d maxFrameSize=%d sourceLen=%d opIndex=%d)",
+					return fmt.Errorf("ReadAt(off=%d, len=%d) = %q, want %q (seed=%d strategy=%s cacheMaxFrames=%d frameCount=%d maxFrameSize=%d sourceLen=%d opIndex=%d)",
 						off, size, got[:n], source[off:off+n], streamSeed, strategy, cacheMaxFrames, frameCount, maxFrameSize, len(source), opIndex)
 				}
 				return nil

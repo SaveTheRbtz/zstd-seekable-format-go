@@ -17,15 +17,20 @@ var (
 //
 // It is intended for simple custom caches that are used with concurrent
 // seekable.Reader.ReadAt calls or shared by multiple Readers. Built-in caches
-// are already safe for concurrent use and do not need this wrapper. The supplied
-// cache must be non-nil.
+// are already safe for concurrent use and do not need this wrapper.
 //
 // The returned wrapper's Clear method calls the wrapped cache's Clear method if
 // it implements Clearer. Otherwise Clear is a no-op.
+//
+// NewSynchronized panics if cache is nil.
 func NewSynchronized(cache Cache) *Synchronized {
+	if cache == nil {
+		panic("framecache: nil cache")
+	}
 	return &Synchronized{cache: cache}
 }
 
+// Get calls the wrapped cache's Get method while holding c's lock.
 func (c *Synchronized) Get(key Key) ([]byte, bool) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -33,6 +38,7 @@ func (c *Synchronized) Get(key Key) ([]byte, bool) {
 	return c.cache.Get(key)
 }
 
+// Put calls the wrapped cache's Put method while holding c's lock.
 func (c *Synchronized) Put(key Key, data []byte) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -40,7 +46,8 @@ func (c *Synchronized) Put(key Key, data []byte) {
 	c.cache.Put(key, data)
 }
 
-// Clear clears the wrapped cache if it implements Clearer.
+// Clear calls the wrapped cache's Clear method while holding c's lock if the
+// wrapped cache implements Clearer. Otherwise Clear is a no-op.
 func (c *Synchronized) Clear() {
 	c.mu.Lock()
 	defer c.mu.Unlock()

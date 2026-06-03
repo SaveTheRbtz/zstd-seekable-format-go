@@ -33,11 +33,10 @@ func WithReaderEnvironment(e ReaderEnvironment) ReaderOption {
 // pass any cache implementation that stores no entries, such as
 // framecache.NewFIFO(framecache.Limits{MaxFrames: 0}).
 //
-// The caller retains ownership of the supplied cache. Reader borrows it and
-// does not clear it on Close. Built-in framecache caches are safe for concurrent
-// use. Custom caches used by concurrent ReadAt calls or shared between Readers
-// must be safe for concurrent use; use framecache.NewSynchronized to adapt a
-// simple custom cache.
+// Reader uses the supplied cache directly and does not clear it on Close.
+// Built-in framecache caches are safe for concurrent use. Custom caches used by
+// concurrent ReadAt calls or shared between Readers must be safe for concurrent
+// use; use framecache.NewSynchronized to adapt a simple custom cache.
 func WithReaderFrameCache(cache framecache.Cache) ReaderOption {
 	return func(r *Reader) error {
 		selected := cache

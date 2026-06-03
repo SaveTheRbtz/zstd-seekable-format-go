@@ -84,10 +84,11 @@ func (rs *readSeekerEnvImpl) ReadSkipFrame(skippableFrameOffset int64) ([]byte, 
 // Offsets are expressed in the decompressed stream. Read and Seek use an
 // internal current offset; ReadAt does not.
 //
-// Before Close, ReadAt and SeekTable may be called concurrently if the supplied
-// decoder, read environment, and frame cache support concurrent use. Read and
-// Seek share the internal current offset and should be serialized by the
-// caller. No other Reader method should be called concurrently with Close.
+// Before Close, SeekTable may be called concurrently with other Reader methods.
+// ReadAt may also be called concurrently if the supplied decoder, read
+// environment, and frame cache support concurrent use. Read and Seek share the
+// internal current offset and should be serialized by the caller. No Reader
+// method should be called concurrently with Close.
 type Reader struct {
 	dec   ZSTDDecoder
 	table SeekTable
@@ -127,8 +128,9 @@ type ZSTDDecoder interface {
 // uncompressed offset.
 //
 // The stream must contain a final seek-table skippable frame. rs must be
-// non-nil unless WithReaderEnvironment supplies a custom read environment. If rs
-// also implements io.ReaderAt, frame reads do not move rs's current offset.
+// non-nil unless WithReaderEnvironment supplies a custom read environment. When
+// NewReader uses rs directly and rs also implements io.ReaderAt, frame reads do
+// not move rs's current offset.
 //
 // decoder must be non-nil. NewReader reads and validates the seek table during
 // construction. By default, Reader caches one decoded frame using a FIFO cache;
@@ -208,7 +210,8 @@ func (r *Reader) ReadAt(p []byte, off int64) (n int, err error) {
 	return
 }
 
-// Read reads decompressed bytes from the Reader's current offset.
+// Read reads decompressed bytes from the Reader's current offset and advances
+// the current offset by the bytes read.
 func (r *Reader) Read(p []byte) (n int, err error) {
 	offset, n, err := r.read(p, r.offset)
 	if err != nil {

@@ -423,12 +423,12 @@ func TestNewSynchronizedClear(t *testing.T) {
 	})
 }
 
-func ExampleNewFIFO_noCache() {
-	c := NewFIFO(Limits{MaxFrames: 0})
-	c.Put(NewKey(1, 1), []byte("decoded frame"))
-	_, ok := c.Get(NewKey(1, 1))
-	fmt.Println(ok)
+func TestNewSynchronizedPanicsOnNil(t *testing.T) {
+	defer func() {
+		if got := recover(); got != "framecache: nil cache" {
+			t.Fatalf("recover() = %v, want framecache: nil cache", got)
+		}
+	}()
 
-	// Output:
-	// false
+	NewSynchronized(nil)
 }

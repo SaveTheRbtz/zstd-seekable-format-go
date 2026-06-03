@@ -11,6 +11,8 @@ package framecache
 type Cache interface {
 	// Get returns the frame stored for key.
 	//
+	// ok reports whether key was found.
+	//
 	// Implementations may return the same []byte supplied to Put. Callers must
 	// not mutate the returned slice.
 	Get(key Key) ([]byte, bool)

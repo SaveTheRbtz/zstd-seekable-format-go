@@ -27,7 +27,9 @@ type Key struct {
 // NewKey returns a cache key for direct cache use.
 //
 // Most callers do not need this; seekable.Reader creates keys for configured
-// caches. namespace must not be treated as a stable stream identity.
+// caches. Use distinct namespace values when one cache may hold frames from
+// different streams or Readers. namespace must not be treated as a stable stream
+// identity.
 func NewKey(namespace uint64, frameID int64) Key {
 	return Key{namespace: namespace, frameID: frameID}
 }
@@ -62,6 +64,10 @@ func (k Key) AppendBinary(dst []byte) ([]byte, error) {
 }
 
 // MarshalBinary returns k's opaque binary encoding.
+//
+// The encoding is useful for ephemeral external caches that need byte keys. It
+// must not be used as persistent cache identity across Reader or process
+// lifetimes.
 func (k Key) MarshalBinary() ([]byte, error) {
 	return k.AppendBinary(nil)
 }

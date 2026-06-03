@@ -98,6 +98,16 @@ func ExampleCache_customReplacementPolicy() {
 	// third: third
 }
 
+func ExampleLimits_disabled() {
+	cache := framecache.NewFIFO(framecache.Limits{MaxFrames: 0})
+	cache.Put(framecache.NewKey(1, 1), []byte("decoded frame"))
+	_, ok := cache.Get(framecache.NewKey(1, 1))
+	fmt.Println(ok)
+
+	// Output:
+	// false
+}
+
 func printFrame(label string, cache framecache.Cache, key framecache.Key) {
 	data, ok := cache.Get(key)
 	if !ok {
