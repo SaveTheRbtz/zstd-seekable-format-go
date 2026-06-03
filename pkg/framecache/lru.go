@@ -49,7 +49,7 @@ func (c *LRU) Put(key Key, data []byte) {
 	defer c.mu.Unlock()
 
 	size := uint64(len(data))
-	if !canStore(c.limits, size) {
+	if !c.limits.canStore(size) {
 		c.remove(key)
 		return
 	}
@@ -96,7 +96,7 @@ func (c *LRU) removeElement(elem *list.Element) {
 }
 
 func (c *LRU) evict() {
-	for overLimits(c.limits, c.order.Len(), c.bytes) {
+	for c.limits.overLimits(c.order.Len(), c.bytes) {
 		elem := c.order.Back()
 		if elem == nil {
 			return

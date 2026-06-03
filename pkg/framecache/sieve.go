@@ -53,7 +53,7 @@ func (c *Sieve) Put(key Key, data []byte) {
 	defer c.mu.Unlock()
 
 	size := uint64(len(data))
-	if !canStore(c.limits, size) {
+	if !c.limits.canStore(size) {
 		c.remove(key)
 		return
 	}
@@ -113,7 +113,7 @@ func (c *Sieve) removeElement(elem *list.Element) {
 }
 
 func (c *Sieve) evictFor(extraFrames int, extraBytes uint64) {
-	for overLimits(c.limits, c.order.Len()+extraFrames, c.bytes+extraBytes) {
+	for c.limits.overLimits(c.order.Len()+extraFrames, c.bytes+extraBytes) {
 		if c.hand == nil {
 			c.hand = c.order.Back()
 		}

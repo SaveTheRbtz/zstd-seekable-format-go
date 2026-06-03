@@ -39,14 +39,14 @@ type Limits struct {
 	MaxBytes uint64
 }
 
-func canStore(limits Limits, size uint64) bool {
+func (limits Limits) canStore(size uint64) bool {
 	if limits.MaxFrames <= 0 {
 		return false
 	}
 	return limits.MaxBytes == 0 || size <= limits.MaxBytes
 }
 
-func overLimits(limits Limits, frames int, bytes uint64) bool {
+func (limits Limits) overLimits(frames int, bytes uint64) bool {
 	if limits.MaxFrames > 0 && frames > limits.MaxFrames {
 		return true
 	}
