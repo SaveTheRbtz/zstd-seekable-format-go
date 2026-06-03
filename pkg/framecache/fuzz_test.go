@@ -33,11 +33,12 @@ func FuzzFrameCacheAccessPatterns(f *testing.F) {
 
 		for _, frameID := range seq {
 			want := frames[frameID]
-			got, ok := c.Get(int64(frameID))
+			key := testKey(int64(frameID))
+			got, ok := c.Get(key)
 			if ok && !bytes.Equal(got, want) {
 				t.Fatalf("Get(%d) = %q; want %q", frameID, got, want)
 			}
-			c.Put(int64(frameID), want)
+			c.Put(key, want)
 			assertCacheInvariants(t, c, limits)
 		}
 	})

@@ -1,14 +1,18 @@
 package framecache
 
-import "container/list"
+import (
+	"container/list"
+	"sync"
+)
 
 // Sieve is a decoded-frame cache using the Sieve replacement policy.
 //
 // Hits set a visited bit. Eviction scans entries and clears visited bits until
-// it finds an unvisited entry to evict. Sieve is not safe for direct concurrent use.
+// it finds an unvisited entry to evict. Sieve is safe for concurrent use.
 type Sieve struct {
 	limits Limits
-	items  map[int64]*list.Element
+	mu     sync.Mutex
+	items  map[Key]*list.Element
 	order  list.List
 	hand   *list.Element
 	bytes  uint64
@@ -18,13 +22,16 @@ type Sieve struct {
 func NewSieve(limits Limits) *Sieve {
 	return &Sieve{
 		limits: limits,
-		items:  make(map[int64]*list.Element),
+		items:  make(map[Key]*list.Element),
 	}
 }
 
-// Get returns the cached frame for frameID and marks it visited.
-func (c *Sieve) Get(frameID int64) ([]byte, bool) {
-	elem, ok := c.items[frameID]
+// Get returns the cached frame for key and marks it visited.
+func (c *Sieve) Get(key Key) ([]byte, bool) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	elem, ok := c.items[key]
 	if !ok {
 		return nil, false
 	}
@@ -33,15 +40,18 @@ func (c *Sieve) Get(frameID int64) ([]byte, bool) {
 	return entry.data, true
 }
 
-// Put stores data for frameID, replacing any existing entry.
-func (c *Sieve) Put(frameID int64, data []byte) {
+// Put stores data for key, replacing any existing entry.
+func (c *Sieve) Put(key Key, data []byte) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
 	size := uint64(len(data))
 	if !canStore(c.limits, size) {
-		c.remove(frameID)
+		c.remove(key)
 		return
 	}
 
-	if elem, ok := c.items[frameID]; ok {
+	if elem, ok := c.items[key]; ok {
 		entry := elem.Value.(*cacheEntry)
 		c.bytes -= entry.size
 		entry.data = data
@@ -52,9 +62,9 @@ func (c *Sieve) Put(frameID int64, data []byte) {
 		return
 	}
 
-	entry := newCacheEntry(frameID, data)
+	entry := newCacheEntry(key, data)
 	elem := c.order.PushFront(entry)
-	c.items[frameID] = elem
+	c.items[key] = elem
 	c.bytes += entry.size
 	if c.hand == nil {
 		c.hand = c.order.Back()
@@ -64,14 +74,17 @@ func (c *Sieve) Put(frameID int64, data []byte) {
 
 // Clear removes all cached frames.
 func (c *Sieve) Clear() {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
 	clear(c.items)
 	c.order.Init()
 	c.hand = nil
 	c.bytes = 0
 }
 
-func (c *Sieve) remove(frameID int64) {
-	elem, ok := c.items[frameID]
+func (c *Sieve) remove(key Key) {
+	elem, ok := c.items[key]
 	if !ok {
 		return
 	}
@@ -81,7 +94,7 @@ func (c *Sieve) remove(frameID int64) {
 func (c *Sieve) removeElement(elem *list.Element) {
 	next := c.prevCircular(elem)
 	entry := elem.Value.(*cacheEntry)
-	delete(c.items, entry.frameID)
+	delete(c.items, entry.key)
 	c.bytes -= entry.size
 	c.order.Remove(elem)
 

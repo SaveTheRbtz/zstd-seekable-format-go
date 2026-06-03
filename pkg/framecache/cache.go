@@ -1,16 +1,28 @@
 // Package framecache provides decoded-frame cache implementations for seekable readers.
 //
-// Cache implementations in this package are not safe for direct concurrent use.
-// seekable.Reader serializes calls to a configured Cache.
+// Cache implementations in this package are safe for direct concurrent use.
 package framecache
 
-// Cache stores decoded frames by seek-table frame ID.
+// Key identifies one decoded frame in one Reader namespace.
+//
+// Namespace is assigned by seekable.Reader. It is unique to one Reader instance
+// and is not a stable stream fingerprint.
+type Key struct {
+	Namespace uint64
+	FrameID   int64
+}
+
+// Cache stores decoded frames by key.
 //
 // Values returned by Get are immutable by convention. Callers must not mutate
 // them after putting them in a cache or after getting them back from a cache.
 type Cache interface {
-	Get(frameID int64) ([]byte, bool)
-	Put(frameID int64, data []byte)
+	Get(key Key) ([]byte, bool)
+	Put(key Key, data []byte)
+}
+
+// Clearer is implemented by caches that support explicit clearing.
+type Clearer interface {
 	Clear()
 }
 
@@ -25,17 +37,17 @@ type Limits struct {
 }
 
 type cacheEntry struct {
-	frameID int64
+	key     Key
 	data    []byte
 	size    uint64
 	visited bool
 }
 
-func newCacheEntry(frameID int64, data []byte) *cacheEntry {
+func newCacheEntry(key Key, data []byte) *cacheEntry {
 	return &cacheEntry{
-		frameID: frameID,
-		data:    data,
-		size:    uint64(len(data)),
+		key:  key,
+		data: data,
+		size: uint64(len(data)),
 	}
 }
 

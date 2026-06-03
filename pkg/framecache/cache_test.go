@@ -11,13 +11,22 @@ import (
 
 type cacheFactory struct {
 	name string
-	new  func(Limits) Cache
+	new  func(Limits) testCache
+}
+
+type testCache interface {
+	Cache
+	Clearer
 }
 
 var cacheFactories = []cacheFactory{
-	{name: "FIFO", new: func(l Limits) Cache { return NewFIFO(l) }},
-	{name: "LRU", new: func(l Limits) Cache { return NewLRU(l) }},
-	{name: "Sieve", new: func(l Limits) Cache { return NewSieve(l) }},
+	{name: "FIFO", new: func(l Limits) testCache { return NewFIFO(l) }},
+	{name: "LRU", new: func(l Limits) testCache { return NewLRU(l) }},
+	{name: "Sieve", new: func(l Limits) testCache { return NewSieve(l) }},
+}
+
+func testKey(frameID int64) Key {
+	return Key{Namespace: 1, FrameID: frameID}
 }
 
 func TestPolicyEviction(t *testing.T) {
@@ -32,10 +41,10 @@ func TestPolicyEviction(t *testing.T) {
 			name:  "FIFO",
 			cache: NewFIFO(Limits{MaxFrames: 2}),
 			primeFunc: func(c Cache) {
-				c.Put(1, []byte("one"))
-				c.Put(2, []byte("two"))
-				_, _ = c.Get(1)
-				c.Put(3, []byte("three"))
+				c.Put(testKey(1), []byte("one"))
+				c.Put(testKey(2), []byte("two"))
+				_, _ = c.Get(testKey(1))
+				c.Put(testKey(3), []byte("three"))
 			},
 			wantHit:  []int64{2, 3},
 			wantMiss: []int64{1},
@@ -44,10 +53,10 @@ func TestPolicyEviction(t *testing.T) {
 			name:  "LRU",
 			cache: NewLRU(Limits{MaxFrames: 2}),
 			primeFunc: func(c Cache) {
-				c.Put(1, []byte("one"))
-				c.Put(2, []byte("two"))
-				_, _ = c.Get(1)
-				c.Put(3, []byte("three"))
+				c.Put(testKey(1), []byte("one"))
+				c.Put(testKey(2), []byte("two"))
+				_, _ = c.Get(testKey(1))
+				c.Put(testKey(3), []byte("three"))
 			},
 			wantHit:  []int64{1, 3},
 			wantMiss: []int64{2},
@@ -56,10 +65,10 @@ func TestPolicyEviction(t *testing.T) {
 			name:  "Sieve",
 			cache: NewSieve(Limits{MaxFrames: 2}),
 			primeFunc: func(c Cache) {
-				c.Put(1, []byte("one"))
-				c.Put(2, []byte("two"))
-				_, _ = c.Get(1)
-				c.Put(3, []byte("three"))
+				c.Put(testKey(1), []byte("one"))
+				c.Put(testKey(2), []byte("two"))
+				_, _ = c.Get(testKey(1))
+				c.Put(testKey(3), []byte("three"))
 			},
 			wantHit:  []int64{1, 3},
 			wantMiss: []int64{2},
@@ -70,12 +79,12 @@ func TestPolicyEviction(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			tc.primeFunc(tc.cache)
 			for _, frameID := range tc.wantHit {
-				if _, ok := tc.cache.Get(frameID); !ok {
+				if _, ok := tc.cache.Get(testKey(frameID)); !ok {
 					t.Fatalf("Get(%d) missed", frameID)
 				}
 			}
 			for _, frameID := range tc.wantMiss {
-				if data, ok := tc.cache.Get(frameID); ok {
+				if data, ok := tc.cache.Get(testKey(frameID)); ok {
 					t.Fatalf("Get(%d) = %q, true; want miss", frameID, data)
 				}
 			}
@@ -87,41 +96,41 @@ func TestCacheLimitsReplacementAndClear(t *testing.T) {
 	for _, factory := range cacheFactories {
 		t.Run(factory.name, func(t *testing.T) {
 			c := factory.new(Limits{MaxFrames: 2})
-			c.Put(1, []byte("a"))
-			c.Put(1, []byte("bb"))
-			got, ok := c.Get(1)
+			c.Put(testKey(1), []byte("a"))
+			c.Put(testKey(1), []byte("bb"))
+			got, ok := c.Get(testKey(1))
 			if !ok || !bytes.Equal(got, []byte("bb")) {
 				t.Fatalf("replacement Get(1) = %q, %t; want %q, true", got, ok, "bb")
 			}
 			assertCacheInvariants(t, c, Limits{MaxFrames: 2})
 
 			c = factory.new(Limits{MaxFrames: 2, MaxBytes: 2})
-			c.Put(1, []byte("a"))
-			c.Put(1, []byte("bbb"))
-			if got, ok := c.Get(1); ok {
+			c.Put(testKey(1), []byte("a"))
+			c.Put(testKey(1), []byte("bbb"))
+			if got, ok := c.Get(testKey(1)); ok {
 				t.Fatalf("oversized replacement Get(1) = %q, true; want miss", got)
 			}
 			assertCacheInvariants(t, c, Limits{MaxFrames: 2, MaxBytes: 2})
 
 			c = factory.new(Limits{MaxFrames: 3, MaxBytes: 5})
-			c.Put(1, []byte("aa"))
-			c.Put(2, []byte("bb"))
-			c.Put(3, []byte("cc"))
+			c.Put(testKey(1), []byte("aa"))
+			c.Put(testKey(2), []byte("bb"))
+			c.Put(testKey(3), []byte("cc"))
 			assertCacheInvariants(t, c, Limits{MaxFrames: 3, MaxBytes: 5})
 
 			c = factory.new(Limits{MaxFrames: 0})
-			c.Put(1, []byte("a"))
-			if got, ok := c.Get(1); ok {
+			c.Put(testKey(1), []byte("a"))
+			if got, ok := c.Get(testKey(1)); ok {
 				t.Fatalf("disabled cache Get(1) = %q, true; want miss", got)
 			}
 			assertCacheInvariants(t, c, Limits{MaxFrames: 0})
 
 			c = factory.new(Limits{MaxFrames: 2})
-			c.Put(1, []byte("a"))
-			c.Put(2, []byte("b"))
+			c.Put(testKey(1), []byte("a"))
+			c.Put(testKey(2), []byte("b"))
 			c.Clear()
 			assertCacheInvariants(t, c, Limits{MaxFrames: 2})
-			if got, ok := c.Get(1); ok {
+			if got, ok := c.Get(testKey(1)); ok {
 				t.Fatalf("Get(1) after Clear = %q, true; want miss", got)
 			}
 		})
@@ -151,11 +160,11 @@ func TestCacheAccessDistributions(t *testing.T) {
 				c := factory.new(limits)
 				for _, frameID := range dist.seq {
 					want := frames[frameID]
-					got, ok := c.Get(int64(frameID))
+					got, ok := c.Get(testKey(int64(frameID)))
 					if ok && !bytes.Equal(got, want) {
 						t.Fatalf("Get(%d) = %q; want %q", frameID, got, want)
 					}
-					c.Put(int64(frameID), want)
+					c.Put(testKey(int64(frameID)), want)
 					assertCacheInvariants(t, c, limits)
 				}
 			})
@@ -213,21 +222,27 @@ func assertCacheInvariants(t *testing.T, c Cache, limits Limits) {
 
 	var (
 		order *list.List
-		items map[int64]*list.Element
+		items map[Key]*list.Element
 		bytes uint64
 		hand  *list.Element
 	)
 
 	switch v := c.(type) {
 	case *FIFO:
+		v.mu.Lock()
+		defer v.mu.Unlock()
 		order = &v.order
 		items = v.items
 		bytes = v.bytes
 	case *LRU:
+		v.mu.Lock()
+		defer v.mu.Unlock()
 		order = &v.order
 		items = v.items
 		bytes = v.bytes
 	case *Sieve:
+		v.mu.Lock()
+		defer v.mu.Unlock()
 		order = &v.order
 		items = v.items
 		bytes = v.bytes
@@ -253,21 +268,21 @@ func assertCacheInvariants(t *testing.T, c Cache, limits Limits) {
 	}
 
 	var sum uint64
-	seen := make(map[int64]bool, order.Len())
+	seen := make(map[Key]bool, order.Len())
 	for elem := order.Front(); elem != nil; elem = elem.Next() {
 		entry, ok := elem.Value.(*cacheEntry)
 		if !ok {
 			t.Fatalf("list entry has type %T", elem.Value)
 		}
-		if seen[entry.frameID] {
-			t.Fatalf("duplicate frame ID %d", entry.frameID)
+		if seen[entry.key] {
+			t.Fatalf("duplicate key %+v", entry.key)
 		}
-		seen[entry.frameID] = true
-		if items[entry.frameID] != elem {
-			t.Fatalf("map element mismatch for frame ID %d", entry.frameID)
+		seen[entry.key] = true
+		if items[entry.key] != elem {
+			t.Fatalf("map element mismatch for key %+v", entry.key)
 		}
 		if uint64(len(entry.data)) != entry.size {
-			t.Fatalf("frame ID %d size = %d, len(data) = %d", entry.frameID, entry.size, len(entry.data))
+			t.Fatalf("key %+v size = %d, len(data) = %d", entry.key, entry.size, len(entry.data))
 		}
 		sum += entry.size
 	}
@@ -298,8 +313,8 @@ func TestCacheByStrategyCoversAllCaches(t *testing.T) {
 
 func ExampleNewFIFO_noCache() {
 	c := NewFIFO(Limits{MaxFrames: 0})
-	c.Put(1, []byte("decoded frame"))
-	_, ok := c.Get(1)
+	c.Put(Key{Namespace: 1, FrameID: 1}, []byte("decoded frame"))
+	_, ok := c.Get(Key{Namespace: 1, FrameID: 1})
 	fmt.Println(ok)
 
 	// Output:

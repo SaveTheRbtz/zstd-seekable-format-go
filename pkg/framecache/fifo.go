@@ -1,13 +1,17 @@
 package framecache
 
-import "container/list"
+import (
+	"container/list"
+	"sync"
+)
 
 // FIFO is a first-in, first-out decoded-frame cache.
 //
-// Hits do not affect eviction order. FIFO is not safe for direct concurrent use.
+// Hits do not affect eviction order. FIFO is safe for concurrent use.
 type FIFO struct {
 	limits Limits
-	items  map[int64]*list.Element
+	mu     sync.Mutex
+	items  map[Key]*list.Element
 	order  list.List
 	bytes  uint64
 }
@@ -16,28 +20,34 @@ type FIFO struct {
 func NewFIFO(limits Limits) *FIFO {
 	return &FIFO{
 		limits: limits,
-		items:  make(map[int64]*list.Element),
+		items:  make(map[Key]*list.Element),
 	}
 }
 
-// Get returns the cached frame for frameID.
-func (c *FIFO) Get(frameID int64) ([]byte, bool) {
-	elem, ok := c.items[frameID]
+// Get returns the cached frame for key.
+func (c *FIFO) Get(key Key) ([]byte, bool) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	elem, ok := c.items[key]
 	if !ok {
 		return nil, false
 	}
 	return elem.Value.(*cacheEntry).data, true
 }
 
-// Put stores data for frameID, replacing any existing entry.
-func (c *FIFO) Put(frameID int64, data []byte) {
+// Put stores data for key, replacing any existing entry.
+func (c *FIFO) Put(key Key, data []byte) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
 	size := uint64(len(data))
 	if !canStore(c.limits, size) {
-		c.remove(frameID)
+		c.remove(key)
 		return
 	}
 
-	if elem, ok := c.items[frameID]; ok {
+	if elem, ok := c.items[key]; ok {
 		entry := elem.Value.(*cacheEntry)
 		c.bytes -= entry.size
 		entry.data = data
@@ -47,21 +57,24 @@ func (c *FIFO) Put(frameID int64, data []byte) {
 		return
 	}
 
-	entry := newCacheEntry(frameID, data)
-	c.items[frameID] = c.order.PushBack(entry)
+	entry := newCacheEntry(key, data)
+	c.items[key] = c.order.PushBack(entry)
 	c.bytes += entry.size
 	c.evict()
 }
 
 // Clear removes all cached frames.
 func (c *FIFO) Clear() {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
 	clear(c.items)
 	c.order.Init()
 	c.bytes = 0
 }
 
-func (c *FIFO) remove(frameID int64) {
-	elem, ok := c.items[frameID]
+func (c *FIFO) remove(key Key) {
+	elem, ok := c.items[key]
 	if !ok {
 		return
 	}
@@ -70,7 +83,7 @@ func (c *FIFO) remove(frameID int64) {
 
 func (c *FIFO) removeElement(elem *list.Element) {
 	entry := elem.Value.(*cacheEntry)
-	delete(c.items, entry.frameID)
+	delete(c.items, entry.key)
 	c.bytes -= entry.size
 	c.order.Remove(elem)
 }

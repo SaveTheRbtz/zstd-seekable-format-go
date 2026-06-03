@@ -101,6 +101,7 @@ type Reader struct {
 
 	frameCacheMu sync.Mutex
 	frameCache   framecache.Cache
+	cacheNS      uint64
 }
 
 var (
@@ -109,6 +110,8 @@ var (
 	_ io.ReaderAt = (*Reader)(nil)
 	_ io.Closer   = (*Reader)(nil)
 )
+
+var nextFrameCacheNamespace atomic.Uint64
 
 // ZSTDDecoder is the decompressor.
 //
@@ -131,7 +134,8 @@ type ZSTDDecoder interface {
 // remains responsible for closing rs and decoder, if they require closing.
 func NewReader(rs io.ReadSeeker, decoder ZSTDDecoder, opts ...ReaderOption) (*Reader, error) {
 	sr := Reader{
-		dec: decoder,
+		dec:     decoder,
+		cacheNS: nextFrameCacheNamespace.Add(1),
 	}
 
 	sr.logger = discardLogger
@@ -209,7 +213,7 @@ func (r *Reader) Read(p []byte) (n int, err error) {
 // Close is idempotent. Read, ReadAt, Seek, and SeekTable return ErrClosed after Close.
 func (r *Reader) Close() error {
 	if !r.closed.Swap(true) {
-		r.clearCachedFrames()
+		r.dropFrameCache()
 		r.table = SeekTable{}
 	}
 	return nil
@@ -241,7 +245,7 @@ func (r *Reader) read(dst []byte, off int64) (int64, int, error) {
 
 	var decompressed []byte
 
-	cachedData, ok := r.getCachedFrame(index.ID)
+	cachedData, ok := r.getCachedFrame(framecache.Key{Namespace: r.cacheNS, FrameID: index.ID})
 	if ok {
 		decompressed = cachedData
 	} else {
@@ -272,7 +276,7 @@ func (r *Reader) read(dst []byte, off int64) (int64, int, error) {
 					index.CompressedOffset, index.Checksum, checksum)
 			}
 		}
-		r.putCachedFrame(index.ID, decompressed)
+		r.putCachedFrame(framecache.Key{Namespace: r.cacheNS, FrameID: index.ID}, decompressed)
 	}
 
 	if len(decompressed) != int(index.DecompressedSize) {

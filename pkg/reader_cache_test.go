@@ -33,46 +33,37 @@ func (d *countingDecoder) Count() int {
 }
 
 type spyFrameCache struct {
-	mu     sync.Mutex
-	items  map[int64][]byte
-	gets   int
-	puts   int
-	clears int
+	mu    sync.Mutex
+	items map[framecache.Key][]byte
+	gets  int
+	puts  int
 }
 
 func newSpyFrameCache() *spyFrameCache {
-	return &spyFrameCache{items: make(map[int64][]byte)}
+	return &spyFrameCache{items: make(map[framecache.Key][]byte)}
 }
 
-func (c *spyFrameCache) Get(frameID int64) ([]byte, bool) {
+func (c *spyFrameCache) Get(key framecache.Key) ([]byte, bool) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
 	c.gets++
-	data, ok := c.items[frameID]
+	data, ok := c.items[key]
 	return data, ok
 }
 
-func (c *spyFrameCache) Put(frameID int64, data []byte) {
+func (c *spyFrameCache) Put(key framecache.Key, data []byte) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
 	c.puts++
-	c.items[frameID] = data
+	c.items[key] = data
 }
 
-func (c *spyFrameCache) Clear() {
+func (c *spyFrameCache) Counts() (int, int) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-
-	c.clears++
-	clear(c.items)
-}
-
-func (c *spyFrameCache) Counts() (int, int, int) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	return c.gets, c.puts, c.clears
+	return c.gets, c.puts
 }
 
 func TestReaderDefaultFrameCacheIsOneFrameFIFO(t *testing.T) {
@@ -141,14 +132,14 @@ func TestReaderFrameCacheOption(t *testing.T) {
 	assert.Equal(t, frames[0], buf)
 	assert.Equal(t, 1, counting.Count())
 
-	gets, puts, clears := cache.Counts()
+	gets, puts := cache.Counts()
 	assert.Equal(t, 2, gets)
 	assert.Equal(t, 1, puts)
-	assert.Equal(t, 0, clears)
 
 	require.NoError(t, r.Close())
-	_, _, clears = cache.Counts()
-	assert.Equal(t, 1, clears)
+	gets, puts = cache.Counts()
+	assert.Equal(t, 2, gets)
+	assert.Equal(t, 1, puts)
 }
 
 func TestReaderFIFOZeroDisablesFrameCache(t *testing.T) {
@@ -234,6 +225,64 @@ func TestReaderFrameCacheConcurrent(t *testing.T) {
 	}
 }
 
+func TestReaderFrameCacheSharedCacheConcurrentReaders(t *testing.T) {
+	t.Parallel()
+
+	caches := []struct {
+		name  string
+		cache framecache.Cache
+	}{
+		{name: "FIFO", cache: framecache.NewFIFO(framecache.Limits{MaxFrames: 1})},
+		{name: "LRU", cache: framecache.NewLRU(framecache.Limits{MaxFrames: 1})},
+		{name: "Sieve", cache: framecache.NewSieve(framecache.Limits{MaxFrames: 1})},
+	}
+
+	for _, tc := range caches {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			first, firstSource := cacheTestReaderFromFrame(t, []byte("aaaa"), tc.cache)
+			defer func() { require.NoError(t, first.Close()) }()
+			second, secondSource := cacheTestReaderFromFrame(t, []byte("bbbb"), tc.cache)
+			defer func() { require.NoError(t, second.Close()) }()
+
+			const workers = 64
+			var wg sync.WaitGroup
+			errCh := make(chan error, workers)
+			for i := 0; i < workers; i++ {
+				i := i
+				wg.Add(1)
+				go func() {
+					defer wg.Done()
+
+					reader := first
+					want := firstSource
+					if i%2 == 1 {
+						reader = second
+						want = secondSource
+					}
+
+					got := make([]byte, len(want))
+					n, err := reader.ReadAt(got, 0)
+					if err != nil {
+						errCh <- err
+						return
+					}
+					if !bytes.Equal(got[:n], want) {
+						errCh <- fmt.Errorf("ReadAt shared cache = %q, want %q", got[:n], want)
+					}
+				}()
+			}
+			wg.Wait()
+			close(errCh)
+			for err := range errCh {
+				require.NoError(t, err)
+			}
+		})
+	}
+}
+
 func cacheTestStream(t testing.TB, frameCount int) ([]byte, [][]byte, []byte) {
 	t.Helper()
 
@@ -257,4 +306,27 @@ func cacheTestStream(t testing.TB, frameCount int) ([]byte, [][]byte, []byte) {
 	require.NoError(t, w.Close())
 
 	return compressed.Bytes(), frames, source
+}
+
+func cacheTestReaderFromFrame(t testing.TB, frame []byte, cache framecache.Cache) (*Reader, []byte) {
+	t.Helper()
+
+	enc, err := zstd.NewWriter(nil, zstd.WithEncoderLevel(zstd.SpeedFastest))
+	require.NoError(t, err)
+	defer func() { require.NoError(t, enc.Close()) }()
+
+	var compressed bytes.Buffer
+	w, err := NewWriter(&compressed, enc)
+	require.NoError(t, err)
+	_, err = w.Write(frame)
+	require.NoError(t, err)
+	require.NoError(t, w.Close())
+
+	dec, err := zstd.NewReader(nil)
+	require.NoError(t, err)
+	t.Cleanup(dec.Close)
+
+	r, err := NewReader(bytes.NewReader(compressed.Bytes()), dec, WithReaderFrameCache(cache))
+	require.NoError(t, err)
+	return r, frame
 }
