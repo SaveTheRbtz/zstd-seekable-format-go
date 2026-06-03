@@ -18,8 +18,9 @@ var (
 
 func BenchmarkReaderFrameCache(b *testing.B) {
 	const (
-		frameCount  = 256
-		accessCount = 4096
+		frameCount  = 25_600
+		accessCount = 409_600
+		cacheFrames = 10_000
 	)
 
 	compressed, frames, _ := cacheTestStream(b, frameCount)
@@ -36,11 +37,9 @@ func BenchmarkReaderFrameCache(b *testing.B) {
 		name string
 		new  func() framecache.Cache
 	}{
-		{name: "FIFO0", new: func() framecache.Cache { return framecache.NewFIFO(framecache.Limits{MaxFrames: 0}) }},
-		{name: "FIFO1", new: func() framecache.Cache { return framecache.NewFIFO(framecache.Limits{MaxFrames: 1}) }},
-		{name: "FIFO64", new: func() framecache.Cache { return framecache.NewFIFO(framecache.Limits{MaxFrames: 64}) }},
-		{name: "LRU64", new: func() framecache.Cache { return framecache.NewLRU(framecache.Limits{MaxFrames: 64}) }},
-		{name: "Sieve64", new: func() framecache.Cache { return framecache.NewSieve(framecache.Limits{MaxFrames: 64}) }},
+		{name: "FIFO10000", new: func() framecache.Cache { return framecache.NewFIFO(framecache.Limits{MaxFrames: cacheFrames}) }},
+		{name: "LRU10000", new: func() framecache.Cache { return framecache.NewLRU(framecache.Limits{MaxFrames: cacheFrames}) }},
+		{name: "Sieve10000", new: func() framecache.Cache { return framecache.NewSieve(framecache.Limits{MaxFrames: cacheFrames}) }},
 	}
 
 	for _, dist := range distributions {
