@@ -4,7 +4,7 @@ go 1.25.0
 
 require (
 	github.com/SaveTheRbtz/fastcdc-go v0.3.0
-	github.com/SaveTheRbtz/zstd-seekable-format-go/pkg v0.9.1-0.20260602114314-163b998318aa
+	github.com/SaveTheRbtz/zstd-seekable-format-go/pkg v0.9.1-0.20260603112515-37445b349c2c
 	github.com/klauspost/compress v1.18.6
 	github.com/schollz/progressbar/v3 v3.19.0
 	golang.org/x/term v0.43.0
