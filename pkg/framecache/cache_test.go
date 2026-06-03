@@ -206,14 +206,38 @@ func TestSieveReplacementPreservesPositionAndHand(t *testing.T) {
 		t.Fatal("replacement moved hand")
 	}
 	entry := elem.Value.(*sieveEntry)
-	if !entry.visited {
-		t.Fatal("replacement did not mark frame visited")
+	if entry.count != 1 {
+		t.Fatalf("replacement counter = %d, want 1", entry.count)
 	}
 	if !bytes.Equal(entry.data, []byte("ddd")) {
 		t.Fatalf("replacement data = %q, want ddd", entry.data)
 	}
 	if got, want := c.bytes, uint64(5); got != want {
 		t.Fatalf("bytes = %d, want %d", got, want)
+	}
+}
+
+func TestSieveKCounterGivesMultipleChances(t *testing.T) {
+	c := NewSieve(Limits{MaxFrames: 2})
+	c.Put(1, []byte("one"))
+	c.Put(2, []byte("two"))
+	_, _ = c.Get(1)
+	_, _ = c.Get(1)
+
+	c.Put(3, []byte("three"))
+	c.Put(4, []byte("four"))
+
+	if _, ok := c.items[1]; !ok {
+		t.Fatal("twice-used frame was evicted before its counter reached zero")
+	}
+	if _, ok := c.items[2]; ok {
+		t.Fatal("unused frame 2 is still cached")
+	}
+	if _, ok := c.items[3]; ok {
+		t.Fatal("unused frame 3 is still cached")
+	}
+	if _, ok := c.items[4]; !ok {
+		t.Fatal("new frame 4 is not cached")
 	}
 }
 

@@ -76,7 +76,7 @@ func BenchmarkReaderFrameCache(b *testing.B) {
 		{name: "LRU_MaxFrames=10000", new: func() *benchmarkCountingCache {
 			return &benchmarkCountingCache{cache: framecache.NewLRU(framecache.Limits{MaxFrames: cacheFrames})}
 		}},
-		{name: "Sieve_MaxFrames=10000", new: func() *benchmarkCountingCache {
+		{name: "SieveK16_MaxFrames=10000", new: func() *benchmarkCountingCache {
 			return &benchmarkCountingCache{cache: framecache.NewSieve(framecache.Limits{MaxFrames: cacheFrames})}
 		}},
 	}

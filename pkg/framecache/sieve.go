@@ -2,10 +2,11 @@ package framecache
 
 import "container/list"
 
-// Sieve is a decoded-frame cache using the Sieve replacement policy.
+// Sieve is a decoded-frame cache using the SIEVE-k replacement policy with k=16.
 //
-// Hits and replacements mark entries visited. During eviction, visited entries
-// get one second chance; the first unvisited entry is evicted.
+// Hits and replacements increment a small counter. During eviction, entries
+// with a positive counter are decremented and get another chance; the first
+// entry with a zero counter is evicted.
 type Sieve struct {
 	limits Limits
 	items  map[int64]*list.Element
@@ -14,10 +15,12 @@ type Sieve struct {
 	bytes  uint64
 }
 
+const sieveMaxCount = 16
+
 type sieveEntry struct {
 	frameID int64
 	data    []byte
-	visited bool
+	count   uint8
 }
 
 // NewSieve returns a Sieve cache with the provided limits.
@@ -28,14 +31,14 @@ func NewSieve(limits Limits) *Sieve {
 	}
 }
 
-// Get returns the cached frame for frameID and marks it visited.
+// Get returns the cached frame for frameID and marks it used.
 func (c *Sieve) Get(frameID int64) ([]byte, bool) {
 	elem, ok := c.items[frameID]
 	if !ok {
 		return nil, false
 	}
 	entry := elem.Value.(*sieveEntry)
-	entry.visited = true
+	entry.touch()
 	return entry.data, true
 }
 
@@ -51,7 +54,7 @@ func (c *Sieve) Put(frameID int64, data []byte) {
 		entry := elem.Value.(*sieveEntry)
 		c.bytes -= uint64(len(entry.data))
 		entry.data = data
-		entry.visited = true
+		entry.touch()
 		c.bytes += size
 		c.evictForExcept(0, 0, elem)
 		return
@@ -126,8 +129,8 @@ func (c *Sieve) evictForExcept(extraFrames int, extraBytes uint64, protected *li
 		}
 
 		entry := elem.Value.(*sieveEntry)
-		if entry.visited {
-			entry.visited = false
+		if entry.count > 0 {
+			entry.count--
 			next := c.prevCircular(elem)
 			if next != nil {
 				c.hand = next
@@ -136,6 +139,12 @@ func (c *Sieve) evictForExcept(extraFrames int, extraBytes uint64, protected *li
 		}
 
 		c.removeElement(elem)
+	}
+}
+
+func (entry *sieveEntry) touch() {
+	if entry.count < sieveMaxCount {
+		entry.count++
 	}
 }
 
