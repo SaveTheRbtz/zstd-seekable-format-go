@@ -3,6 +3,13 @@
 // Cache implementations in this package are safe for direct concurrent use.
 package framecache
 
+import (
+	"encoding/binary"
+	"fmt"
+)
+
+const keyBinarySize = 16
+
 // Key identifies one decoded frame in one Reader namespace.
 //
 // Namespace is assigned by seekable.Reader. It is unique to one Reader instance
@@ -20,9 +27,42 @@ func NewKey(namespace uint64, frameID int64) Key {
 	return Key{namespace: namespace, frameID: frameID}
 }
 
+// ParseKey returns the key encoded by Key.MarshalBinary or Key.AppendBinary.
+func ParseKey(data []byte) (Key, error) {
+	var key Key
+	if err := key.UnmarshalBinary(data); err != nil {
+		return Key{}, err
+	}
+	return key, nil
+}
+
 // FrameID returns the seek-table frame ID embedded in k.
 func (k Key) FrameID() int64 {
 	return k.frameID
+}
+
+// AppendBinary appends k's opaque binary encoding to dst and returns the result.
+func (k Key) AppendBinary(dst []byte) []byte {
+	n := len(dst)
+	dst = append(dst, make([]byte, keyBinarySize)...)
+	binary.BigEndian.PutUint64(dst[n:n+8], k.namespace)
+	binary.BigEndian.PutUint64(dst[n+8:n+keyBinarySize], uint64(k.frameID))
+	return dst
+}
+
+// MarshalBinary returns k's opaque binary encoding.
+func (k Key) MarshalBinary() ([]byte, error) {
+	return k.AppendBinary(nil), nil
+}
+
+// UnmarshalBinary decodes k from the encoding produced by MarshalBinary.
+func (k *Key) UnmarshalBinary(data []byte) error {
+	if len(data) != keyBinarySize {
+		return fmt.Errorf("framecache key length is %d, want %d", len(data), keyBinarySize)
+	}
+	k.namespace = binary.BigEndian.Uint64(data[:8])
+	k.frameID = int64(binary.BigEndian.Uint64(data[8:keyBinarySize]))
+	return nil
 }
 
 // Cache stores decoded frames by key.
