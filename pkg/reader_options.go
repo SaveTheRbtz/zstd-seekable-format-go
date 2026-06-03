@@ -1,6 +1,10 @@
 package seekable
 
-import "log/slog"
+import (
+	"log/slog"
+
+	"github.com/SaveTheRbtz/zstd-seekable-format-go/pkg/framecache"
+)
 
 // ReaderOption configures NewReader.
 type ReaderOption func(*Reader) error
@@ -21,4 +25,22 @@ func WithReaderLogger(l *slog.Logger) ReaderOption {
 // argument for all seek-table and frame reads.
 func WithReaderEnvironment(e ReaderEnvironment) ReaderOption {
 	return func(r *Reader) error { r.env = e; return nil }
+}
+
+// WithReaderFrameCache sets the decoded-frame cache used by Reader.
+//
+// Passing nil restores the default one-frame FIFO cache. To disable caching,
+// pass framecache.NewFIFO(framecache.Limits{MaxFrames: 0}).
+//
+// Do not share one cache between concurrently used Readers unless that cache is
+// safe for concurrent use or externally synchronized.
+func WithReaderFrameCache(cache framecache.Cache) ReaderOption {
+	return func(r *Reader) error {
+		selected := cache
+		if selected == nil {
+			selected = defaultFrameCache()
+		}
+		r.frameCache = selected
+		return nil
+	}
 }

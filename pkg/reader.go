@@ -5,36 +5,14 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
-	"math"
 	"sync"
 	"sync/atomic"
 
+	"github.com/SaveTheRbtz/zstd-seekable-format-go/pkg/framecache"
 	"github.com/cespare/xxhash/v2"
 )
 
-type cachedFrame struct {
-	m sync.Mutex
-
-	offset uint64
-	data   []byte
-}
-
 const maxReaderOffset = uint64(1<<63 - 1)
-
-func (f *cachedFrame) replace(offset uint64, data []byte) {
-	f.m.Lock()
-	defer f.m.Unlock()
-
-	f.offset = offset
-	f.data = data
-}
-
-func (f *cachedFrame) get() (uint64, []byte) {
-	f.m.Lock()
-	defer f.m.Unlock()
-
-	return f.offset, f.data
-}
 
 // readSeekerEnvImpl is the environment implementation for the io.ReadSeeker.
 type readSeekerEnvImpl struct {
@@ -121,8 +99,8 @@ type Reader struct {
 
 	closed atomic.Bool
 
-	// TODO: Add simple LRU cache.
-	cachedFrame cachedFrame
+	frameCacheMu sync.Mutex
+	frameCache   framecache.Cache
 }
 
 var (
@@ -162,6 +140,9 @@ func NewReader(rs io.ReadSeeker, decoder ZSTDDecoder, opts ...ReaderOption) (*Re
 		if err != nil {
 			return nil, err
 		}
+	}
+	if sr.frameCache == nil {
+		sr.frameCache = defaultFrameCache()
 	}
 
 	if sr.env == nil {
@@ -228,7 +209,7 @@ func (r *Reader) Read(p []byte) (n int, err error) {
 // Close is idempotent. Read, ReadAt, Seek, and SeekTable return ErrClosed after Close.
 func (r *Reader) Close() error {
 	if !r.closed.Swap(true) {
-		r.cachedFrame.replace(math.MaxUint64, nil)
+		r.clearCachedFrames()
 		r.table = SeekTable{}
 	}
 	return nil
@@ -260,12 +241,10 @@ func (r *Reader) read(dst []byte, off int64) (int64, int, error) {
 
 	var decompressed []byte
 
-	cachedOffset, cachedData := r.cachedFrame.get()
-	if cachedOffset == index.DecompressedOffset && cachedData != nil {
-		// fastpath
+	cachedData, ok := r.getCachedFrame(index.ID)
+	if ok {
 		decompressed = cachedData
 	} else {
-		// slowpath
 		if index.CompressedSize > maxDecoderFrameSize {
 			return 0, 0, fmt.Errorf("index.CompressedSize is too big: %d > %d",
 				index.CompressedSize, maxDecoderFrameSize)
@@ -293,7 +272,7 @@ func (r *Reader) read(dst []byte, off int64) (int64, int, error) {
 					index.CompressedOffset, index.Checksum, checksum)
 			}
 		}
-		r.cachedFrame.replace(index.DecompressedOffset, decompressed)
+		r.putCachedFrame(index.ID, decompressed)
 	}
 
 	if len(decompressed) != int(index.DecompressedSize) {
