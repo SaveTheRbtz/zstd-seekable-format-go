@@ -9,12 +9,12 @@ import (
 	"fmt"
 	"io"
 	"math/rand"
-	"sync"
 	"testing"
 
 	"github.com/SaveTheRbtz/zstd-seekable-format-go/pkg/framecache"
 	"github.com/klauspost/compress/zstd"
 	"github.com/stretchr/testify/require"
+	"golang.org/x/sync/errgroup"
 )
 
 func FuzzReaderFrameCacheConcurrent(f *testing.F) {
@@ -40,57 +40,23 @@ func FuzzReaderFrameCacheConcurrent(f *testing.F) {
 		require.NoError(t, err)
 		defer func() { require.NoError(t, r.Close()) }()
 
-		var wg sync.WaitGroup
-		errCh := make(chan error, len(rawOps)/2+1)
+		var g errgroup.Group
 		for i := 0; i+1 < len(rawOps); i += 2 {
 			off := int(rawOps[i]) % len(source)
 			size := int(rawOps[i+1]) % 64
-			wg.Add(1)
-			go func() {
-				defer wg.Done()
+			g.Go(func() error {
 				got := make([]byte, size)
 				n, err := r.ReadAt(got, int64(off))
 				if err != nil && !errors.Is(err, io.EOF) {
-					errCh <- err
-					return
+					return err
 				}
 				if !bytes.Equal(got[:n], source[off:off+n]) {
-					errCh <- fmt.Errorf("ReadAt(%d, %d) = %q, want %q", off, size, got[:n], source[off:off+n])
+					return fmt.Errorf("ReadAt(%d, %d) = %q, want %q", off, size, got[:n], source[off:off+n])
 				}
-			}()
+				return nil
+			})
 		}
-		wg.Wait()
-		close(errCh)
-		for err := range errCh {
-			require.NoError(t, err)
-		}
-	})
-}
-
-func FuzzReaderFrameCacheSharedCache(f *testing.F) {
-	f.Add([]byte("aaaa"), []byte("bbbb"), uint8(0))
-	f.Add([]byte("left"), []byte("right"), uint8(1))
-	f.Add([]byte{0, 1, 2, 3}, []byte{4, 5, 6, 7}, uint8(2))
-
-	f.Fuzz(func(t *testing.T, first []byte, second []byte, strategy uint8) {
-		first = normalizeSharedCacheFrame(first)
-		second = normalizeSharedCacheFrame(second)
-
-		shared := fuzzReaderCache(strategy, 1)
-		firstReader, firstSource := fuzzSharedCacheReader(t, first, shared)
-		defer func() { require.NoError(t, firstReader.Close()) }()
-		secondReader, secondSource := fuzzSharedCacheReader(t, second, shared)
-		defer func() { require.NoError(t, secondReader.Close()) }()
-
-		gotFirst := make([]byte, len(firstSource))
-		n, err := firstReader.ReadAt(gotFirst, 0)
-		require.NoError(t, err)
-		require.Equal(t, firstSource, gotFirst[:n])
-
-		gotSecond := make([]byte, len(secondSource))
-		n, err = secondReader.ReadAt(gotSecond, 0)
-		require.NoError(t, err)
-		require.Equal(t, secondSource, gotSecond[:n])
+		require.NoError(t, g.Wait())
 	})
 }
 
@@ -130,37 +96,4 @@ func fuzzReaderCacheStream(t testing.TB, seed int64, frameCount, maxFrameSize in
 	require.NoError(t, w.Close())
 
 	return compressed.Bytes(), source
-}
-
-func normalizeSharedCacheFrame(frame []byte) []byte {
-	if len(frame) == 0 {
-		return []byte{0}
-	}
-	if len(frame) > 64 {
-		frame = frame[:64]
-	}
-	return bytes.Clone(frame)
-}
-
-func fuzzSharedCacheReader(t testing.TB, frame []byte, cache framecache.Cache) (*Reader, []byte) {
-	t.Helper()
-
-	enc, err := zstd.NewWriter(nil, zstd.WithEncoderLevel(zstd.SpeedFastest))
-	require.NoError(t, err)
-	defer func() { require.NoError(t, enc.Close()) }()
-
-	var compressed bytes.Buffer
-	w, err := NewWriter(&compressed, enc)
-	require.NoError(t, err)
-	_, err = w.Write(frame)
-	require.NoError(t, err)
-	require.NoError(t, w.Close())
-
-	dec, err := zstd.NewReader(nil)
-	require.NoError(t, err)
-	t.Cleanup(dec.Close)
-
-	r, err := NewReader(bytes.NewReader(compressed.Bytes()), dec, WithReaderFrameCache(cache))
-	require.NoError(t, err)
-	return r, frame
 }

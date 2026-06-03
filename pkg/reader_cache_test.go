@@ -4,36 +4,30 @@ import (
 	"bytes"
 	"fmt"
 	"io"
-	"sync"
 	"testing"
 
 	"github.com/SaveTheRbtz/zstd-seekable-format-go/pkg/framecache"
 	"github.com/klauspost/compress/zstd"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"golang.org/x/sync/errgroup"
 )
 
 type countingDecoder struct {
 	dec ZSTDDecoder
-	mu  sync.Mutex
 	n   int
 }
 
 func (d *countingDecoder) DecodeAll(input, dst []byte) ([]byte, error) {
-	d.mu.Lock()
 	d.n++
-	d.mu.Unlock()
 	return d.dec.DecodeAll(input, dst)
 }
 
 func (d *countingDecoder) Count() int {
-	d.mu.Lock()
-	defer d.mu.Unlock()
 	return d.n
 }
 
 type spyFrameCache struct {
-	mu    sync.Mutex
 	items map[framecache.Key][]byte
 	gets  int
 	puts  int
@@ -44,25 +38,17 @@ func newSpyFrameCache() *spyFrameCache {
 }
 
 func (c *spyFrameCache) Get(key framecache.Key) ([]byte, bool) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
 	c.gets++
 	data, ok := c.items[key]
 	return data, ok
 }
 
 func (c *spyFrameCache) Put(key framecache.Key, data []byte) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
 	c.puts++
 	c.items[key] = data
 }
 
 func (c *spyFrameCache) Counts() (int, int) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
 	return c.gets, c.puts
 }
 
@@ -79,31 +65,16 @@ func TestReaderDefaultFrameCacheIsOneFrameFIFO(t *testing.T) {
 	require.NoError(t, err)
 	defer func() { require.NoError(t, r.Close()) }()
 
-	buf := make([]byte, len(frames[0]))
-	n, err := r.ReadAt(buf, 0)
-	require.NoError(t, err)
-	assert.Equal(t, len(buf), n)
-	assert.Equal(t, frames[0], buf)
+	assertReadAt(t, r, 0, frames[0])
 	assert.Equal(t, 1, counting.Count())
 
-	n, err = r.ReadAt(buf, 0)
-	require.NoError(t, err)
-	assert.Equal(t, len(buf), n)
-	assert.Equal(t, frames[0], buf)
+	assertReadAt(t, r, 0, frames[0])
 	assert.Equal(t, 1, counting.Count())
 
-	buf = make([]byte, len(frames[1]))
-	n, err = r.ReadAt(buf, int64(len(frames[0])))
-	require.NoError(t, err)
-	assert.Equal(t, len(buf), n)
-	assert.Equal(t, frames[1], buf)
+	assertReadAt(t, r, int64(len(frames[0])), frames[1])
 	assert.Equal(t, 2, counting.Count())
 
-	buf = make([]byte, len(frames[0]))
-	n, err = r.ReadAt(buf, 0)
-	require.NoError(t, err)
-	assert.Equal(t, len(buf), n)
-	assert.Equal(t, frames[0], buf)
+	assertReadAt(t, r, 0, frames[0])
 	assert.Equal(t, 3, counting.Count())
 }
 
@@ -120,16 +91,8 @@ func TestReaderFrameCacheOption(t *testing.T) {
 	r, err := NewReader(bytes.NewReader(compressed), counting, WithReaderFrameCache(cache))
 	require.NoError(t, err)
 
-	buf := make([]byte, len(frames[0]))
-	n, err := r.ReadAt(buf, 0)
-	require.NoError(t, err)
-	assert.Equal(t, len(buf), n)
-	assert.Equal(t, frames[0], buf)
-
-	n, err = r.ReadAt(buf, 0)
-	require.NoError(t, err)
-	assert.Equal(t, len(buf), n)
-	assert.Equal(t, frames[0], buf)
+	assertReadAt(t, r, 0, frames[0])
+	assertReadAt(t, r, 0, frames[0])
 	assert.Equal(t, 1, counting.Count())
 
 	gets, puts := cache.Counts()
@@ -156,12 +119,8 @@ func TestReaderFIFOZeroDisablesFrameCache(t *testing.T) {
 	require.NoError(t, err)
 	defer func() { require.NoError(t, r.Close()) }()
 
-	buf := make([]byte, len(frames[0]))
 	for i := 1; i <= 2; i++ {
-		n, err := r.ReadAt(buf, 0)
-		require.NoError(t, err)
-		assert.Equal(t, len(buf), n)
-		assert.Equal(t, frames[0], buf)
+		assertReadAt(t, r, 0, frames[0])
 		assert.Equal(t, i, counting.Count())
 	}
 }
@@ -180,7 +139,6 @@ func TestReaderFrameCacheConcurrent(t *testing.T) {
 	}
 
 	for _, tc := range caches {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
@@ -193,13 +151,9 @@ func TestReaderFrameCacheConcurrent(t *testing.T) {
 			defer func() { require.NoError(t, r.Close()) }()
 
 			const workers = 64
-			var wg sync.WaitGroup
-			errCh := make(chan error, workers)
+			var g errgroup.Group
 			for i := 0; i < workers; i++ {
-				i := i
-				wg.Add(1)
-				go func() {
-					defer wg.Done()
+				g.Go(func() error {
 					off := i % len(source)
 					size := len(frames[i%len(frames)])
 					if off+size > len(source) {
@@ -208,19 +162,15 @@ func TestReaderFrameCacheConcurrent(t *testing.T) {
 					got := make([]byte, size)
 					n, err := r.ReadAt(got, int64(off))
 					if err != nil && err != io.EOF {
-						errCh <- err
-						return
+						return err
 					}
 					if !bytes.Equal(got[:n], source[off:off+n]) {
-						errCh <- fmt.Errorf("ReadAt(%d, %d) = %q, want %q", off, size, got[:n], source[off:off+n])
+						return fmt.Errorf("ReadAt(%d, %d) = %q, want %q", off, size, got[:n], source[off:off+n])
 					}
-				}()
+					return nil
+				})
 			}
-			wg.Wait()
-			close(errCh)
-			for err := range errCh {
-				require.NoError(t, err)
-			}
+			require.NoError(t, g.Wait())
 		})
 	}
 }
@@ -238,7 +188,6 @@ func TestReaderFrameCacheSharedCacheConcurrentReaders(t *testing.T) {
 	}
 
 	for _, tc := range caches {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
@@ -248,14 +197,9 @@ func TestReaderFrameCacheSharedCacheConcurrentReaders(t *testing.T) {
 			defer func() { require.NoError(t, second.Close()) }()
 
 			const workers = 64
-			var wg sync.WaitGroup
-			errCh := make(chan error, workers)
+			var g errgroup.Group
 			for i := 0; i < workers; i++ {
-				i := i
-				wg.Add(1)
-				go func() {
-					defer wg.Done()
-
+				g.Go(func() error {
 					reader := first
 					want := firstSource
 					if i%2 == 1 {
@@ -266,21 +210,27 @@ func TestReaderFrameCacheSharedCacheConcurrentReaders(t *testing.T) {
 					got := make([]byte, len(want))
 					n, err := reader.ReadAt(got, 0)
 					if err != nil {
-						errCh <- err
-						return
+						return err
 					}
 					if !bytes.Equal(got[:n], want) {
-						errCh <- fmt.Errorf("ReadAt shared cache = %q, want %q", got[:n], want)
+						return fmt.Errorf("ReadAt shared cache = %q, want %q", got[:n], want)
 					}
-				}()
+					return nil
+				})
 			}
-			wg.Wait()
-			close(errCh)
-			for err := range errCh {
-				require.NoError(t, err)
-			}
+			require.NoError(t, g.Wait())
 		})
 	}
+}
+
+func assertReadAt(t testing.TB, r *Reader, off int64, want []byte) {
+	t.Helper()
+
+	got := make([]byte, len(want))
+	n, err := r.ReadAt(got, off)
+	require.NoError(t, err)
+	require.Equal(t, len(want), n)
+	require.Equal(t, want, got[:n])
 }
 
 func cacheTestStream(t testing.TB, frameCount int) ([]byte, [][]byte, []byte) {

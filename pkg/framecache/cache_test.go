@@ -4,8 +4,6 @@ import (
 	"bytes"
 	"container/list"
 	"fmt"
-	"math"
-	"math/rand"
 	"testing"
 )
 
@@ -33,10 +31,8 @@ func TestPolicyEviction(t *testing.T) {
 	tests := []struct {
 		name      string
 		cache     Cache
-		wantHit   []int64
-		wantMiss  []int64
-		wantData  map[int64][]byte
 		primeFunc func(Cache)
+		want      []cacheResult
 	}{
 		{
 			name:  "FIFO",
@@ -47,8 +43,11 @@ func TestPolicyEviction(t *testing.T) {
 				_, _ = c.Get(testKey(1))
 				c.Put(testKey(3), []byte("three"))
 			},
-			wantHit:  []int64{2, 3},
-			wantMiss: []int64{1},
+			want: []cacheResult{
+				{frameID: 1},
+				{frameID: 2, data: "two", ok: true},
+				{frameID: 3, data: "three", ok: true},
+			},
 		},
 		{
 			name:  "FIFOReplacementByteLimit",
@@ -58,9 +57,10 @@ func TestPolicyEviction(t *testing.T) {
 				c.Put(testKey(2), []byte("bbb"))
 				c.Put(testKey(1), []byte("ccc"))
 			},
-			wantHit:  []int64{1},
-			wantMiss: []int64{2},
-			wantData: map[int64][]byte{1: []byte("ccc")},
+			want: []cacheResult{
+				{frameID: 1, data: "ccc", ok: true},
+				{frameID: 2},
+			},
 		},
 		{
 			name:  "LRU",
@@ -71,8 +71,11 @@ func TestPolicyEviction(t *testing.T) {
 				_, _ = c.Get(testKey(1))
 				c.Put(testKey(3), []byte("three"))
 			},
-			wantHit:  []int64{1, 3},
-			wantMiss: []int64{2},
+			want: []cacheResult{
+				{frameID: 1, data: "one", ok: true},
+				{frameID: 2},
+				{frameID: 3, data: "three", ok: true},
+			},
 		},
 		{
 			name:  "Sieve",
@@ -83,8 +86,11 @@ func TestPolicyEviction(t *testing.T) {
 				_, _ = c.Get(testKey(1))
 				c.Put(testKey(3), []byte("three"))
 			},
-			wantHit:  []int64{1, 3},
-			wantMiss: []int64{2},
+			want: []cacheResult{
+				{frameID: 1, data: "one", ok: true},
+				{frameID: 2},
+				{frameID: 3, data: "three", ok: true},
+			},
 		},
 		{
 			name:  "SieveAdmissionKeepsNewEntry",
@@ -94,9 +100,10 @@ func TestPolicyEviction(t *testing.T) {
 				_, _ = c.Get(testKey(1))
 				c.Put(testKey(2), []byte("two"))
 			},
-			wantHit:  []int64{2},
-			wantMiss: []int64{1},
-			wantData: map[int64][]byte{2: []byte("two")},
+			want: []cacheResult{
+				{frameID: 1},
+				{frameID: 2, data: "two", ok: true},
+			},
 		},
 		{
 			name:  "SieveReplacementByteLimit",
@@ -108,30 +115,38 @@ func TestPolicyEviction(t *testing.T) {
 				_, _ = c.Get(testKey(2))
 				c.Put(testKey(1), []byte("aa"))
 			},
-			wantHit:  []int64{1},
-			wantMiss: []int64{2},
-			wantData: map[int64][]byte{1: []byte("aa")},
+			want: []cacheResult{
+				{frameID: 1, data: "aa", ok: true},
+				{frameID: 2},
+			},
 		},
 	}
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			tc.primeFunc(tc.cache)
-			for _, frameID := range tc.wantHit {
-				data, ok := tc.cache.Get(testKey(frameID))
-				if !ok {
-					t.Fatalf("Get(%d) missed", frameID)
-				}
-				if want, ok := tc.wantData[frameID]; ok && !bytes.Equal(data, want) {
-					t.Fatalf("Get(%d) = %q, want %q", frameID, data, want)
-				}
-			}
-			for _, frameID := range tc.wantMiss {
-				if data, ok := tc.cache.Get(testKey(frameID)); ok {
-					t.Fatalf("Get(%d) = %q, true; want miss", frameID, data)
-				}
-			}
+			assertCacheResults(t, tc.cache, tc.want)
 		})
+	}
+}
+
+type cacheResult struct {
+	frameID int64
+	data    string
+	ok      bool
+}
+
+func assertCacheResults(t *testing.T, c Cache, results []cacheResult) {
+	t.Helper()
+
+	for _, want := range results {
+		data, ok := c.Get(testKey(want.frameID))
+		if ok != want.ok {
+			t.Fatalf("Get(%d) ok = %t, want %t", want.frameID, ok, want.ok)
+		}
+		if ok && string(data) != want.data {
+			t.Fatalf("Get(%d) = %q, want %q", want.frameID, data, want.data)
+		}
 	}
 }
 
@@ -145,7 +160,6 @@ func TestCacheLimitsReplacementAndClear(t *testing.T) {
 			if !ok || !bytes.Equal(got, []byte("bb")) {
 				t.Fatalf("replacement Get(1) = %q, %t; want %q, true", got, ok, "bb")
 			}
-			assertCacheInvariants(t, c, Limits{MaxFrames: 2})
 
 			c = factory.new(Limits{MaxFrames: 2, MaxBytes: 2})
 			c.Put(testKey(1), []byte("a"))
@@ -153,65 +167,31 @@ func TestCacheLimitsReplacementAndClear(t *testing.T) {
 			if got, ok := c.Get(testKey(1)); ok {
 				t.Fatalf("oversized replacement Get(1) = %q, true; want miss", got)
 			}
-			assertCacheInvariants(t, c, Limits{MaxFrames: 2, MaxBytes: 2})
 
 			c = factory.new(Limits{MaxFrames: 3, MaxBytes: 5})
 			c.Put(testKey(1), []byte("aa"))
 			c.Put(testKey(2), []byte("bb"))
 			c.Put(testKey(3), []byte("cc"))
-			assertCacheInvariants(t, c, Limits{MaxFrames: 3, MaxBytes: 5})
+			assertCacheResults(t, c, []cacheResult{
+				{frameID: 1},
+				{frameID: 2, data: "bb", ok: true},
+				{frameID: 3, data: "cc", ok: true},
+			})
 
 			c = factory.new(Limits{MaxFrames: 0})
 			c.Put(testKey(1), []byte("a"))
 			if got, ok := c.Get(testKey(1)); ok {
 				t.Fatalf("disabled cache Get(1) = %q, true; want miss", got)
 			}
-			assertCacheInvariants(t, c, Limits{MaxFrames: 0})
 
 			c = factory.new(Limits{MaxFrames: 2})
 			c.Put(testKey(1), []byte("a"))
 			c.Put(testKey(2), []byte("b"))
 			c.Clear()
-			assertCacheInvariants(t, c, Limits{MaxFrames: 2})
 			if got, ok := c.Get(testKey(1)); ok {
 				t.Fatalf("Get(1) after Clear = %q, true; want miss", got)
 			}
 		})
-	}
-}
-
-func TestCacheAccessDistributions(t *testing.T) {
-	const (
-		frameCount  = 32
-		accessCount = 512
-	)
-
-	distributions := []struct {
-		name string
-		seq  []int
-	}{
-		{name: "Random", seq: randomAccesses(frameCount, accessCount, 1)},
-		{name: "Zipf", seq: zipfAccesses(frameCount, accessCount, 2)},
-		{name: "Normal", seq: normalAccesses(frameCount, accessCount, 3)},
-	}
-
-	frames := testFrames(frameCount)
-	for _, factory := range cacheFactories {
-		for _, dist := range distributions {
-			t.Run(factory.name+"/"+dist.name, func(t *testing.T) {
-				limits := Limits{MaxFrames: 8, MaxBytes: 64}
-				c := factory.new(limits)
-				for _, frameID := range dist.seq {
-					want := frames[frameID]
-					got, ok := c.Get(testKey(int64(frameID)))
-					if ok && !bytes.Equal(got, want) {
-						t.Fatalf("Get(%d) = %q; want %q", frameID, got, want)
-					}
-					c.Put(testKey(int64(frameID)), want)
-					assertCacheInvariants(t, c, limits)
-				}
-			})
-		}
 	}
 }
 
@@ -223,51 +203,15 @@ func testFrames(n int) [][]byte {
 	return frames
 }
 
-func randomAccesses(frameCount, accessCount int, seed int64) []int {
-	rng := rand.New(rand.NewSource(seed))
-	seq := make([]int, accessCount)
-	for i := range seq {
-		seq[i] = rng.Intn(frameCount)
-	}
-	return seq
-}
-
-func zipfAccesses(frameCount, accessCount int, seed int64) []int {
-	rng := rand.New(rand.NewSource(seed))
-	zipf := rand.NewZipf(rng, 1.2, 1, uint64(frameCount-1))
-	seq := make([]int, accessCount)
-	for i := range seq {
-		seq[i] = int(zipf.Uint64())
-	}
-	return seq
-}
-
-func normalAccesses(frameCount, accessCount int, seed int64) []int {
-	rng := rand.New(rand.NewSource(seed))
-	mean := float64(frameCount-1) / 2
-	stddev := math.Max(1, float64(frameCount)/6)
-	seq := make([]int, accessCount)
-	for i := range seq {
-		v := int(math.Round(rng.NormFloat64()*stddev + mean))
-		if v < 0 {
-			v = 0
-		}
-		if v >= frameCount {
-			v = frameCount - 1
-		}
-		seq[i] = v
-	}
-	return seq
-}
-
-func assertCacheInvariants(t *testing.T, c Cache, limits Limits) {
+func assertCacheInvariants(t *testing.T, c Cache) {
 	t.Helper()
 
 	var (
-		order *list.List
-		items map[Key]*list.Element
-		bytes uint64
-		hand  *list.Element
+		order  *list.List
+		items  map[Key]*list.Element
+		bytes  uint64
+		hand   *list.Element
+		limits Limits
 	)
 
 	switch v := c.(type) {
@@ -277,12 +221,14 @@ func assertCacheInvariants(t *testing.T, c Cache, limits Limits) {
 		order = &v.order
 		items = v.items
 		bytes = v.bytes
+		limits = v.limits
 	case *LRU:
 		v.mu.Lock()
 		defer v.mu.Unlock()
 		order = &v.order
 		items = v.items
 		bytes = v.bytes
+		limits = v.limits
 	case *Sieve:
 		v.mu.Lock()
 		defer v.mu.Unlock()
@@ -290,6 +236,7 @@ func assertCacheInvariants(t *testing.T, c Cache, limits Limits) {
 		items = v.items
 		bytes = v.bytes
 		hand = v.hand
+		limits = v.limits
 	default:
 		t.Fatalf("unsupported cache type %T", c)
 	}

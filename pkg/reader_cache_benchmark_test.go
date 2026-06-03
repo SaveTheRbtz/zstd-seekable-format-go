@@ -4,16 +4,11 @@ import (
 	"bytes"
 	"math"
 	"math/rand"
+	"runtime"
 	"testing"
 
 	"github.com/SaveTheRbtz/zstd-seekable-format-go/pkg/framecache"
 	"github.com/klauspost/compress/zstd"
-)
-
-var (
-	benchmarkReaderCacheN    int
-	benchmarkReaderCacheByte byte
-	benchmarkReaderCacheErr  error
 )
 
 type benchmarkCountingCache struct {
@@ -54,12 +49,18 @@ func BenchmarkReaderFrameCache(b *testing.B) {
 	compressed, frames, _ := cacheTestStream(b, frameCount)
 	offsets := frameOffsets(frames)
 	distributions := []struct {
-		name string
-		seq  []int
+		name   string
+		newSeq func() []int
 	}{
-		{name: "Random", seq: readerCacheRandomAccesses(frameCount, accessCount, 1)},
-		{name: "Zipf", seq: readerCacheZipfAccesses(frameCount, accessCount, 2)},
-		{name: "Normal", seq: readerCacheNormalAccesses(frameCount, accessCount, 3)},
+		{name: "Random", newSeq: func() []int {
+			return readerCacheRandomAccesses(frameCount, accessCount, 1)
+		}},
+		{name: "Zipf", newSeq: func() []int {
+			return readerCacheZipfAccesses(frameCount, accessCount, 2)
+		}},
+		{name: "Normal", newSeq: func() []int {
+			return readerCacheNormalAccesses(frameCount, accessCount, 3)
+		}},
 	}
 	caches := []struct {
 		name string
@@ -77,6 +78,7 @@ func BenchmarkReaderFrameCache(b *testing.B) {
 	}
 
 	for _, dist := range distributions {
+		seq := dist.newSeq()
 		for _, cache := range caches {
 			b.Run(dist.name+"/"+cache.name, func(b *testing.B) {
 				dec, err := zstd.NewReader(nil)
@@ -100,13 +102,13 @@ func BenchmarkReaderFrameCache(b *testing.B) {
 				var total int
 				var sink byte
 
-				b.ResetTimer()
-				for i := 0; i < b.N; i++ {
-					frameID := dist.seq[i%len(dist.seq)]
+				var i int
+				for b.Loop() {
+					frameID := seq[i%len(seq)]
+					i++
 					dst := buf[:len(frames[frameID])]
 					n, err := r.ReadAt(dst, offsets[frameID])
 					if err != nil {
-						benchmarkReaderCacheErr = err
 						b.Fatal(err)
 					}
 					total += n
@@ -114,10 +116,9 @@ func BenchmarkReaderFrameCache(b *testing.B) {
 						sink ^= dst[0]
 					}
 				}
-				b.StopTimer()
 
-				benchmarkReaderCacheN = total
-				benchmarkReaderCacheByte = sink
+				runtime.KeepAlive(total)
+				runtime.KeepAlive(sink)
 				b.ReportMetric(countingCache.HitRate()*100, "hit_rate_%")
 			})
 		}

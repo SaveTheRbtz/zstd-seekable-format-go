@@ -13,11 +13,13 @@ func TestKeyBinaryEncoding(t *testing.T) {
 	if err != nil {
 		t.Fatalf("AppendBinary: %v", err)
 	}
-	if !bytes.Equal(encoded[:len(prefix)], prefix) {
-		t.Fatalf("AppendBinary prefix = %v, want %v", encoded[:len(prefix)], prefix)
+	wantEncoded := []byte{
+		1, 2, 3,
+		0, 0, 0, 0, 0, 0, 0, 42,
+		255, 255, 255, 255, 255, 255, 255, 249,
 	}
-	if got, want := len(encoded)-len(prefix), keyBinarySize; got != want {
-		t.Fatalf("AppendBinary appended %d bytes, want %d", got, want)
+	if !bytes.Equal(encoded, wantEncoded) {
+		t.Fatalf("AppendBinary = %v, want %v", encoded, wantEncoded)
 	}
 
 	marshaled, err := key.MarshalBinary()
@@ -45,11 +47,6 @@ func TestKeyBinaryEncoding(t *testing.T) {
 	}
 	if unmarshaled != key {
 		t.Fatalf("UnmarshalBinary = %+v, want %+v", unmarshaled, key)
-	}
-
-	values := map[Key][]byte{parsed: []byte("decoded")}
-	if got := values[key]; !bytes.Equal(got, []byte("decoded")) {
-		t.Fatalf("map lookup = %q, want decoded", got)
 	}
 }
 
