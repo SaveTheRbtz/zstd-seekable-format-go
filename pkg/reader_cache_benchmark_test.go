@@ -16,10 +16,42 @@ var (
 	benchmarkReaderCacheErr  error
 )
 
+type benchmarkCountingCache struct {
+	cache  framecache.Cache
+	hits   uint64
+	misses uint64
+}
+
+func (c *benchmarkCountingCache) Get(frameID int64) ([]byte, bool) {
+	data, ok := c.cache.Get(frameID)
+	if ok {
+		c.hits++
+	} else {
+		c.misses++
+	}
+	return data, ok
+}
+
+func (c *benchmarkCountingCache) Put(frameID int64, data []byte) {
+	c.cache.Put(frameID, data)
+}
+
+func (c *benchmarkCountingCache) Clear() {
+	c.cache.Clear()
+}
+
+func (c *benchmarkCountingCache) HitRate() float64 {
+	total := c.hits + c.misses
+	if total == 0 {
+		return 0
+	}
+	return float64(c.hits) / float64(total)
+}
+
 func BenchmarkReaderFrameCache(b *testing.B) {
 	const (
-		frameCount  = 25_600
-		accessCount = 409_600
+		frameCount  = 256_000
+		accessCount = 4_096_000
 		cacheFrames = 10_000
 	)
 
@@ -35,11 +67,17 @@ func BenchmarkReaderFrameCache(b *testing.B) {
 	}
 	caches := []struct {
 		name string
-		new  func() framecache.Cache
+		new  func() *benchmarkCountingCache
 	}{
-		{name: "FIFO10000", new: func() framecache.Cache { return framecache.NewFIFO(framecache.Limits{MaxFrames: cacheFrames}) }},
-		{name: "LRU10000", new: func() framecache.Cache { return framecache.NewLRU(framecache.Limits{MaxFrames: cacheFrames}) }},
-		{name: "Sieve10000", new: func() framecache.Cache { return framecache.NewSieve(framecache.Limits{MaxFrames: cacheFrames}) }},
+		{name: "FIFO10000", new: func() *benchmarkCountingCache {
+			return &benchmarkCountingCache{cache: framecache.NewFIFO(framecache.Limits{MaxFrames: cacheFrames})}
+		}},
+		{name: "LRU10000", new: func() *benchmarkCountingCache {
+			return &benchmarkCountingCache{cache: framecache.NewLRU(framecache.Limits{MaxFrames: cacheFrames})}
+		}},
+		{name: "Sieve10000", new: func() *benchmarkCountingCache {
+			return &benchmarkCountingCache{cache: framecache.NewSieve(framecache.Limits{MaxFrames: cacheFrames})}
+		}},
 	}
 
 	for _, dist := range distributions {
@@ -51,7 +89,8 @@ func BenchmarkReaderFrameCache(b *testing.B) {
 				}
 				defer dec.Close()
 
-				r, err := NewReader(bytes.NewReader(compressed), dec, WithReaderFrameCache(cache.new()))
+				countingCache := cache.new()
+				r, err := NewReader(bytes.NewReader(compressed), dec, WithReaderFrameCache(countingCache))
 				if err != nil {
 					b.Fatal(err)
 				}
@@ -64,7 +103,7 @@ func BenchmarkReaderFrameCache(b *testing.B) {
 				buf := make([]byte, maxFrameLen(frames))
 				var total int
 				var sink byte
-				b.ReportAllocs()
+
 				b.ResetTimer()
 				for i := 0; i < b.N; i++ {
 					frameID := dist.seq[i%len(dist.seq)]
@@ -79,8 +118,11 @@ func BenchmarkReaderFrameCache(b *testing.B) {
 						sink ^= dst[0]
 					}
 				}
+				b.StopTimer()
+
 				benchmarkReaderCacheN = total
 				benchmarkReaderCacheByte = sink
+				b.ReportMetric(countingCache.HitRate()*100, "hit_rate_%")
 			})
 		}
 	}
