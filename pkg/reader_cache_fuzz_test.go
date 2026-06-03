@@ -67,6 +67,33 @@ func FuzzReaderFrameCacheConcurrent(f *testing.F) {
 	})
 }
 
+func FuzzReaderFrameCacheSharedCache(f *testing.F) {
+	f.Add([]byte("aaaa"), []byte("bbbb"), uint8(0))
+	f.Add([]byte("left"), []byte("right"), uint8(1))
+	f.Add([]byte{0, 1, 2, 3}, []byte{4, 5, 6, 7}, uint8(2))
+
+	f.Fuzz(func(t *testing.T, first []byte, second []byte, strategy uint8) {
+		first = normalizeSharedCacheFrame(first)
+		second = normalizeSharedCacheFrame(second)
+
+		shared := fuzzReaderCache(strategy, 1)
+		firstReader, firstSource := fuzzSharedCacheReader(t, first, shared)
+		defer func() { require.NoError(t, firstReader.Close()) }()
+		secondReader, secondSource := fuzzSharedCacheReader(t, second, shared)
+		defer func() { require.NoError(t, secondReader.Close()) }()
+
+		gotFirst := make([]byte, len(firstSource))
+		n, err := firstReader.ReadAt(gotFirst, 0)
+		require.NoError(t, err)
+		require.Equal(t, firstSource, gotFirst[:n])
+
+		gotSecond := make([]byte, len(secondSource))
+		n, err = secondReader.ReadAt(gotSecond, 0)
+		require.NoError(t, err)
+		require.Equal(t, secondSource, gotSecond[:n])
+	})
+}
+
 func fuzzReaderCache(strategy uint8, maxFrames int) framecache.Cache {
 	limits := framecache.Limits{MaxFrames: maxFrames}
 	switch strategy % 3 {
@@ -103,4 +130,37 @@ func fuzzReaderCacheStream(t testing.TB, seed int64, frameCount, maxFrameSize in
 	require.NoError(t, w.Close())
 
 	return compressed.Bytes(), source
+}
+
+func normalizeSharedCacheFrame(frame []byte) []byte {
+	if len(frame) == 0 {
+		return []byte{0}
+	}
+	if len(frame) > 64 {
+		frame = frame[:64]
+	}
+	return bytes.Clone(frame)
+}
+
+func fuzzSharedCacheReader(t testing.TB, frame []byte, cache framecache.Cache) (*Reader, []byte) {
+	t.Helper()
+
+	enc, err := zstd.NewWriter(nil, zstd.WithEncoderLevel(zstd.SpeedFastest))
+	require.NoError(t, err)
+	defer func() { require.NoError(t, enc.Close()) }()
+
+	var compressed bytes.Buffer
+	w, err := NewWriter(&compressed, enc)
+	require.NoError(t, err)
+	_, err = w.Write(frame)
+	require.NoError(t, err)
+	require.NoError(t, w.Close())
+
+	dec, err := zstd.NewReader(nil)
+	require.NoError(t, err)
+	t.Cleanup(dec.Close)
+
+	r, err := NewReader(bytes.NewReader(compressed.Bytes()), dec, WithReaderFrameCache(cache))
+	require.NoError(t, err)
+	return r, frame
 }
