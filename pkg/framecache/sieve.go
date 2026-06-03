@@ -47,14 +47,18 @@ func (c *Sieve) Put(frameID int64, data []byte) {
 		return
 	}
 
-	visited := false
 	if elem, ok := c.items[frameID]; ok {
-		visited = true
-		c.removeElement(elem)
+		entry := elem.Value.(*sieveEntry)
+		c.bytes -= uint64(len(entry.data))
+		entry.data = data
+		entry.visited = true
+		c.bytes += size
+		c.evictForExcept(0, 0, elem)
+		return
 	}
 
 	c.evictFor(1, size)
-	entry := &sieveEntry{frameID: frameID, data: data, visited: visited}
+	entry := &sieveEntry{frameID: frameID, data: data}
 	elem := c.order.PushFront(entry)
 	c.items[frameID] = elem
 	c.bytes += uint64(len(entry.data))
@@ -99,6 +103,10 @@ func (c *Sieve) removeElement(elem *list.Element) {
 }
 
 func (c *Sieve) evictFor(extraFrames int, extraBytes uint64) {
+	c.evictForExcept(extraFrames, extraBytes, nil)
+}
+
+func (c *Sieve) evictForExcept(extraFrames int, extraBytes uint64, protected *list.Element) {
 	for c.limits.overLimits(c.order.Len()+extraFrames, c.bytes+extraBytes) {
 		if c.hand == nil {
 			c.hand = c.order.Back()
@@ -108,6 +116,15 @@ func (c *Sieve) evictFor(extraFrames int, extraBytes uint64) {
 		}
 
 		elem := c.hand
+		if elem == protected {
+			next := c.prevCircular(elem)
+			if next == nil {
+				return
+			}
+			c.hand = next
+			continue
+		}
+
 		entry := elem.Value.(*sieveEntry)
 		if entry.visited {
 			entry.visited = false

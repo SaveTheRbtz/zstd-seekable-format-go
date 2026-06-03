@@ -189,6 +189,34 @@ func TestCacheLimitsReplacementAndClear(t *testing.T) {
 	}
 }
 
+func TestSieveReplacementPreservesPositionAndHand(t *testing.T) {
+	c := NewSieve(Limits{MaxFrames: 3, MaxBytes: 10})
+	c.Put(1, []byte("a"))
+	c.Put(2, []byte("bb"))
+	c.Put(3, []byte("c"))
+
+	elem := c.items[2]
+	hand := c.hand
+	c.Put(2, []byte("ddd"))
+
+	if c.items[2] != elem {
+		t.Fatal("replacement moved frame 2")
+	}
+	if c.hand != hand {
+		t.Fatal("replacement moved hand")
+	}
+	entry := elem.Value.(*sieveEntry)
+	if !entry.visited {
+		t.Fatal("replacement did not mark frame visited")
+	}
+	if !bytes.Equal(entry.data, []byte("ddd")) {
+		t.Fatalf("replacement data = %q, want ddd", entry.data)
+	}
+	if got, want := c.bytes, uint64(5); got != want {
+		t.Fatalf("bytes = %d, want %d", got, want)
+	}
+}
+
 func testFrames(n int) [][]byte {
 	frames := make([][]byte, n)
 	for i := range frames {
