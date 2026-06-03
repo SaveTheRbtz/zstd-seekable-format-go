@@ -5,36 +5,13 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
-	"math"
 	"sync"
 	"sync/atomic"
 
 	"github.com/cespare/xxhash/v2"
 )
 
-type cachedFrame struct {
-	m sync.Mutex
-
-	offset uint64
-	data   []byte
-}
-
 const maxReaderOffset = uint64(1<<63 - 1)
-
-func (f *cachedFrame) replace(offset uint64, data []byte) {
-	f.m.Lock()
-	defer f.m.Unlock()
-
-	f.offset = offset
-	f.data = data
-}
-
-func (f *cachedFrame) get() (uint64, []byte) {
-	f.m.Lock()
-	defer f.m.Unlock()
-
-	return f.offset, f.data
-}
 
 // readSeekerEnvImpl is the environment implementation for the io.ReadSeeker.
 type readSeekerEnvImpl struct {
@@ -106,10 +83,11 @@ func (rs *readSeekerEnvImpl) ReadSkipFrame(skippableFrameOffset int64) ([]byte, 
 // Offsets are expressed in the decompressed stream. Read and Seek use an
 // internal current offset; ReadAt does not.
 //
-// Before Close, ReadAt and SeekTable may be called concurrently if the supplied
-// decoder and read environment support concurrent use. Read and Seek share the
-// internal current offset and should be serialized by the caller. No other
-// Reader method should be called concurrently with Close.
+// SeekTable may be called concurrently with any Reader method except Close.
+// ReadAt may be called concurrently with other Reader methods when the decoder
+// and read environment support concurrent use. Read and Seek share the current
+// offset and must be serialized by the caller. Do not call Close concurrently
+// with any Reader method.
 type Reader struct {
 	dec   ZSTDDecoder
 	table SeekTable
@@ -121,8 +99,7 @@ type Reader struct {
 
 	closed atomic.Bool
 
-	// TODO: Add simple LRU cache.
-	cachedFrame cachedFrame
+	frameCache *readerFrameCache
 }
 
 var (
@@ -143,14 +120,20 @@ type ZSTDDecoder interface {
 	DecodeAll(input, dst []byte) ([]byte, error)
 }
 
-// NewReader returns a Zstandard stream reader that can be randomly accessed by uncompressed offset.
+// NewReader returns a Zstandard stream reader that supports random access by
+// decompressed offset.
 //
-// The stream must contain a final seek-table skippable frame. rs must be
-// non-nil unless WithReaderEnvironment supplies a custom read environment. If rs
-// also implements io.ReaderAt, frame reads do not move rs's current offset.
+// The stream must end with a seek-table skippable frame. Unless
+// WithReaderEnvironment supplies a read environment, rs must be non-nil. When
+// NewReader uses rs directly and rs also implements io.ReaderAt, frame reads do
+// not move rs's current offset.
 //
-// NewReader reads and validates the seek table during construction. The caller
-// remains responsible for closing rs and decoder, if they require closing.
+// The decoder must be non-nil. NewReader reads and validates the seek table
+// during construction. Reader caches one decoded frame by default; use
+// WithReaderFrameCache to change or disable caching.
+//
+// The caller remains responsible for closing rs and decoder, if they require
+// closing.
 func NewReader(rs io.ReadSeeker, decoder ZSTDDecoder, opts ...ReaderOption) (*Reader, error) {
 	sr := Reader{
 		dec: decoder,
@@ -162,6 +145,9 @@ func NewReader(rs io.ReadSeeker, decoder ZSTDDecoder, opts ...ReaderOption) (*Re
 		if err != nil {
 			return nil, err
 		}
+	}
+	if sr.frameCache == nil {
+		sr.frameCache = newReaderFrameCache(nil)
 	}
 
 	if sr.env == nil {
@@ -182,6 +168,7 @@ func NewReader(rs io.ReadSeeker, decoder ZSTDDecoder, opts ...ReaderOption) (*Re
 	}
 
 	sr.table = table
+	sr.frameCache.Clear()
 
 	return &sr, nil
 }
@@ -201,6 +188,11 @@ func (r *Reader) SeekTable() (SeekTable, error) {
 // ReadAt reads len(p) decompressed bytes starting at off.
 //
 // ReadAt does not move the Reader's current offset.
+//
+// ReadAt follows io.ReaderAt EOF behavior. For non-empty p, it returns io.EOF
+// when off is at or past the decompressed size, or with the bytes read when p
+// extends past the end. Before Close, a zero-length p returns 0, nil.
+//
 // Before Close, ReadAt may be called concurrently if the supplied decoder and
 // read environment support concurrent use.
 func (r *Reader) ReadAt(p []byte, off int64) (n int, err error) {
@@ -214,7 +206,8 @@ func (r *Reader) ReadAt(p []byte, off int64) (n int, err error) {
 	return
 }
 
-// Read reads decompressed bytes from the Reader's current offset.
+// Read reads decompressed bytes from the Reader's current offset and advances
+// the current offset by the bytes read.
 func (r *Reader) Read(p []byte) (n int, err error) {
 	offset, n, err := r.read(p, r.offset)
 	if err != nil {
@@ -224,11 +217,17 @@ func (r *Reader) Read(p []byte) (n int, err error) {
 	return
 }
 
-// Close releases reader-owned memory.
-// Close is idempotent. Read, ReadAt, Seek, and SeekTable return ErrClosed after Close.
+// Close releases Reader-owned resources.
+//
+// Close is idempotent. After Close, Read, ReadAt, Seek, and SeekTable return
+// ErrClosed. Close does not close the io.ReadSeeker, decoder, or custom read
+// environment passed to NewReader.
 func (r *Reader) Close() error {
 	if !r.closed.Swap(true) {
-		r.cachedFrame.replace(math.MaxUint64, nil)
+		if r.frameCache != nil {
+			r.frameCache.Clear()
+		}
+		r.frameCache = nil
 		r.table = SeekTable{}
 	}
 	return nil
@@ -260,12 +259,10 @@ func (r *Reader) read(dst []byte, off int64) (int64, int, error) {
 
 	var decompressed []byte
 
-	cachedOffset, cachedData := r.cachedFrame.get()
-	if cachedOffset == index.DecompressedOffset && cachedData != nil {
-		// fastpath
+	cachedData, ok := r.frameCache.Get(index.ID)
+	if ok {
 		decompressed = cachedData
 	} else {
-		// slowpath
 		if index.CompressedSize > maxDecoderFrameSize {
 			return 0, 0, fmt.Errorf("index.CompressedSize is too big: %d > %d",
 				index.CompressedSize, maxDecoderFrameSize)
@@ -293,7 +290,7 @@ func (r *Reader) read(dst []byte, off int64) (int64, int, error) {
 					index.CompressedOffset, index.Checksum, checksum)
 			}
 		}
-		r.cachedFrame.replace(index.DecompressedOffset, decompressed)
+		r.frameCache.Put(index.ID, decompressed)
 	}
 
 	if len(decompressed) != int(index.DecompressedSize) {

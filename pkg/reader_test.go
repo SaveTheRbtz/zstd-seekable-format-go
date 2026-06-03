@@ -280,6 +280,14 @@ func TestReaderPostCloseContract(t *testing.T) {
 	}
 }
 
+func TestReaderZeroValueClose(t *testing.T) {
+	t.Parallel()
+
+	var r Reader
+	require.NoError(t, r.Close())
+	require.NoError(t, r.Close())
+}
+
 func TestGetFrameByIndexShortReaderAt(t *testing.T) {
 	t.Parallel()
 
