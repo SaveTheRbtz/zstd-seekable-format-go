@@ -26,7 +26,7 @@ var cacheFactories = []cacheFactory{
 }
 
 func testKey(frameID int64) Key {
-	return Key{Namespace: 1, FrameID: frameID}
+	return NewKey(1, frameID)
 }
 
 func TestPolicyEviction(t *testing.T) {
@@ -313,8 +313,8 @@ func TestCacheByStrategyCoversAllCaches(t *testing.T) {
 
 func ExampleNewFIFO_noCache() {
 	c := NewFIFO(Limits{MaxFrames: 0})
-	c.Put(Key{Namespace: 1, FrameID: 1}, []byte("decoded frame"))
-	_, ok := c.Get(Key{Namespace: 1, FrameID: 1})
+	c.Put(NewKey(1, 1), []byte("decoded frame"))
+	_, ok := c.Get(NewKey(1, 1))
 	fmt.Println(ok)
 
 	// Output:

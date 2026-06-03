@@ -8,8 +8,21 @@ package framecache
 // Namespace is assigned by seekable.Reader. It is unique to one Reader instance
 // and is not a stable stream fingerprint.
 type Key struct {
-	Namespace uint64
-	FrameID   int64
+	namespace uint64
+	frameID   int64
+}
+
+// NewKey returns a cache key for direct cache use.
+//
+// Most callers do not need this; seekable.Reader creates keys for configured
+// caches. namespace must not be treated as a stable stream identity.
+func NewKey(namespace uint64, frameID int64) Key {
+	return Key{namespace: namespace, frameID: frameID}
+}
+
+// FrameID returns the seek-table frame ID embedded in k.
+func (k Key) FrameID() int64 {
+	return k.frameID
 }
 
 // Cache stores decoded frames by key.

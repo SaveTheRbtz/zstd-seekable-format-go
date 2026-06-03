@@ -245,7 +245,7 @@ func (r *Reader) read(dst []byte, off int64) (int64, int, error) {
 
 	var decompressed []byte
 
-	cachedData, ok := r.getCachedFrame(framecache.Key{Namespace: r.cacheNS, FrameID: index.ID})
+	cachedData, ok := r.getCachedFrame(framecache.NewKey(r.cacheNS, index.ID))
 	if ok {
 		decompressed = cachedData
 	} else {
@@ -276,7 +276,7 @@ func (r *Reader) read(dst []byte, off int64) (int64, int, error) {
 					index.CompressedOffset, index.Checksum, checksum)
 			}
 		}
-		r.putCachedFrame(framecache.Key{Namespace: r.cacheNS, FrameID: index.ID}, decompressed)
+		r.putCachedFrame(framecache.NewKey(r.cacheNS, index.ID), decompressed)
 	}
 
 	if len(decompressed) != int(index.DecompressedSize) {
