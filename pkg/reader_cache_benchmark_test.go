@@ -45,9 +45,10 @@ func (c *benchmarkCountingCache) HitRate() float64 {
 
 func BenchmarkReaderFrameCache(b *testing.B) {
 	const (
-		frameCount  = 256_000
-		accessCount = 4_096_000
-		cacheFrames = 10_000
+		frameCount          = 256_000
+		accessCount         = 4_096_000
+		cacheFrames         = 10_000
+		gaussianStddevFrame = 5_600
 	)
 
 	compressed, frames, _ := cacheTestStream(b, frameCount)
@@ -62,8 +63,8 @@ func BenchmarkReaderFrameCache(b *testing.B) {
 		{name: "Zipf_s=1.2_v=1", newSeq: func() []int {
 			return readerCacheZipfAccesses(frameCount, accessCount, 2)
 		}},
-		{name: "Normal_mu=mid_sigma=n/6", newSeq: func() []int {
-			return readerCacheNormalAccesses(frameCount, accessCount, 3)
+		{name: "Gaussian_mu=mid_sigma=5600", newSeq: func() []int {
+			return readerCacheNormalAccesses(frameCount, accessCount, gaussianStddevFrame, 3)
 		}},
 	}
 	caches := []struct {
@@ -168,10 +169,10 @@ func readerCacheZipfAccesses(frameCount, accessCount int, seed int64) []int {
 	return seq
 }
 
-func readerCacheNormalAccesses(frameCount, accessCount int, seed int64) []int {
+func readerCacheNormalAccesses(frameCount, accessCount, stddevFrames int, seed int64) []int {
 	rng := rand.New(rand.NewSource(seed))
 	mean := float64(frameCount-1) / 2
-	stddev := math.Max(1, float64(frameCount)/6)
+	stddev := math.Max(1, float64(stddevFrames))
 	seq := make([]int, accessCount)
 	for i := range seq {
 		v := int(math.Round(rng.NormFloat64()*stddev + mean))
