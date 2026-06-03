@@ -17,8 +17,8 @@ type benchmarkCountingCache struct {
 	misses uint64
 }
 
-func (c *benchmarkCountingCache) Get(key framecache.Key) ([]byte, bool) {
-	data, ok := c.cache.Get(key)
+func (c *benchmarkCountingCache) Get(frameID int64) ([]byte, bool) {
+	data, ok := c.cache.Get(frameID)
 	if ok {
 		c.hits++
 	} else {
@@ -27,8 +27,12 @@ func (c *benchmarkCountingCache) Get(key framecache.Key) ([]byte, bool) {
 	return data, ok
 }
 
-func (c *benchmarkCountingCache) Put(key framecache.Key, data []byte) {
-	c.cache.Put(key, data)
+func (c *benchmarkCountingCache) Put(frameID int64, data []byte) {
+	c.cache.Put(frameID, data)
+}
+
+func (c *benchmarkCountingCache) Clear() {
+	c.cache.Clear()
 }
 
 func (c *benchmarkCountingCache) HitRate() float64 {

@@ -3,8 +3,6 @@ package framecache
 import (
 	"bytes"
 	"container/list"
-	"fmt"
-	"sync"
 	"testing"
 )
 
@@ -15,17 +13,12 @@ type cacheFactory struct {
 
 type testCache interface {
 	Cache
-	Clearer
 }
 
 var cacheFactories = []cacheFactory{
 	{name: "FIFO", new: func(l Limits) testCache { return NewFIFO(l) }},
 	{name: "LRU", new: func(l Limits) testCache { return NewLRU(l) }},
 	{name: "Sieve", new: func(l Limits) testCache { return NewSieve(l) }},
-}
-
-func testKey(frameID int64) Key {
-	return NewKey(1, frameID)
 }
 
 func TestPolicyEviction(t *testing.T) {
@@ -39,10 +32,10 @@ func TestPolicyEviction(t *testing.T) {
 			name:  "FIFO",
 			cache: NewFIFO(Limits{MaxFrames: 2}),
 			primeFunc: func(c Cache) {
-				c.Put(testKey(1), []byte("one"))
-				c.Put(testKey(2), []byte("two"))
-				_, _ = c.Get(testKey(1))
-				c.Put(testKey(3), []byte("three"))
+				c.Put(1, []byte("one"))
+				c.Put(2, []byte("two"))
+				_, _ = c.Get(1)
+				c.Put(3, []byte("three"))
 			},
 			want: []cacheResult{
 				{frameID: 1},
@@ -54,9 +47,9 @@ func TestPolicyEviction(t *testing.T) {
 			name:  "FIFOReplacementByteLimit",
 			cache: NewFIFO(Limits{MaxFrames: 2, MaxBytes: 5}),
 			primeFunc: func(c Cache) {
-				c.Put(testKey(1), []byte("aa"))
-				c.Put(testKey(2), []byte("bbb"))
-				c.Put(testKey(1), []byte("ccc"))
+				c.Put(1, []byte("aa"))
+				c.Put(2, []byte("bbb"))
+				c.Put(1, []byte("ccc"))
 			},
 			want: []cacheResult{
 				{frameID: 1, data: "ccc", ok: true},
@@ -67,10 +60,10 @@ func TestPolicyEviction(t *testing.T) {
 			name:  "LRU",
 			cache: NewLRU(Limits{MaxFrames: 2}),
 			primeFunc: func(c Cache) {
-				c.Put(testKey(1), []byte("one"))
-				c.Put(testKey(2), []byte("two"))
-				_, _ = c.Get(testKey(1))
-				c.Put(testKey(3), []byte("three"))
+				c.Put(1, []byte("one"))
+				c.Put(2, []byte("two"))
+				_, _ = c.Get(1)
+				c.Put(3, []byte("three"))
 			},
 			want: []cacheResult{
 				{frameID: 1, data: "one", ok: true},
@@ -82,10 +75,10 @@ func TestPolicyEviction(t *testing.T) {
 			name:  "Sieve",
 			cache: NewSieve(Limits{MaxFrames: 2}),
 			primeFunc: func(c Cache) {
-				c.Put(testKey(1), []byte("one"))
-				c.Put(testKey(2), []byte("two"))
-				_, _ = c.Get(testKey(1))
-				c.Put(testKey(3), []byte("three"))
+				c.Put(1, []byte("one"))
+				c.Put(2, []byte("two"))
+				_, _ = c.Get(1)
+				c.Put(3, []byte("three"))
 			},
 			want: []cacheResult{
 				{frameID: 1, data: "one", ok: true},
@@ -97,9 +90,9 @@ func TestPolicyEviction(t *testing.T) {
 			name:  "SieveAdmissionKeepsNewEntry",
 			cache: NewSieve(Limits{MaxFrames: 1}),
 			primeFunc: func(c Cache) {
-				c.Put(testKey(1), []byte("one"))
-				_, _ = c.Get(testKey(1))
-				c.Put(testKey(2), []byte("two"))
+				c.Put(1, []byte("one"))
+				_, _ = c.Get(1)
+				c.Put(2, []byte("two"))
 			},
 			want: []cacheResult{
 				{frameID: 1},
@@ -110,11 +103,11 @@ func TestPolicyEviction(t *testing.T) {
 			name:  "SieveReplacementByteLimit",
 			cache: NewSieve(Limits{MaxFrames: 2, MaxBytes: 2}),
 			primeFunc: func(c Cache) {
-				c.Put(testKey(1), []byte("a"))
-				c.Put(testKey(2), []byte("b"))
-				_, _ = c.Get(testKey(1))
-				_, _ = c.Get(testKey(2))
-				c.Put(testKey(1), []byte("aa"))
+				c.Put(1, []byte("a"))
+				c.Put(2, []byte("b"))
+				_, _ = c.Get(1)
+				_, _ = c.Get(2)
+				c.Put(1, []byte("aa"))
 			},
 			want: []cacheResult{
 				{frameID: 1, data: "aa", ok: true},
@@ -141,7 +134,7 @@ func assertCacheResults(t *testing.T, c Cache, results []cacheResult) {
 	t.Helper()
 
 	for _, want := range results {
-		data, ok := c.Get(testKey(want.frameID))
+		data, ok := c.Get(want.frameID)
 		if ok != want.ok {
 			t.Fatalf("Get(%d) ok = %t, want %t", want.frameID, ok, want.ok)
 		}
@@ -155,24 +148,24 @@ func TestCacheLimitsReplacementAndClear(t *testing.T) {
 	for _, factory := range cacheFactories {
 		t.Run(factory.name, func(t *testing.T) {
 			c := factory.new(Limits{MaxFrames: 2})
-			c.Put(testKey(1), []byte("a"))
-			c.Put(testKey(1), []byte("bb"))
-			got, ok := c.Get(testKey(1))
+			c.Put(1, []byte("a"))
+			c.Put(1, []byte("bb"))
+			got, ok := c.Get(1)
 			if !ok || !bytes.Equal(got, []byte("bb")) {
 				t.Fatalf("replacement Get(1) = %q, %t; want %q, true", got, ok, "bb")
 			}
 
 			c = factory.new(Limits{MaxFrames: 2, MaxBytes: 2})
-			c.Put(testKey(1), []byte("a"))
-			c.Put(testKey(1), []byte("bbb"))
-			if got, ok := c.Get(testKey(1)); ok {
+			c.Put(1, []byte("a"))
+			c.Put(1, []byte("bbb"))
+			if got, ok := c.Get(1); ok {
 				t.Fatalf("oversized replacement Get(1) = %q, true; want miss", got)
 			}
 
 			c = factory.new(Limits{MaxFrames: 3, MaxBytes: 5})
-			c.Put(testKey(1), []byte("aa"))
-			c.Put(testKey(2), []byte("bb"))
-			c.Put(testKey(3), []byte("cc"))
+			c.Put(1, []byte("aa"))
+			c.Put(2, []byte("bb"))
+			c.Put(3, []byte("cc"))
 			assertCacheResults(t, c, []cacheResult{
 				{frameID: 1},
 				{frameID: 2, data: "bb", ok: true},
@@ -180,16 +173,16 @@ func TestCacheLimitsReplacementAndClear(t *testing.T) {
 			})
 
 			c = factory.new(Limits{MaxFrames: 0})
-			c.Put(testKey(1), []byte("a"))
-			if got, ok := c.Get(testKey(1)); ok {
+			c.Put(1, []byte("a"))
+			if got, ok := c.Get(1); ok {
 				t.Fatalf("disabled cache Get(1) = %q, true; want miss", got)
 			}
 
 			c = factory.new(Limits{MaxFrames: 2})
-			c.Put(testKey(1), []byte("a"))
-			c.Put(testKey(2), []byte("b"))
+			c.Put(1, []byte("a"))
+			c.Put(2, []byte("b"))
 			c.Clear()
-			if got, ok := c.Get(testKey(1)); ok {
+			if got, ok := c.Get(1); ok {
 				t.Fatalf("Get(1) after Clear = %q, true; want miss", got)
 			}
 		})
@@ -216,7 +209,7 @@ func assertCacheInvariants(t *testing.T, c Cache, context string) {
 
 	var (
 		order  *list.List
-		items  map[Key]*list.Element
+		items  map[int64]*list.Element
 		bytes  uint64
 		hand   *list.Element
 		limits Limits
@@ -224,22 +217,16 @@ func assertCacheInvariants(t *testing.T, c Cache, context string) {
 
 	switch v := c.(type) {
 	case *FIFO:
-		v.mu.Lock()
-		defer v.mu.Unlock()
 		order = &v.order
 		items = v.items
 		bytes = v.bytes
 		limits = v.limits
 	case *LRU:
-		v.mu.Lock()
-		defer v.mu.Unlock()
 		order = &v.order
 		items = v.items
 		bytes = v.bytes
 		limits = v.limits
 	case *Sieve:
-		v.mu.Lock()
-		defer v.mu.Unlock()
 		order = &v.order
 		items = v.items
 		bytes = v.bytes
@@ -266,15 +253,15 @@ func assertCacheInvariants(t *testing.T, c Cache, context string) {
 	}
 
 	var sum uint64
-	seen := make(map[Key]bool, order.Len())
+	seen := make(map[int64]bool, order.Len())
 	for elem := order.Front(); elem != nil; elem = elem.Next() {
-		key, data := cacheElement(t, elem, context)
-		if seen[key] {
-			fail("duplicate key %+v", key)
+		frameID, data := cacheElement(t, elem, context)
+		if seen[frameID] {
+			fail("duplicate frame ID %d", frameID)
 		}
-		seen[key] = true
-		if items[key] != elem {
-			fail("map element mismatch for key %+v", key)
+		seen[frameID] = true
+		if items[frameID] != elem {
+			fail("map element mismatch for frame ID %d", frameID)
 		}
 		sum += uint64(len(data))
 	}
@@ -283,22 +270,22 @@ func assertCacheInvariants(t *testing.T, c Cache, context string) {
 	}
 }
 
-func cacheElement(t *testing.T, elem *list.Element, context string) (Key, []byte) {
+func cacheElement(t *testing.T, elem *list.Element, context string) (int64, []byte) {
 	t.Helper()
 
 	switch entry := elem.Value.(type) {
 	case *fifoEntry:
-		return entry.key, entry.data
+		return entry.frameID, entry.data
 	case *lruEntry:
-		return entry.key, entry.data
+		return entry.frameID, entry.data
 	case *sieveEntry:
-		return entry.key, entry.data
+		return entry.frameID, entry.data
 	default:
 		if context != "" {
 			t.Fatalf("list entry has type %T (%s)", elem.Value, context)
 		}
 		t.Fatalf("list entry has type %T", elem.Value)
-		return Key{}, nil
+		return 0, nil
 	}
 }
 
@@ -320,115 +307,4 @@ func TestCacheByStrategyCoversAllCaches(t *testing.T) {
 			t.Fatalf("strategy %d = %s, want %s", strategy, got, name)
 		}
 	}
-}
-
-type unsynchronizedMapCache struct {
-	items map[Key][]byte
-}
-
-func newUnsynchronizedMapCache() *unsynchronizedMapCache {
-	return &unsynchronizedMapCache{items: make(map[Key][]byte)}
-}
-
-func (c *unsynchronizedMapCache) Get(key Key) ([]byte, bool) {
-	data, ok := c.items[key]
-	return data, ok
-}
-
-func (c *unsynchronizedMapCache) Put(key Key, data []byte) {
-	c.items[key] = data
-}
-
-func (c *unsynchronizedMapCache) Clear() {
-	c.items = make(map[Key][]byte)
-}
-
-type cacheWithoutClearer struct {
-	items map[Key][]byte
-}
-
-func newCacheWithoutClearer() *cacheWithoutClearer {
-	return &cacheWithoutClearer{items: make(map[Key][]byte)}
-}
-
-func (c *cacheWithoutClearer) Get(key Key) ([]byte, bool) {
-	data, ok := c.items[key]
-	return data, ok
-}
-
-func (c *cacheWithoutClearer) Put(key Key, data []byte) {
-	c.items[key] = data
-}
-
-func TestNewSynchronizedSerializesAccess(t *testing.T) {
-	base := newUnsynchronizedMapCache()
-	cache := NewSynchronized(base)
-
-	const (
-		workers = 8
-		entries = 64
-	)
-
-	var wg sync.WaitGroup
-	errCh := make(chan error, workers*entries)
-	for worker := 0; worker < workers; worker++ {
-		wg.Go(func() {
-			for entryID := 0; entryID < entries; entryID++ {
-				key := NewKey(uint64(worker), int64(entryID))
-				want := []byte{byte(worker), byte(entryID)}
-				cache.Put(key, want)
-				got, ok := cache.Get(key)
-				if !ok || !bytes.Equal(got, want) {
-					errCh <- fmt.Errorf("Get(%+v) = %q, %t; want %q, true", key, got, ok, want)
-				}
-			}
-		})
-	}
-	wg.Wait()
-	close(errCh)
-	for err := range errCh {
-		if err != nil {
-			t.Fatal(err)
-		}
-	}
-	if got, want := len(base.items), workers*entries; got != want {
-		t.Fatalf("stored entries = %d, want %d", got, want)
-	}
-}
-
-func TestNewSynchronizedClear(t *testing.T) {
-	t.Run("DelegatesClear", func(t *testing.T) {
-		base := newUnsynchronizedMapCache()
-		cache := NewSynchronized(base)
-		cache.Put(testKey(1), []byte("one"))
-
-		cache.Clear()
-
-		if got := len(base.items); got != 0 {
-			t.Fatalf("stored entries = %d, want 0", got)
-		}
-	})
-
-	t.Run("NoOpWithoutClearer", func(t *testing.T) {
-		base := newCacheWithoutClearer()
-		cache := NewSynchronized(base)
-		cache.Put(testKey(1), []byte("one"))
-
-		cache.Clear()
-
-		got, ok := base.Get(testKey(1))
-		if !ok || !bytes.Equal(got, []byte("one")) {
-			t.Fatalf("Get(1) = %q, %t; want one, true", got, ok)
-		}
-	})
-}
-
-func TestNewSynchronizedPanicsOnNil(t *testing.T) {
-	defer func() {
-		if got := recover(); got != "framecache: nil cache" {
-			t.Fatalf("recover() = %v, want framecache: nil cache", got)
-		}
-	}()
-
-	NewSynchronized(nil)
 }

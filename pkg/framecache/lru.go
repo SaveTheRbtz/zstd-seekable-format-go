@@ -1,41 +1,33 @@
 package framecache
 
-import (
-	"container/list"
-	"sync"
-)
+import "container/list"
 
 // LRU is a decoded-frame cache using the least-recently-used replacement policy.
 //
-// Hits and replacements mark entries recently used. LRU is safe for concurrent
-// use.
+// Hits and replacements mark entries recently used.
 type LRU struct {
 	limits Limits
-	mu     sync.Mutex
-	items  map[Key]*list.Element
+	items  map[int64]*list.Element
 	order  list.List
 	bytes  uint64
 }
 
 type lruEntry struct {
-	key  Key
-	data []byte
+	frameID int64
+	data    []byte
 }
 
 // NewLRU returns an LRU cache with the provided limits.
 func NewLRU(limits Limits) *LRU {
 	return &LRU{
 		limits: limits,
-		items:  make(map[Key]*list.Element),
+		items:  make(map[int64]*list.Element),
 	}
 }
 
-// Get returns the cached frame for key and marks it recently used.
-func (c *LRU) Get(key Key) ([]byte, bool) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	elem, ok := c.items[key]
+// Get returns the cached frame for frameID and marks it recently used.
+func (c *LRU) Get(frameID int64) ([]byte, bool) {
+	elem, ok := c.items[frameID]
 	if !ok {
 		return nil, false
 	}
@@ -43,18 +35,15 @@ func (c *LRU) Get(key Key) ([]byte, bool) {
 	return elem.Value.(*lruEntry).data, true
 }
 
-// Put stores data for key, replacing any existing entry.
-func (c *LRU) Put(key Key, data []byte) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
+// Put stores data for frameID, replacing any existing entry.
+func (c *LRU) Put(frameID int64, data []byte) {
 	size := uint64(len(data))
 	if !c.limits.canStore(size) {
-		c.remove(key)
+		c.remove(frameID)
 		return
 	}
 
-	if elem, ok := c.items[key]; ok {
+	if elem, ok := c.items[frameID]; ok {
 		entry := elem.Value.(*lruEntry)
 		c.bytes -= uint64(len(entry.data))
 		entry.data = data
@@ -64,24 +53,21 @@ func (c *LRU) Put(key Key, data []byte) {
 		return
 	}
 
-	entry := &lruEntry{key: key, data: data}
-	c.items[key] = c.order.PushFront(entry)
+	entry := &lruEntry{frameID: frameID, data: data}
+	c.items[frameID] = c.order.PushFront(entry)
 	c.bytes += uint64(len(entry.data))
 	c.evict()
 }
 
 // Clear removes all cached frames.
 func (c *LRU) Clear() {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
 	clear(c.items)
 	c.order.Init()
 	c.bytes = 0
 }
 
-func (c *LRU) remove(key Key) {
-	elem, ok := c.items[key]
+func (c *LRU) remove(frameID int64) {
+	elem, ok := c.items[frameID]
 	if !ok {
 		return
 	}
@@ -90,7 +76,7 @@ func (c *LRU) remove(key Key) {
 
 func (c *LRU) removeElement(elem *list.Element) {
 	entry := elem.Value.(*lruEntry)
-	delete(c.items, entry.key)
+	delete(c.items, entry.frameID)
 	c.bytes -= uint64(len(entry.data))
 	c.order.Remove(elem)
 }

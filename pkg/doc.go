@@ -20,5 +20,5 @@
 // github.com/klauspost/compress/zstd.
 //
 // Reader caches one decoded frame by default. Use WithReaderFrameCache to
-// select, share, or disable the decoded-frame cache.
+// select or disable the decoded-frame cache.
 package seekable

@@ -9,14 +9,14 @@ import (
 type clockCache struct {
 	maxFrames int
 	hand      int
-	items     map[framecache.Key]int
+	items     map[int64]int
 	slots     []clockSlot
 }
 
 type clockSlot struct {
-	key  framecache.Key
-	data []byte
-	used bool
+	frameID int64
+	data    []byte
+	used    bool
 }
 
 var _ framecache.Cache = (*clockCache)(nil)
@@ -24,12 +24,12 @@ var _ framecache.Cache = (*clockCache)(nil)
 func newClockCache(maxFrames int) *clockCache {
 	return &clockCache{
 		maxFrames: maxFrames,
-		items:     make(map[framecache.Key]int),
+		items:     make(map[int64]int),
 	}
 }
 
-func (c *clockCache) Get(key framecache.Key) ([]byte, bool) {
-	index, ok := c.items[key]
+func (c *clockCache) Get(frameID int64) ([]byte, bool) {
+	index, ok := c.items[frameID]
 	if !ok {
 		return nil, false
 	}
@@ -37,20 +37,20 @@ func (c *clockCache) Get(key framecache.Key) ([]byte, bool) {
 	return c.slots[index].data, true
 }
 
-func (c *clockCache) Put(key framecache.Key, data []byte) {
+func (c *clockCache) Put(frameID int64, data []byte) {
 	if c.maxFrames <= 0 {
 		return
 	}
 
-	if index, ok := c.items[key]; ok {
+	if index, ok := c.items[frameID]; ok {
 		c.slots[index].data = data
 		c.slots[index].used = true
 		return
 	}
 
 	if len(c.slots) < c.maxFrames {
-		c.items[key] = len(c.slots)
-		c.slots = append(c.slots, clockSlot{key: key, data: data})
+		c.items[frameID] = len(c.slots)
+		c.slots = append(c.slots, clockSlot{frameID: frameID, data: data})
 		return
 	}
 
@@ -62,12 +62,18 @@ func (c *clockCache) Put(key framecache.Key, data []byte) {
 			continue
 		}
 
-		delete(c.items, slot.key)
-		*slot = clockSlot{key: key, data: data}
-		c.items[key] = c.hand
+		delete(c.items, slot.frameID)
+		*slot = clockSlot{frameID: frameID, data: data}
+		c.items[frameID] = c.hand
 		c.advance()
 		return
 	}
+}
+
+func (c *clockCache) Clear() {
+	c.hand = 0
+	c.items = make(map[int64]int)
+	c.slots = nil
 }
 
 func (c *clockCache) advance() {
@@ -75,11 +81,11 @@ func (c *clockCache) advance() {
 }
 
 func ExampleCache_customReplacementPolicy() {
-	cache := framecache.NewSynchronized(newClockCache(2))
+	cache := newClockCache(2)
 
-	first := framecache.NewKey(1, 1)
-	second := framecache.NewKey(1, 2)
-	third := framecache.NewKey(1, 3)
+	first := int64(1)
+	second := int64(2)
+	third := int64(3)
 
 	cache.Put(first, []byte("first"))
 	cache.Put(second, []byte("second"))
@@ -98,8 +104,8 @@ func ExampleCache_customReplacementPolicy() {
 	// third: third
 }
 
-func printFrame(label string, cache framecache.Cache, key framecache.Key) {
-	data, ok := cache.Get(key)
+func printFrame(label string, cache framecache.Cache, frameID int64) {
+	data, ok := cache.Get(frameID)
 	if !ok {
 		fmt.Println(label + ": miss")
 		return

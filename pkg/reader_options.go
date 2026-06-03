@@ -32,10 +32,9 @@ func WithReaderEnvironment(e ReaderEnvironment) ReaderOption {
 // A nil cache selects the default one-frame FIFO cache. To disable caching, use
 // framecache.NewFIFO(framecache.Limits{MaxFrames: 0}).
 //
-// Reader uses the supplied cache directly and does not clear it on Close.
-// Built-in framecache caches are safe for concurrent use; wrap unsynchronized
-// custom caches with framecache.NewSynchronized before using them with
-// concurrent ReadAt calls or sharing them between Readers.
+// On successful NewReader, Reader takes ownership of cache, clears it, and
+// clears it again on Close. After ownership transfers, callers must not use the
+// cache directly or pass it to another Reader.
 func WithReaderFrameCache(cache framecache.Cache) ReaderOption {
 	return func(r *Reader) error {
 		selected := cache

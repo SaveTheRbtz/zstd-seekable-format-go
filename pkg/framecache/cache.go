@@ -1,29 +1,23 @@
 // Package framecache provides decoded-frame cache implementations for seekable readers.
 //
-// Cache implementations in this package are safe for direct concurrent use.
-// Use NewSynchronized to adapt a simple custom cache for concurrent use.
+// A cache is owned by one seekable.Reader. Reader serializes cache access, so
+// Cache implementations do not need to be safe for concurrent use.
 package framecache
 
-// Cache stores decoded frames by key.
-//
-// Cache implementations passed to a concurrently used seekable.Reader must be
-// safe for concurrent use. The built-in caches satisfy that requirement.
+// Cache stores decoded frames by seek-table frame ID.
 type Cache interface {
-	// Get returns the frame stored for key, if any.
+	// Get returns the frame stored for frameID, if any.
 	//
 	// Implementations may return the same []byte supplied to Put. Callers must
 	// not mutate the returned slice.
-	Get(key Key) ([]byte, bool)
+	Get(frameID int64) ([]byte, bool)
 
-	// Put stores data for key, replacing any existing value.
+	// Put stores data for frameID, replacing any existing value.
 	//
 	// Implementations may retain data directly. Callers must not mutate data
 	// after passing it to Put.
-	Put(key Key, data []byte)
-}
+	Put(frameID int64, data []byte)
 
-// Clearer is implemented by caches that support explicit clearing.
-type Clearer interface {
 	// Clear removes all cached frames.
 	Clear()
 }
@@ -34,7 +28,7 @@ type Limits struct {
 	MaxFrames int
 
 	// MaxBytes caps decoded bytes stored in the cache. MaxBytes == 0 means no
-	// byte limit. Entries larger than MaxBytes are not stored; if the key
+	// byte limit. Entries larger than MaxBytes are not stored; if the frame ID
 	// already exists, the existing entry is removed.
 	MaxBytes uint64
 }
