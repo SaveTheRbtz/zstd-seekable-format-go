@@ -1,11 +1,18 @@
 package framecache
 
 import (
+	"encoding"
 	"encoding/binary"
 	"fmt"
 )
 
 const keyBinarySize = 16
+
+var (
+	_ encoding.BinaryAppender    = Key{}
+	_ encoding.BinaryMarshaler   = Key{}
+	_ encoding.BinaryUnmarshaler = (*Key)(nil)
+)
 
 // Key identifies one decoded frame in one Reader namespace.
 //
@@ -43,16 +50,16 @@ func (k Key) FrameID() int64 {
 // The encoding is useful for ephemeral external caches that need byte keys. It
 // must not be used as persistent cache identity across Reader or process
 // lifetimes.
-func (k Key) AppendBinary(dst []byte) []byte {
+func (k Key) AppendBinary(dst []byte) ([]byte, error) {
 	var data [keyBinarySize]byte
 	binary.BigEndian.PutUint64(data[:8], k.namespace)
 	binary.BigEndian.PutUint64(data[8:], uint64(k.frameID))
-	return append(dst, data[:]...)
+	return append(dst, data[:]...), nil
 }
 
 // MarshalBinary returns k's opaque binary encoding.
 func (k Key) MarshalBinary() ([]byte, error) {
-	return k.AppendBinary(nil), nil
+	return k.AppendBinary(nil)
 }
 
 // UnmarshalBinary decodes k from the encoding produced by MarshalBinary.

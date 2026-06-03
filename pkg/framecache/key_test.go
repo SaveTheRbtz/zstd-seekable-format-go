@@ -9,7 +9,10 @@ func TestKeyBinaryEncoding(t *testing.T) {
 	key := NewKey(42, -7)
 
 	prefix := []byte{1, 2, 3}
-	encoded := key.AppendBinary(prefix)
+	encoded, err := key.AppendBinary(prefix)
+	if err != nil {
+		t.Fatalf("AppendBinary: %v", err)
+	}
 	if !bytes.Equal(encoded[:len(prefix)], prefix) {
 		t.Fatalf("AppendBinary prefix = %v, want %v", encoded[:len(prefix)], prefix)
 	}
