@@ -224,7 +224,9 @@ func (r *Reader) Read(p []byte) (n int, err error) {
 // environment passed to NewReader.
 func (r *Reader) Close() error {
 	if !r.closed.Swap(true) {
-		r.frameCache.Clear()
+		if r.frameCache != nil {
+			r.frameCache.Clear()
+		}
 		r.frameCache = nil
 		r.table = SeekTable{}
 	}
