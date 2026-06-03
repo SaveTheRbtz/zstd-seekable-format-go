@@ -239,7 +239,7 @@ func cacheTestStream(t testing.TB, frameCount int) ([]byte, [][]byte, []byte) {
 
 	enc, err := zstd.NewWriter(nil, zstd.WithEncoderLevel(zstd.SpeedFastest))
 	require.NoError(t, err)
-	defer enc.Close()
+	defer func() { require.NoError(t, enc.Close()) }()
 
 	var compressed bytes.Buffer
 	w, err := NewWriter(&compressed, enc)
