@@ -1,6 +1,7 @@
 package seekable
 
 import (
+	"context"
 	"fmt"
 	"log/slog"
 
@@ -82,7 +83,9 @@ func (e *Encoder) Encode(src []byte) ([]byte, error) {
 	}
 
 	frame := w.appendFrameEntry(entry)
-	w.logger.Debug("appended frame", slog.Any("frame", frame))
+	if w.logger.Enabled(context.Background(), slog.LevelDebug) {
+		w.logger.LogAttrs(context.Background(), slog.LevelDebug, "appended frame", slog.Any("frame", frame))
+	}
 	return dst, nil
 }
 

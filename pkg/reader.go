@@ -1,6 +1,7 @@
 package seekable
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -304,8 +305,16 @@ func (r *Reader) read(dst []byte, off int64) (int64, int, error) {
 		size = uint64(len(dst))
 	}
 
-	r.logger.Debug("decompressed", slog.Uint64("offsetWithinFrame", offsetWithinFrame), slog.Uint64("end", offsetWithinFrame+size),
-		slog.Uint64("size", size), slog.Int("lenDecompressed", len(decompressed)), slog.Int("lenDst", len(dst)), slog.Any("index", index))
+	if r.logger.Enabled(context.Background(), slog.LevelDebug) {
+		r.logger.LogAttrs(context.Background(), slog.LevelDebug, "decompressed",
+			slog.Uint64("offsetWithinFrame", offsetWithinFrame),
+			slog.Uint64("end", offsetWithinFrame+size),
+			slog.Uint64("size", size),
+			slog.Int("lenDecompressed", len(decompressed)),
+			slog.Int("lenDst", len(dst)),
+			slog.Any("index", index),
+		)
+	}
 	copy(dst, decompressed[offsetWithinFrame:offsetWithinFrame+size])
 
 	return off + int64(size), int(size), nil
