@@ -11,9 +11,9 @@ type FIFO struct {
 }
 
 type fifoEntry struct {
-	frameID int64
-	data    []byte
-	intrusiveLinks[*fifoEntry]
+	frameID                    int64
+	data                       []byte
+	intrusiveLinks[*fifoEntry] //nolint:unused // Used through method promotion by intrusiveList.
 }
 
 // NewFIFO returns a FIFO cache with the provided limits.

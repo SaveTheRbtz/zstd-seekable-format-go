@@ -11,9 +11,9 @@ type LRU struct {
 }
 
 type lruEntry struct {
-	frameID int64
-	data    []byte
-	intrusiveLinks[*lruEntry]
+	frameID                   int64
+	data                      []byte
+	intrusiveLinks[*lruEntry] //nolint:unused // Used through method promotion by intrusiveList.
 }
 
 // NewLRU returns an LRU cache with the provided limits.

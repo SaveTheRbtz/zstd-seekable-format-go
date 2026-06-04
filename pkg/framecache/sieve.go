@@ -16,10 +16,10 @@ type Sieve struct {
 const sieveMaxCount = 16
 
 type sieveEntry struct {
-	frameID int64
-	data    []byte
-	count   uint8
-	intrusiveLinks[*sieveEntry]
+	frameID                     int64
+	data                        []byte
+	count                       uint8
+	intrusiveLinks[*sieveEntry] //nolint:unused // Used through method promotion by intrusiveList.
 }
 
 // NewSieve returns a Sieve cache with the provided limits.

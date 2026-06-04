@@ -10,6 +10,7 @@ type intrusiveLinks[T any] struct {
 	next T
 }
 
+//nolint:unused // Used through method promotion from embedded intrusiveLinks fields.
 func (links *intrusiveLinks[T]) links() *intrusiveLinks[T] {
 	return links
 }
