@@ -8,7 +8,7 @@ import "sort"
 // WriterEnvironment.WriteSeekTable or returned by Encoder.EndStream. Lookup methods
 // can be used concurrently.
 type SeekTable struct {
-	entries   []FrameOffsetEntry
+	entries   []seekTableIndexEntry
 	checksums bool
 }
 
@@ -62,7 +62,7 @@ func (t SeekTable) EntryByDecompressedOffset(off uint64) (FrameOffsetEntry, bool
 	if n == len(t.entries) || t.entries[n].DecompressedOffset > off {
 		return FrameOffsetEntry{}, false
 	}
-	return t.entries[n], true
+	return t.entries[n].frameOffsetEntry(int64(n)), true
 }
 
 // EntryByID returns the frame with id.
@@ -72,5 +72,5 @@ func (t SeekTable) EntryByID(id int64) (FrameOffsetEntry, bool) {
 		return FrameOffsetEntry{}, false
 	}
 
-	return t.entries[int(id)], true
+	return t.entries[int(id)].frameOffsetEntry(id), true
 }

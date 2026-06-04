@@ -21,6 +21,25 @@ type FrameOffsetEntry struct {
 	Checksum uint32
 }
 
+type seekTableIndexEntry struct {
+	CompressedOffset   uint64
+	DecompressedOffset uint64
+	CompressedSize     uint32
+	DecompressedSize   uint32
+	Checksum           uint32
+}
+
+func (e seekTableIndexEntry) frameOffsetEntry(id int64) FrameOffsetEntry {
+	return FrameOffsetEntry{
+		ID:                 id,
+		CompressedOffset:   e.CompressedOffset,
+		DecompressedOffset: e.DecompressedOffset,
+		CompressedSize:     e.CompressedSize,
+		DecompressedSize:   e.DecompressedSize,
+		Checksum:           e.Checksum,
+	}
+}
+
 // LogValue implements slog.LogValuer.
 func (o FrameOffsetEntry) LogValue() slog.Value {
 	return slog.GroupValue(

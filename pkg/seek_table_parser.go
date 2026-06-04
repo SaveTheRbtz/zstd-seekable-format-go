@@ -113,7 +113,7 @@ func seekTableEntrySize(checksum bool) int64 {
 	return baseSize
 }
 
-func parseSeekTableEntries(p []byte, entrySize uint64, numberOfFrames uint32) ([]FrameOffsetEntry, error) {
+func parseSeekTableEntries(p []byte, entrySize uint64, numberOfFrames uint32) ([]seekTableIndexEntry, error) {
 	if entrySize == 0 {
 		return nil, fmt.Errorf("seek table entry size is 0")
 	}
@@ -126,11 +126,10 @@ func parseSeekTableEntries(p []byte, entrySize uint64, numberOfFrames uint32) ([
 			parsedEntries, numberOfFrames)
 	}
 
-	entries := make([]FrameOffsetEntry, 0, int(parsedEntries))
+	entries := make([]seekTableIndexEntry, 0, int(parsedEntries))
 	entry := seekTableEntry{}
 	var compressedOffset, decompressedOffset uint64
 
-	var i int64
 	for indexOffset := uint64(0); indexOffset < uint64(len(p)); indexOffset += entrySize {
 		err := entry.UnmarshalBinary(p[indexOffset : indexOffset+entrySize])
 		if err != nil {
@@ -138,8 +137,7 @@ func parseSeekTableEntries(p []byte, entrySize uint64, numberOfFrames uint32) ([
 				p[indexOffset:indexOffset+entrySize], indexOffset, err)
 		}
 
-		entries = append(entries, FrameOffsetEntry{
-			ID:                 i,
+		entries = append(entries, seekTableIndexEntry{
 			CompressedOffset:   compressedOffset,
 			DecompressedOffset: decompressedOffset,
 			CompressedSize:     entry.CompressedSize,
@@ -148,7 +146,6 @@ func parseSeekTableEntries(p []byte, entrySize uint64, numberOfFrames uint32) ([
 		})
 		compressedOffset += uint64(entry.CompressedSize)
 		decompressedOffset += uint64(entry.DecompressedSize)
-		i++
 	}
 
 	return entries, nil
