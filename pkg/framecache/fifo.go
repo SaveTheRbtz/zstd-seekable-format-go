@@ -37,20 +37,28 @@ func (c *FIFO) Get(frameID int64) ([]byte, bool) {
 // Put stores data for frameID as a new FIFO insertion, replacing any existing
 // entry.
 func (c *FIFO) Put(frameID int64, data []byte) {
+	_, _ = c.PutWithEvicted(frameID, data)
+}
+
+// PutWithEvicted stores data and returns one evicted frame buffer, if any.
+func (c *FIFO) PutWithEvicted(frameID int64, data []byte) ([]byte, bool) {
 	size := uint64(len(data))
 	if !c.limits.canStore(size) {
-		c.remove(frameID)
-		return
+		return c.remove(frameID), false
 	}
 
+	var evicted []byte
 	if elem, ok := c.items[frameID]; ok {
-		c.removeElement(elem)
+		evicted = c.removeElement(elem)
 	}
 
-	c.evictFor(1, size)
+	if removed := c.evictFor(1, size); removed != nil {
+		evicted = removed
+	}
 	entry := &fifoEntry{frameID: frameID, data: data}
 	c.items[frameID] = c.order.PushBack(entry)
 	c.bytes += uint64(len(entry.data))
+	return evicted, true
 }
 
 // Clear removes all cached frames.
@@ -60,27 +68,30 @@ func (c *FIFO) Clear() {
 	c.bytes = 0
 }
 
-func (c *FIFO) remove(frameID int64) {
+func (c *FIFO) remove(frameID int64) []byte {
 	elem, ok := c.items[frameID]
 	if !ok {
-		return
+		return nil
 	}
-	c.removeElement(elem)
+	return c.removeElement(elem)
 }
 
-func (c *FIFO) removeElement(elem *list.Element) {
+func (c *FIFO) removeElement(elem *list.Element) []byte {
 	entry := elem.Value.(*fifoEntry)
 	delete(c.items, entry.frameID)
 	c.bytes -= uint64(len(entry.data))
 	c.order.Remove(elem)
+	return entry.data
 }
 
-func (c *FIFO) evictFor(extraFrames int, extraBytes uint64) {
+func (c *FIFO) evictFor(extraFrames int, extraBytes uint64) []byte {
+	var evicted []byte
 	for c.limits.overLimits(c.order.Len()+extraFrames, c.bytes+extraBytes) {
 		elem := c.order.Front()
 		if elem == nil {
-			return
+			return evicted
 		}
-		c.removeElement(elem)
+		evicted = c.removeElement(elem)
 	}
+	return evicted
 }

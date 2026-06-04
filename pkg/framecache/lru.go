@@ -39,26 +39,33 @@ func (c *LRU) Get(frameID int64) ([]byte, bool) {
 // Put stores data for frameID, replacing any existing frame and marking it most
 // recently used.
 func (c *LRU) Put(frameID int64, data []byte) {
+	_, _ = c.PutWithEvicted(frameID, data)
+}
+
+// PutWithEvicted stores data and returns one evicted frame buffer, if any.
+func (c *LRU) PutWithEvicted(frameID int64, data []byte) ([]byte, bool) {
 	size := uint64(len(data))
 	if !c.limits.canStore(size) {
-		c.remove(frameID)
-		return
+		return c.remove(frameID), false
 	}
 
 	if elem, ok := c.items[frameID]; ok {
 		entry := elem.Value.(*lruEntry)
+		evicted := entry.data
 		c.bytes -= uint64(len(entry.data))
 		entry.data = data
 		c.bytes += size
 		c.order.MoveToFront(elem)
-		c.evict()
-		return
+		if removed := c.evict(); removed != nil {
+			evicted = removed
+		}
+		return evicted, true
 	}
 
 	entry := &lruEntry{frameID: frameID, data: data}
 	c.items[frameID] = c.order.PushFront(entry)
 	c.bytes += uint64(len(entry.data))
-	c.evict()
+	return c.evict(), true
 }
 
 // Clear removes all cached frames.
@@ -68,27 +75,30 @@ func (c *LRU) Clear() {
 	c.bytes = 0
 }
 
-func (c *LRU) remove(frameID int64) {
+func (c *LRU) remove(frameID int64) []byte {
 	elem, ok := c.items[frameID]
 	if !ok {
-		return
+		return nil
 	}
-	c.removeElement(elem)
+	return c.removeElement(elem)
 }
 
-func (c *LRU) removeElement(elem *list.Element) {
+func (c *LRU) removeElement(elem *list.Element) []byte {
 	entry := elem.Value.(*lruEntry)
 	delete(c.items, entry.frameID)
 	c.bytes -= uint64(len(entry.data))
 	c.order.Remove(elem)
+	return entry.data
 }
 
-func (c *LRU) evict() {
+func (c *LRU) evict() []byte {
+	var evicted []byte
 	for c.limits.overLimits(c.order.Len(), c.bytes) {
 		elem := c.order.Back()
 		if elem == nil {
-			return
+			return evicted
 		}
-		c.removeElement(elem)
+		evicted = c.removeElement(elem)
 	}
+	return evicted
 }

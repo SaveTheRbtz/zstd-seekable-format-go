@@ -31,6 +31,14 @@ func (c *benchmarkCountingCache) Put(frameID int64, data []byte) {
 	c.cache.Put(frameID, data)
 }
 
+func (c *benchmarkCountingCache) PutWithEvicted(frameID int64, data []byte) ([]byte, bool) {
+	if cache, ok := c.cache.(evictingFrameCache); ok {
+		return cache.PutWithEvicted(frameID, data)
+	}
+	c.cache.Put(frameID, data)
+	return nil, true
+}
+
 func (c *benchmarkCountingCache) Clear() {
 	c.cache.Clear()
 }

@@ -45,23 +45,30 @@ func (c *Sieve) Get(frameID int64) ([]byte, bool) {
 
 // Put stores data for frameID, replacing any existing entry.
 func (c *Sieve) Put(frameID int64, data []byte) {
+	_, _ = c.PutWithEvicted(frameID, data)
+}
+
+// PutWithEvicted stores data and returns one evicted frame buffer, if any.
+func (c *Sieve) PutWithEvicted(frameID int64, data []byte) ([]byte, bool) {
 	size := uint64(len(data))
 	if !c.limits.canStore(size) {
-		c.remove(frameID)
-		return
+		return c.remove(frameID), false
 	}
 
 	if elem, ok := c.items[frameID]; ok {
 		entry := elem.Value.(*sieveEntry)
+		evicted := entry.data
 		c.bytes -= uint64(len(entry.data))
 		entry.data = data
 		entry.touch()
 		c.bytes += size
-		c.evictForExcept(0, 0, elem)
-		return
+		if removed := c.evictForExcept(0, 0, elem); removed != nil {
+			evicted = removed
+		}
+		return evicted, true
 	}
 
-	c.evictFor(1, size)
+	evicted := c.evictFor(1, size)
 	entry := &sieveEntry{frameID: frameID, data: data}
 	elem := c.order.PushFront(entry)
 	c.items[frameID] = elem
@@ -69,6 +76,7 @@ func (c *Sieve) Put(frameID int64, data []byte) {
 	if c.hand == nil {
 		c.hand = c.order.Back()
 	}
+	return evicted, true
 }
 
 // Clear removes all cached frames.
@@ -79,15 +87,15 @@ func (c *Sieve) Clear() {
 	c.bytes = 0
 }
 
-func (c *Sieve) remove(frameID int64) {
+func (c *Sieve) remove(frameID int64) []byte {
 	elem, ok := c.items[frameID]
 	if !ok {
-		return
+		return nil
 	}
-	c.removeElement(elem)
+	return c.removeElement(elem)
 }
 
-func (c *Sieve) removeElement(elem *list.Element) {
+func (c *Sieve) removeElement(elem *list.Element) []byte {
 	next := c.prevCircular(elem)
 	entry := elem.Value.(*sieveEntry)
 	delete(c.items, entry.frameID)
@@ -104,26 +112,28 @@ func (c *Sieve) removeElement(elem *list.Element) {
 			c.hand = c.order.Back()
 		}
 	}
+	return entry.data
 }
 
-func (c *Sieve) evictFor(extraFrames int, extraBytes uint64) {
-	c.evictForExcept(extraFrames, extraBytes, nil)
+func (c *Sieve) evictFor(extraFrames int, extraBytes uint64) []byte {
+	return c.evictForExcept(extraFrames, extraBytes, nil)
 }
 
-func (c *Sieve) evictForExcept(extraFrames int, extraBytes uint64, protected *list.Element) {
+func (c *Sieve) evictForExcept(extraFrames int, extraBytes uint64, protected *list.Element) []byte {
+	var evicted []byte
 	for c.limits.overLimits(c.order.Len()+extraFrames, c.bytes+extraBytes) {
 		if c.hand == nil {
 			c.hand = c.order.Back()
 		}
 		if c.hand == nil {
-			return
+			return evicted
 		}
 
 		elem := c.hand
 		if elem == protected {
 			next := c.prevCircular(elem)
 			if next == nil {
-				return
+				return evicted
 			}
 			c.hand = next
 			continue
@@ -139,8 +149,9 @@ func (c *Sieve) evictForExcept(extraFrames int, extraBytes uint64, protected *li
 			continue
 		}
 
-		c.removeElement(elem)
+		evicted = c.removeElement(elem)
 	}
+	return evicted
 }
 
 func (entry *sieveEntry) touch() {

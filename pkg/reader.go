@@ -100,7 +100,12 @@ type Reader struct {
 	closed atomic.Bool
 
 	frameCache *readerFrameCache
+
+	decodedBuffersMu sync.Mutex
+	decodedBuffers   [][]byte
 }
+
+const maxRecycledDecodedBuffers = 64
 
 var (
 	_ io.Seeker   = (*Reader)(nil)
@@ -229,8 +234,49 @@ func (r *Reader) Close() error {
 		}
 		r.frameCache = nil
 		r.table = SeekTable{}
+		r.decodedBuffersMu.Lock()
+		r.decodedBuffers = nil
+		r.decodedBuffersMu.Unlock()
 	}
 	return nil
+}
+
+func (r *Reader) decodedFrameBuffer(size int) []byte {
+	r.decodedBuffersMu.Lock()
+	for len(r.decodedBuffers) > 0 {
+		last := len(r.decodedBuffers) - 1
+		buf := r.decodedBuffers[last]
+		r.decodedBuffers[last] = nil
+		r.decodedBuffers = r.decodedBuffers[:last]
+		if cap(buf) >= size {
+			r.decodedBuffersMu.Unlock()
+			return buf[:0]
+		}
+	}
+	r.decodedBuffersMu.Unlock()
+	return make([]byte, 0, size)
+}
+
+func (r *Reader) recycleDecodedFrameBuffer(buf []byte) {
+	r.decodedBuffersMu.Lock()
+	if len(r.decodedBuffers) < maxRecycledDecodedBuffers {
+		r.decodedBuffers = append(r.decodedBuffers, buf[:0])
+	}
+	r.decodedBuffersMu.Unlock()
+}
+
+func sameSliceData(a, b []byte) bool {
+	if cap(a) == 0 || cap(b) == 0 {
+		return false
+	}
+	return &a[:1][0] == &b[:1][0]
+}
+
+func (r *Reader) recycleDecodeBuffers(original, decoded []byte) {
+	r.recycleDecodedFrameBuffer(decoded)
+	if !sameSliceData(original, decoded) {
+		r.recycleDecodedFrameBuffer(original)
+	}
 }
 
 func (r *Reader) read(dst []byte, off int64) (int64, int, error) {
@@ -257,58 +303,75 @@ func (r *Reader) read(dst []byte, off int64) (int64, int, error) {
 			off, int64(index.DecompressedOffset), int64(index.DecompressedOffset)+int64(index.DecompressedSize))
 	}
 
-	var decompressed []byte
-
-	cachedData, ok := r.frameCache.Get(index.ID)
-	if ok {
-		decompressed = cachedData
-	} else {
-		if index.CompressedSize > maxDecoderFrameSize {
-			return 0, 0, fmt.Errorf("index.CompressedSize is too big: %d > %d",
-				index.CompressedSize, maxDecoderFrameSize)
-		}
-
-		src, err := r.env.GetFrameByIndex(index)
-		if err != nil {
-			return 0, 0, fmt.Errorf("failed to read compressed data at: %d, %w", index.CompressedOffset, err)
-		}
-
-		if len(src) != int(index.CompressedSize) {
-			return 0, 0, fmt.Errorf("compressed size does not match index at: %d: expected: %d, index: %+v",
-				off, len(src), index)
-		}
-
-		decompressed, err = r.dec.DecodeAll(src, nil)
-		if err != nil {
-			return 0, 0, fmt.Errorf("failed to decompress data data at: %d, %w", index.CompressedOffset, err)
-		}
-
-		if r.table.HasChecksums() {
-			checksum := uint32(xxhash.Sum64(decompressed))
-			if index.Checksum != checksum {
-				return 0, 0, fmt.Errorf("checksum verification failed at: %d: expected: %d, actual: %d",
-					index.CompressedOffset, index.Checksum, checksum)
-			}
-		}
-		r.frameCache.Put(index.ID, decompressed)
-	}
-
-	if len(decompressed) != int(index.DecompressedSize) {
-		return 0, 0, fmt.Errorf("index corruption: len: %d, expected: %d", len(decompressed), int(index.DecompressedSize))
-	}
-
 	offsetWithinFrame := uint64(off) - index.DecompressedOffset
 
-	size := uint64(len(decompressed)) - offsetWithinFrame
+	size := uint64(index.DecompressedSize) - offsetWithinFrame
 	if size > uint64(len(dst)) {
 		size = uint64(len(dst))
 	}
 
+	if n, ok, valid := r.frameCache.Copy(index.ID, dst, offsetWithinFrame, size, int(index.DecompressedSize)); ok {
+		if !valid {
+			return 0, 0, fmt.Errorf("index corruption: len: %d, expected: %d", n, int(index.DecompressedSize))
+		}
+		r.logger.Debug("decompressed", slog.Uint64("offsetWithinFrame", offsetWithinFrame), slog.Uint64("end", offsetWithinFrame+size),
+			slog.Uint64("size", size), slog.Int("lenDecompressed", int(index.DecompressedSize)), slog.Int("lenDst", len(dst)), slog.Any("index", index))
+		return off + int64(n), n, nil
+	}
+
+	var decompressed []byte
+
+	if index.CompressedSize > maxDecoderFrameSize {
+		return 0, 0, fmt.Errorf("index.CompressedSize is too big: %d > %d",
+			index.CompressedSize, maxDecoderFrameSize)
+	}
+
+	src, err := r.env.GetFrameByIndex(index)
+	if err != nil {
+		return 0, 0, fmt.Errorf("failed to read compressed data at: %d, %w", index.CompressedOffset, err)
+	}
+
+	if len(src) != int(index.CompressedSize) {
+		return 0, 0, fmt.Errorf("compressed size does not match index at: %d: expected: %d, index: %+v",
+			off, len(src), index)
+	}
+
+	decodeDst := r.decodedFrameBuffer(int(index.DecompressedSize))
+	decompressed, err = r.dec.DecodeAll(src, decodeDst)
+	if err != nil {
+		r.recycleDecodedFrameBuffer(decodeDst)
+		return 0, 0, fmt.Errorf("failed to decompress data data at: %d, %w", index.CompressedOffset, err)
+	}
+
+	if len(decompressed) != int(index.DecompressedSize) {
+		r.recycleDecodeBuffers(decodeDst, decompressed)
+		return 0, 0, fmt.Errorf("index corruption: len: %d, expected: %d", len(decompressed), int(index.DecompressedSize))
+	}
+
+	if r.table.HasChecksums() {
+		checksum := uint32(xxhash.Sum64(decompressed))
+		if index.Checksum != checksum {
+			r.recycleDecodeBuffers(decodeDst, decompressed)
+			return 0, 0, fmt.Errorf("checksum verification failed at: %d: expected: %d, actual: %d",
+				index.CompressedOffset, index.Checksum, checksum)
+		}
+	}
+
+	n := copy(dst, decompressed[offsetWithinFrame:offsetWithinFrame+size])
+	evicted, stored := r.frameCache.Put(index.ID, decompressed)
+	if evicted != nil {
+		r.recycleDecodedFrameBuffer(evicted)
+	}
+	if !stored {
+		r.recycleDecodeBuffers(decodeDst, decompressed)
+	} else if !sameSliceData(decodeDst, decompressed) {
+		r.recycleDecodedFrameBuffer(decodeDst)
+	}
+
 	r.logger.Debug("decompressed", slog.Uint64("offsetWithinFrame", offsetWithinFrame), slog.Uint64("end", offsetWithinFrame+size),
 		slog.Uint64("size", size), slog.Int("lenDecompressed", len(decompressed)), slog.Int("lenDst", len(dst)), slog.Any("index", index))
-	copy(dst, decompressed[offsetWithinFrame:offsetWithinFrame+size])
 
-	return off + int64(size), int(size), nil
+	return off + int64(n), n, nil
 }
 
 // Seek updates the Reader's current offset and returns the new offset.
