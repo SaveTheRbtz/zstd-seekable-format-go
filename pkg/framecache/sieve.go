@@ -60,8 +60,7 @@ func (c *Sieve) Put(frameID int64, data []byte) {
 
 	c.evictFor(1, size)
 	entry := &sieveEntry{frameID: frameID, data: data}
-	c.order.PushFront(entry)
-	c.items[frameID] = entry
+	c.items[frameID] = c.order.PushFront(entry)
 	c.bytes += uint64(len(entry.data))
 	if c.hand == nil {
 		c.hand = c.order.Back()

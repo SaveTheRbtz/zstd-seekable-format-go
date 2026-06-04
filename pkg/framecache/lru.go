@@ -54,8 +54,7 @@ func (c *LRU) Put(frameID int64, data []byte) {
 	}
 
 	entry := &lruEntry{frameID: frameID, data: data}
-	c.order.PushFront(entry)
-	c.items[frameID] = entry
+	c.items[frameID] = c.order.PushFront(entry)
 	c.bytes += uint64(len(entry.data))
 	c.evict()
 }

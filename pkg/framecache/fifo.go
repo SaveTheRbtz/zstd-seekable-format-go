@@ -48,8 +48,7 @@ func (c *FIFO) Put(frameID int64, data []byte) {
 
 	c.evictFor(1, size)
 	entry := &fifoEntry{frameID: frameID, data: data}
-	c.order.PushBack(entry)
-	c.items[frameID] = entry
+	c.items[frameID] = c.order.PushBack(entry)
 	c.bytes += uint64(len(entry.data))
 }
 

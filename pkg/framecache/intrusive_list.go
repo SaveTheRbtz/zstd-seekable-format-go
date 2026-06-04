@@ -36,7 +36,7 @@ func (l *intrusiveList[T]) Back() T {
 	return l.tail
 }
 
-func (l *intrusiveList[T]) PushFront(entry T) {
+func (l *intrusiveList[T]) PushFront(entry T) T {
 	var zero T
 
 	entryLinks := entry.links()
@@ -50,9 +50,10 @@ func (l *intrusiveList[T]) PushFront(entry T) {
 	}
 	l.head = entry
 	l.len++
+	return entry
 }
 
-func (l *intrusiveList[T]) PushBack(entry T) {
+func (l *intrusiveList[T]) PushBack(entry T) T {
 	var zero T
 
 	entryLinks := entry.links()
@@ -66,6 +67,7 @@ func (l *intrusiveList[T]) PushBack(entry T) {
 	}
 	l.tail = entry
 	l.len++
+	return entry
 }
 
 func (l *intrusiveList[T]) Remove(entry T) {
