@@ -13,11 +13,7 @@ type FIFO struct {
 type fifoEntry struct {
 	frameID int64
 	data    []byte
-	list    intrusiveLinks[*fifoEntry]
-}
-
-func (entry *fifoEntry) links() *intrusiveLinks[*fifoEntry] {
-	return &entry.list
+	intrusiveLinks[*fifoEntry]
 }
 
 // NewFIFO returns a FIFO cache with the provided limits.

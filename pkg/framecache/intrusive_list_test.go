@@ -7,12 +7,8 @@ import (
 )
 
 type intrusiveListTestEntry struct {
-	id   int
-	list intrusiveLinks[*intrusiveListTestEntry]
-}
-
-func (entry *intrusiveListTestEntry) links() *intrusiveLinks[*intrusiveListTestEntry] {
-	return &entry.list
+	id int
+	intrusiveLinks[*intrusiveListTestEntry]
 }
 
 func TestIntrusiveListInit(t *testing.T) {
@@ -226,13 +222,13 @@ func assertIntrusiveListMatchesContainer(
 			t.Fatalf("entry %d = %s, want %s",
 				index, intrusiveListEntryName(gotEntry), intrusiveListEntryName(listElementEntry(wantElem)))
 		}
-		if gotEntry.list.prev != prev {
+		if gotEntry.prev != prev {
 			t.Fatalf("entry %d prev = %s, want %s",
-				gotEntry.id, intrusiveListEntryName(gotEntry.list.prev), intrusiveListEntryName(prev))
+				gotEntry.id, intrusiveListEntryName(gotEntry.prev), intrusiveListEntryName(prev))
 		}
 
 		prev = gotEntry
-		gotEntry = gotEntry.list.next
+		gotEntry = gotEntry.next
 	}
 	if gotEntry != nil {
 		t.Fatalf("list has trailing entry %s", intrusiveListEntryName(gotEntry))
@@ -250,9 +246,9 @@ func assertRemovedIntrusiveListEntriesDetached(
 		if elements[i] != nil {
 			continue
 		}
-		if entry.list.prev != nil || entry.list.next != nil {
+		if entry.prev != nil || entry.next != nil {
 			t.Fatalf("entry %d links = prev %s next %s, want detached",
-				entry.id, intrusiveListEntryName(entry.list.prev), intrusiveListEntryName(entry.list.next))
+				entry.id, intrusiveListEntryName(entry.prev), intrusiveListEntryName(entry.next))
 		}
 	}
 }

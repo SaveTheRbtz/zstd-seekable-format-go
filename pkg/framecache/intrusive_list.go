@@ -10,6 +10,10 @@ type intrusiveLinks[T any] struct {
 	next T
 }
 
+func (links *intrusiveLinks[T]) links() *intrusiveLinks[T] {
+	return links
+}
+
 type intrusiveList[T intrusiveListEntry[T]] struct {
 	head T
 	tail T

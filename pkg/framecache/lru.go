@@ -13,11 +13,7 @@ type LRU struct {
 type lruEntry struct {
 	frameID int64
 	data    []byte
-	list    intrusiveLinks[*lruEntry]
-}
-
-func (entry *lruEntry) links() *intrusiveLinks[*lruEntry] {
-	return &entry.list
+	intrusiveLinks[*lruEntry]
 }
 
 // NewLRU returns an LRU cache with the provided limits.

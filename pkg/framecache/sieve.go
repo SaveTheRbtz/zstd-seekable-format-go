@@ -19,11 +19,7 @@ type sieveEntry struct {
 	frameID int64
 	data    []byte
 	count   uint8
-	list    intrusiveLinks[*sieveEntry]
-}
-
-func (entry *sieveEntry) links() *intrusiveLinks[*sieveEntry] {
-	return &entry.list
+	intrusiveLinks[*sieveEntry]
 }
 
 // NewSieve returns a Sieve cache with the provided limits.
