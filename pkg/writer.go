@@ -161,7 +161,9 @@ func (s *Writer) Write(src []byte) (int, error) {
 	}
 
 	frame := s.appendFrameEntry(entry)
-	s.logger.Debug("appended frame", slog.Any("frame", frame))
+	if s.logger.Enabled(context.Background(), slog.LevelDebug) {
+		s.logger.LogAttrs(context.Background(), slog.LevelDebug, "appended frame", slog.Any("frame", frame))
+	}
 	return len(src), nil
 }
 
