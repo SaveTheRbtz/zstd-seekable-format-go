@@ -17,10 +17,15 @@ const maxReaderOffset = uint64(1<<63 - 1)
 type readSeekerEnvImpl struct {
 	rs io.ReadSeeker
 	mu sync.Mutex
+
+	frameBuffersMu sync.Mutex
+	frameBuffers   [][]byte
 }
 
+const maxRecycledFrameBuffers = 64
+
 func (rs *readSeekerEnvImpl) GetFrameByIndex(index FrameOffsetEntry) ([]byte, error) {
-	p := make([]byte, index.CompressedSize)
+	p := rs.frameBuffer(int(index.CompressedSize))
 	off := int64(index.CompressedOffset)
 
 	switch v := rs.rs.(type) {
@@ -46,6 +51,30 @@ func (rs *readSeekerEnvImpl) GetFrameByIndex(index FrameOffsetEntry) ([]byte, er
 	}
 
 	return p, nil
+}
+
+func (rs *readSeekerEnvImpl) frameBuffer(size int) []byte {
+	rs.frameBuffersMu.Lock()
+	for len(rs.frameBuffers) > 0 {
+		last := len(rs.frameBuffers) - 1
+		buf := rs.frameBuffers[last]
+		rs.frameBuffers[last] = nil
+		rs.frameBuffers = rs.frameBuffers[:last]
+		if cap(buf) >= size {
+			rs.frameBuffersMu.Unlock()
+			return buf[:size]
+		}
+	}
+	rs.frameBuffersMu.Unlock()
+	return make([]byte, size)
+}
+
+func (rs *readSeekerEnvImpl) RecycleFrameBuffer(buf []byte) {
+	rs.frameBuffersMu.Lock()
+	if len(rs.frameBuffers) < maxRecycledFrameBuffers {
+		rs.frameBuffers = append(rs.frameBuffers, buf[:0])
+	}
+	rs.frameBuffersMu.Unlock()
 }
 
 func (rs *readSeekerEnvImpl) ReadFooter() ([]byte, error) {
@@ -100,6 +129,10 @@ type Reader struct {
 	closed atomic.Bool
 
 	frameCache *readerFrameCache
+}
+
+type frameBufferRecycler interface {
+	RecycleFrameBuffer([]byte)
 }
 
 var (
@@ -272,15 +305,28 @@ func (r *Reader) read(dst []byte, off int64) (int64, int, error) {
 		if err != nil {
 			return 0, 0, fmt.Errorf("failed to read compressed data at: %d, %w", index.CompressedOffset, err)
 		}
+		var recycler frameBufferRecycler
+		if fb, ok := r.env.(frameBufferRecycler); ok {
+			recycler = fb
+		}
 
 		if len(src) != int(index.CompressedSize) {
+			if recycler != nil {
+				recycler.RecycleFrameBuffer(src)
+			}
 			return 0, 0, fmt.Errorf("compressed size does not match index at: %d: expected: %d, index: %+v",
 				off, len(src), index)
 		}
 
 		decompressed, err = r.dec.DecodeAll(src, nil)
 		if err != nil {
+			if recycler != nil {
+				recycler.RecycleFrameBuffer(src)
+			}
 			return 0, 0, fmt.Errorf("failed to decompress data data at: %d, %w", index.CompressedOffset, err)
+		}
+		if recycler != nil {
+			recycler.RecycleFrameBuffer(src)
 		}
 
 		if r.table.HasChecksums() {
