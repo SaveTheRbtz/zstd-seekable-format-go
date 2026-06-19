@@ -79,7 +79,7 @@ func main() {
 			fatal("failed to open input", slog.Any("error", err))
 		}
 
-		if term.IsTerminal(int(os.Stdout.Fd())) {
+		if term.IsTerminal(int(os.Stderr.Fd())) {
 			size := int64(-1)
 			stat, err := inputFile.Stat()
 			if err == nil {
