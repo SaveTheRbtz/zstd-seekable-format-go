@@ -131,10 +131,14 @@ zstdseek -f input.dat -o input.dat.zst -t
 ```
 
 Use `-` for stdin or stdout. Verification requires a named output file.
+When `-f` or `-o` is omitted, `zstdseek` uses stdin or stdout respectively.
+To avoid dumping compressed bytes to a terminal, stdout output is rejected when
+stdout is a terminal.
 
 ```sh
 zstdseek -f - -o input.dat.zst < input.dat
 zstdseek -f input.dat -o - > input.dat.zst
+zstdseek < input.dat > input.dat.zst
 ```
 
 The main tuning flags are `-q` for Zstandard compression quality and `-c` for
