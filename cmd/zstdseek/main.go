@@ -81,6 +81,24 @@ func parseChunkSizes(s string) (minSize, avgSize, maxSize int, err error) {
 	}
 }
 
+func resolveInputOutput(inputFlag, outputFlag string, verify, stdoutIsTerminal bool) (inputName, outputName string, err error) {
+	if inputFlag == "" {
+		inputFlag = "-"
+	}
+	if outputFlag == "" {
+		outputFlag = "-"
+	}
+	if outputFlag == "-" {
+		if verify {
+			return "", "", errors.New("verify can't be used with stdout output")
+		}
+		if stdoutIsTerminal {
+			return "", "", errors.New("refusing to write compressed data to terminal; use -o or redirect stdout")
+		}
+	}
+	return inputFlag, outputFlag, nil
+}
+
 func main() {
 	ctx := context.Background()
 	defaultConcurrency := runtime.GOMAXPROCS(0)
@@ -91,8 +109,8 @@ func main() {
 		verifyFlag, verboseFlag             bool
 	)
 
-	flag.StringVar(&inputFlag, "f", "", "input filename")
-	flag.StringVar(&outputFlag, "o", "", "output filename")
+	flag.StringVar(&inputFlag, "f", "", "input filename (default: stdin)")
+	flag.StringVar(&outputFlag, "o", "", "output filename (default: stdout)")
 	flag.StringVar(&chunkingFlag, "c", "128:1024:8192", "avg or min:avg:max chunking block size (in kb)")
 	flag.BoolVar(&verifyFlag, "t", false, "test reading after the write")
 	flag.IntVar(&qualityFlag, "q", 1, "compression quality (lower == faster)")
@@ -109,11 +127,9 @@ func main() {
 	}
 	seekableLogger := logger.WithGroup("seekable")
 
-	if inputFlag == "" || outputFlag == "" {
-		fatal("both input and output files need to be defined")
-	}
-	if verifyFlag && outputFlag == "-" {
-		fatal("verify can't be used with stdout output")
+	inputName, outputName, err := resolveInputOutput(inputFlag, outputFlag, verifyFlag, term.IsTerminal(int(os.Stdout.Fd())))
+	if err != nil {
+		fatal("invalid input/output options", slog.Any("error", err))
 	}
 	concurrency, ok := compressionConcurrency(threadsFlag, defaultConcurrency)
 	if !ok {
@@ -123,8 +139,8 @@ func main() {
 	bar := progressbar.DefaultSilent(0, "")
 
 	inputFile := os.Stdin
-	if inputFlag != "-" {
-		if inputFile, err = os.Open(inputFlag); err != nil {
+	if inputName != "-" {
+		if inputFile, err = os.Open(inputName); err != nil {
 			fatal("failed to open input", slog.Any("error", err))
 		}
 
@@ -163,8 +179,8 @@ func main() {
 	}
 
 	output := os.Stdout
-	if outputFlag != "-" {
-		output, err = os.OpenFile(outputFlag, os.O_TRUNC|os.O_WRONLY|os.O_CREATE, 0o644)
+	if outputName != "-" {
+		output, err = os.OpenFile(outputName, os.O_TRUNC|os.O_WRONLY|os.O_CREATE, 0o644)
 		if err != nil {
 			fatal("failed to open output", slog.Any("error", err))
 		}
@@ -233,7 +249,7 @@ func main() {
 	if verifyFlag {
 		logger.Info("verifying checksum")
 
-		verify, err := os.Open(outputFlag)
+		verify, err := os.Open(outputName)
 		if err != nil {
 			fatal("failed to open file for verification", slog.Any("error", err))
 		}
