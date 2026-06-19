@@ -9,6 +9,7 @@ import (
 	"io"
 	"log/slog"
 	"os"
+	"runtime"
 	"strconv"
 	"strings"
 
@@ -38,12 +39,23 @@ func newLogger(verbose bool) *slog.Logger {
 	return slog.New(slog.NewJSONHandler(os.Stderr, opts))
 }
 
+func compressionConcurrency(threads, defaultConcurrency int) (int, bool) {
+	if threads < 0 {
+		return 0, false
+	}
+	if threads == 0 {
+		return defaultConcurrency, true
+	}
+	return threads, true
+}
+
 func main() {
 	ctx := context.Background()
+	defaultConcurrency := runtime.GOMAXPROCS(0)
 
 	var (
 		inputFlag, chunkingFlag, outputFlag string
-		qualityFlag                         int
+		qualityFlag, threadsFlag            int
 		verifyFlag, verboseFlag             bool
 	)
 
@@ -52,6 +64,7 @@ func main() {
 	flag.StringVar(&chunkingFlag, "c", "128:1024:8192", "min:avg:max chunking block size (in kb)")
 	flag.BoolVar(&verifyFlag, "t", false, "test reading after the write")
 	flag.IntVar(&qualityFlag, "q", 1, "compression quality (lower == faster)")
+	flag.IntVar(&threadsFlag, "threads", defaultConcurrency, "number of concurrent compression workers (0 = runtime CPU count)")
 	flag.BoolVar(&verboseFlag, "v", false, "be verbose")
 
 	flag.Parse()
@@ -69,6 +82,10 @@ func main() {
 	}
 	if verifyFlag && outputFlag == "-" {
 		fatal("verify can't be used with stdout output")
+	}
+	concurrency, ok := compressionConcurrency(threadsFlag, defaultConcurrency)
+	if !ok {
+		fatal("compression workers must be non-negative", slog.Int("threads", threadsFlag))
 	}
 
 	bar := progressbar.DefaultSilent(0, "")
@@ -177,9 +194,12 @@ func main() {
 		return bytes.Clone(chunk.Data), nil
 	}
 
-	err = w.WriteMany(ctx, frameSource, seekable.WithWriteCallback(func(entry seekable.FrameOffsetEntry) {
-		_ = bar.Add(int(entry.DecompressedSize))
-	}))
+	err = w.WriteMany(ctx, frameSource,
+		seekable.WithConcurrency(concurrency),
+		seekable.WithWriteCallback(func(entry seekable.FrameOffsetEntry) {
+			_ = bar.Add(int(entry.DecompressedSize))
+		}),
+	)
 	if err != nil {
 		fatal("failed to write data", slog.Any("error", err))
 	}
