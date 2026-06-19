@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/sha512"
+	"encoding/hex"
 	"errors"
 	"flag"
 	"io"
@@ -30,12 +31,7 @@ func newLogger(verbose bool) *slog.Logger {
 	if verbose {
 		level = slog.LevelDebug
 	}
-
-	opts := &slog.HandlerOptions{Level: level}
-	if verbose {
-		return slog.New(slog.NewTextHandler(os.Stderr, opts))
-	}
-	return slog.New(slog.NewJSONHandler(os.Stderr, opts))
+	return slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: level}))
 }
 
 func main() {
@@ -215,11 +211,14 @@ func main() {
 		}
 		<-origDone
 
-		if !bytes.Equal(actual.Sum(nil), expected.Sum(nil)) {
+		actualSum := actual.Sum(nil)
+		expectedSum := expected.Sum(nil)
+		if !bytes.Equal(actualSum, expectedSum) {
 			fatal("checksum verification failed",
-				slog.Any("actual", actual.Sum(nil)), slog.Any("expected", expected.Sum(nil)))
+				slog.String("actual", hex.EncodeToString(actualSum)),
+				slog.String("expected", hex.EncodeToString(expectedSum)))
 		} else {
-			logger.Info("checksum verification succeeded", slog.Any("actual", actual.Sum(nil)))
+			logger.Info("checksum verification succeeded", slog.String("actual", hex.EncodeToString(actualSum)))
 		}
 	}
 }
