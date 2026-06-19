@@ -110,6 +110,36 @@ func readSequential(src io.Reader) ([]byte, error) {
 }
 ```
 
+## Command Line
+
+Install the `zstdseek` command with:
+
+```sh
+go install github.com/SaveTheRbtz/zstd-seekable-format-go/cmd/zstdseek@latest
+```
+
+Compress a file into a seekable Zstandard stream:
+
+```sh
+zstdseek -f input.dat -o input.dat.zst
+```
+
+Add `-t` to verify the compressed output after writing:
+
+```sh
+zstdseek -f input.dat -o input.dat.zst -t
+```
+
+Use `-` for stdin or stdout. Verification requires a named output file.
+
+```sh
+zstdseek -f - -o input.dat.zst < input.dat
+zstdseek -f input.dat -o - > input.dat.zst
+```
+
+The main tuning flags are `-q` for Zstandard compression quality and `-c` for
+content-defined chunk sizes in `min:avg:max` KiB form.
+
 [format]: https://github.com/facebook/zstd/blob/dev/contrib/seekable_format/zstd_seekable_compression_format.md
 [klauspost-zstd]: https://pkg.go.dev/github.com/klauspost/compress/zstd
 
