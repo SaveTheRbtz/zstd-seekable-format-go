@@ -45,6 +45,42 @@ func compressionConcurrency(threads, defaultConcurrency int) (int, bool) {
 	return threads, true
 }
 
+func parseChunkSizes(s string) (minSize, avgSize, maxSize int, err error) {
+	parse := func(s string) (int, error) {
+		n, err := strconv.Atoi(s)
+		if err != nil {
+			return 0, err
+		}
+		return n, nil
+	}
+
+	chunkParams := strings.Split(s, ":")
+	switch len(chunkParams) {
+	case 1:
+		avg, err := parse(chunkParams[0])
+		if err != nil {
+			return 0, 0, 0, err
+		}
+		return avg / 4 * 1024, avg * 1024, avg * 4 * 1024, nil
+	case 3:
+		min, err := parse(chunkParams[0])
+		if err != nil {
+			return 0, 0, 0, err
+		}
+		avg, err := parse(chunkParams[1])
+		if err != nil {
+			return 0, 0, 0, err
+		}
+		max, err := parse(chunkParams[2])
+		if err != nil {
+			return 0, 0, 0, err
+		}
+		return min * 1024, avg * 1024, max * 1024, nil
+	default:
+		return 0, 0, 0, errors.New("expected N or min:avg:max")
+	}
+}
+
 func main() {
 	ctx := context.Background()
 	defaultConcurrency := runtime.GOMAXPROCS(0)
@@ -57,7 +93,7 @@ func main() {
 
 	flag.StringVar(&inputFlag, "f", "", "input filename")
 	flag.StringVar(&outputFlag, "o", "", "output filename")
-	flag.StringVar(&chunkingFlag, "c", "128:1024:8192", "min:avg:max chunking block size (in kb)")
+	flag.StringVar(&chunkingFlag, "c", "128:1024:8192", "avg or min:avg:max chunking block size (in kb)")
 	flag.BoolVar(&verifyFlag, "t", false, "test reading after the write")
 	flag.IntVar(&qualityFlag, "q", 1, "compression quality (lower == faster)")
 	flag.IntVar(&threadsFlag, "threads", defaultConcurrency, "number of concurrent compression workers (0 = runtime CPU count)")
@@ -135,20 +171,10 @@ func main() {
 		defer output.Close()
 	}
 
-	chunkParams := strings.Split(chunkingFlag, ":")
-	if len(chunkParams) != 3 {
-		fatal("failed parse chunker params. len() != 3", slog.Int("actual", len(chunkParams)))
+	minChunkSize, avgChunkSize, maxChunkSize, err := parseChunkSizes(chunkingFlag)
+	if err != nil {
+		fatal("failed to parse chunker params", slog.String("params", chunkingFlag), slog.Any("error", err))
 	}
-	mustConv := func(s string) int {
-		n, err := strconv.Atoi(s)
-		if err != nil {
-			fatal("failed to parse int", slog.String("string", s), slog.Any("error", err))
-		}
-		return n
-	}
-	minChunkSize := mustConv(chunkParams[0]) * 1024
-	avgChunkSize := mustConv(chunkParams[1]) * 1024
-	maxChunkSize := mustConv(chunkParams[2]) * 1024
 
 	var zstdOpts []zstd.EOption = []zstd.EOption{
 		zstd.WithEncoderLevel(zstd.EncoderLevelFromZstd(qualityFlag)),
