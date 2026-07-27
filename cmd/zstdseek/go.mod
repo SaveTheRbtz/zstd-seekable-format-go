@@ -6,8 +6,8 @@ require (
 	github.com/SaveTheRbtz/fastcdc-go v0.3.0
 	github.com/SaveTheRbtz/zstd-seekable-format-go/pkg v0.10.0
 	github.com/klauspost/compress v1.18.6
-	github.com/schollz/progressbar/v3 v3.19.0
-	golang.org/x/term v0.43.0
+	github.com/schollz/progressbar/v3 v3.19.1
+	golang.org/x/term v0.44.0
 )
 
 require (
@@ -15,5 +15,5 @@ require (
 	github.com/mitchellh/colorstring v0.0.0-20190213212951-d06e56a500db // indirect
 	github.com/rivo/uniseg v0.4.7 // indirect
 	golang.org/x/sync v0.20.0 // indirect
-	golang.org/x/sys v0.44.0 // indirect
+	golang.org/x/sys v0.46.0 // indirect
 )
