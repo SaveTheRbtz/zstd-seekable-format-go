@@ -3,7 +3,7 @@ module github.com/SaveTheRbtz/zstd-seekable-format-go/cmd/zstdseek
 go 1.25.0
 
 require (
-	github.com/SaveTheRbtz/fastcdc-go v0.3.0
+	github.com/SaveTheRbtz/fastcdc-go v0.4.0
 	github.com/SaveTheRbtz/zstd-seekable-format-go/pkg v0.10.0
 	github.com/klauspost/compress v1.19.1
 	github.com/schollz/progressbar/v3 v3.19.1

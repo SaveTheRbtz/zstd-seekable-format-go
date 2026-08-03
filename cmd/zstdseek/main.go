@@ -206,30 +206,31 @@ func main() {
 	}
 	defer w.Close()
 
-	// convert average chunk size to a number of bits
-	logger.Debug("setting chunker params", slog.Int("min", minChunkSize), slog.Int("max", maxChunkSize))
-	chunker, err := fastcdc.NewChunker(
-		input,
-		fastcdc.Options{
-			MinSize:     minChunkSize,
-			AverageSize: avgChunkSize,
-			MaxSize:     maxChunkSize,
-		},
+	logger.Debug("setting chunker params",
+		slog.Int("min", minChunkSize),
+		slog.Int("average", avgChunkSize),
+		slog.Int("max", maxChunkSize),
 	)
+	chunker, err := fastcdc.New(fastcdc.Config{
+		MinSize:     minChunkSize,
+		AverageSize: avgChunkSize,
+		MaxSize:     maxChunkSize,
+	})
 	if err != nil {
 		fatal("failed to create chunker", slog.Any("error", err))
 	}
+	chunkReader := chunker.NewReader(input)
 
 	frameSource := func() ([]byte, error) {
-		chunk, err := chunker.Next()
+		chunk, err := chunkReader.Next()
 		if err != nil {
 			if errors.Is(err, io.EOF) {
 				return nil, nil
 			}
 			return nil, err
 		}
-		// Chunker invalidates the data after calling Next, so we need to clone it
-		return bytes.Clone(chunk.Data), nil
+		// Reader invalidates the data after calling Next, so we need to clone it.
+		return bytes.Clone(chunk), nil
 	}
 
 	err = w.WriteMany(ctx, frameSource,

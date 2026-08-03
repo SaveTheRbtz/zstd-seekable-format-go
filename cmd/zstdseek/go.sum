@@ -1,5 +1,5 @@
-github.com/SaveTheRbtz/fastcdc-go v0.3.0 h1:JdHvLlnijDuisYIwpRDcHZEjbxvCqtEmJ3gf35VJBgA=
-github.com/SaveTheRbtz/fastcdc-go v0.3.0/go.mod h1:2kMKqvBv1h9wCaUfETqsVkSESsCiFhp4YyEHyz7/SfE=
+github.com/SaveTheRbtz/fastcdc-go v0.4.0 h1:T5egtVeOnQgFuU2CymrRkPOu0vgDuEwuAt5YAL/A41o=
+github.com/SaveTheRbtz/fastcdc-go v0.4.0/go.mod h1:kFkPuGmiQa9oGwHIgJV4sKfmVBNNuCCCz47P4J0aXSQ=
 github.com/SaveTheRbtz/zstd-seekable-format-go/pkg v0.10.0 h1:LvK7+C6qgz8BPnmn7xGekf8vTkcqTvyBBHaLYIMxx0g=
 github.com/SaveTheRbtz/zstd-seekable-format-go/pkg v0.10.0/go.mod h1:I28hc9eaiqKCoOB+9Wh/P1IOScfm0xCgyWC6DAo0lmo=
 github.com/cespare/xxhash/v2 v2.3.0 h1:UL815xU9SqsFlibzuggzjXhog7bL6oX9BbNZnL2UFvs=
