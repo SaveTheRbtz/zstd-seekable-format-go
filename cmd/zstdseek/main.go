@@ -89,6 +89,21 @@ func main() {
 	if threadsFlag < 0 {
 		fatal("compression workers must be non-negative", slog.Int("threads", threadsFlag))
 	}
+	levelOK, level := zstd.EncoderLevelFromString(levelFlag)
+	if !levelOK {
+		fatal("invalid compression level", slog.String("level", levelFlag))
+	}
+	if chunkSizeFlag < 1 || chunkSizeFlag > 4096 || chunkSizeFlag&(chunkSizeFlag-1) != 0 {
+		fatal("invalid average chunk size",
+			slog.Int("chunk_size_kib", chunkSizeFlag),
+			slog.String("expected", "power of two from 1 through 4096"))
+	}
+	avgChunkSize := chunkSizeFlag * 1024
+	logger.Debug("setting chunker params", slog.Int("average", avgChunkSize))
+	chunker, err := fastcdc.New(fastcdc.Config{AverageSize: avgChunkSize})
+	if err != nil {
+		fatal("failed to create chunker", slog.Any("error", err))
+	}
 
 	bar := progressbar.DefaultSilent(0, "")
 
@@ -128,10 +143,6 @@ func main() {
 		defer output.Close()
 	}
 
-	levelOK, level := zstd.EncoderLevelFromString(levelFlag)
-	if !levelOK {
-		fatal("invalid compression level", slog.String("level", levelFlag))
-	}
 	enc, err := zstd.NewWriter(nil, zstd.WithEncoderLevel(level))
 	if err != nil {
 		fatal("failed to create zstd encoder", slog.Any("error", err))
@@ -143,14 +154,6 @@ func main() {
 	}
 	defer w.Close()
 
-	avgChunkSize := chunkSizeFlag * 1024
-	logger.Debug("setting chunker params", slog.Int("average", avgChunkSize))
-	chunker, err := fastcdc.New(fastcdc.Config{
-		AverageSize: avgChunkSize,
-	})
-	if err != nil {
-		fatal("failed to create chunker", slog.Any("error", err))
-	}
 	chunkReader := chunker.NewReader(input)
 
 	frameSource := func() ([]byte, error) {
