@@ -21,11 +21,6 @@ import (
 	seekable "github.com/SaveTheRbtz/zstd-seekable-format-go/pkg"
 )
 
-type readCloser struct {
-	io.Reader
-	io.Closer
-}
-
 func newLogger(verbose bool) *slog.Logger {
 	level := slog.LevelInfo
 	if verbose {
@@ -130,24 +125,11 @@ func main() {
 		}
 	}
 
-	var input io.ReadCloser = inputFile
+	var input io.Reader = inputFile
 
 	expected := sha512.New512_256()
-	origDone := make(chan struct{})
 	if verifyFlag {
-		pr, pw := io.Pipe()
-
-		tee := io.TeeReader(inputFile, pw)
-		input = readCloser{tee, pw}
-
-		go func() {
-			defer close(origDone)
-
-			m, err := io.CopyBuffer(expected, pr, make([]byte, 128<<10))
-			if err != nil {
-				fatal("failed to compute expected csum", slog.Int64("processed", m), slog.Any("error", err))
-			}
-		}()
+		input = io.TeeReader(inputFile, expected)
 	}
 
 	output := os.Stdout
@@ -207,7 +189,7 @@ func main() {
 	}
 
 	_ = bar.Finish()
-	input.Close()
+	inputFile.Close()
 	w.Close()
 
 	if verifyFlag {
@@ -235,8 +217,6 @@ func main() {
 		if err != nil {
 			fatal("failed to compute actual csum", slog.Int64("processed", m), slog.Any("error", err))
 		}
-		<-origDone
-
 		actualSum := actual.Sum(nil)
 		expectedSum := expected.Sum(nil)
 		if !bytes.Equal(actualSum, expectedSum) {
