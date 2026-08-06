@@ -124,10 +124,10 @@ Compress a file into a seekable Zstandard stream:
 zstdseek -o input.dat.zst input.dat
 ```
 
-Add `-t` to verify the compressed output after writing:
+Add `-verify` to verify the compressed output after writing:
 
 ```sh
-zstdseek -t -o input.dat.zst input.dat
+zstdseek -verify -o input.dat.zst input.dat
 ```
 
 Use `-` for stdin or stdout. Verification requires a named output file.

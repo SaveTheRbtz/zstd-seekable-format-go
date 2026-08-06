@@ -80,7 +80,7 @@ func main() {
 
 	flag.StringVar(&outputFlag, "o", "", "output filename (default: stdout)")
 	flag.IntVar(&chunkSizeFlag, "chunk-size", 1024, "average chunk size in KiB (power of two, 1-4096)")
-	flag.BoolVar(&verifyFlag, "t", false, "test reading after the write")
+	flag.BoolVar(&verifyFlag, "verify", false, "verify output after writing (requires -o)")
 	flag.StringVar(&levelFlag, "level", "fastest", "compression level: fastest, default, better, or best")
 	flag.IntVar(&threadsFlag, "threads", defaultConcurrency, "number of concurrent compression workers (0 = runtime CPU count)")
 	flag.BoolVar(&verboseFlag, "v", false, "be verbose")
