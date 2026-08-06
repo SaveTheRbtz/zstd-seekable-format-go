@@ -11,7 +11,6 @@ import (
 	"io"
 	"log/slog"
 	"os"
-	"runtime"
 
 	"github.com/SaveTheRbtz/fastcdc-go"
 	"github.com/klauspost/compress/zstd"
@@ -27,16 +26,6 @@ func newLogger(verbose bool) *slog.Logger {
 		level = slog.LevelDebug
 	}
 	return slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: level}))
-}
-
-func compressionConcurrency(threads, defaultConcurrency int) (int, bool) {
-	if threads < 0 {
-		return 0, false
-	}
-	if threads == 0 {
-		return defaultConcurrency, true
-	}
-	return threads, true
 }
 
 func resolveInputOutput(args []string, outputFlag string, verify, stdoutIsTerminal bool) (inputName, outputName string, err error) {
@@ -64,7 +53,6 @@ func resolveInputOutput(args []string, outputFlag string, verify, stdoutIsTermin
 
 func main() {
 	ctx := context.Background()
-	defaultConcurrency := runtime.GOMAXPROCS(0)
 
 	var (
 		outputFlag, levelFlag   string
@@ -77,7 +65,7 @@ func main() {
 	flag.IntVar(&chunkSizeFlag, "chunk-size", 1024, "average chunk size in KiB (power of two, 1-4096)")
 	flag.BoolVar(&verifyFlag, "verify", false, "verify output after writing (requires -o)")
 	flag.StringVar(&levelFlag, "level", "fastest", "compression level: fastest, default, better, or best")
-	flag.IntVar(&threadsFlag, "threads", defaultConcurrency, "number of concurrent compression workers (0 = runtime CPU count)")
+	flag.IntVar(&threadsFlag, "threads", 0, "number of compression workers (0 = automatic)")
 	flag.BoolVar(&verboseFlag, "v", false, "be verbose")
 
 	flag.Usage = func() {
@@ -98,8 +86,7 @@ func main() {
 	if err != nil {
 		fatal("invalid input/output options", slog.Any("error", err))
 	}
-	concurrency, ok := compressionConcurrency(threadsFlag, defaultConcurrency)
-	if !ok {
+	if threadsFlag < 0 {
 		fatal("compression workers must be non-negative", slog.Int("threads", threadsFlag))
 	}
 
@@ -178,12 +165,15 @@ func main() {
 		return bytes.Clone(chunk), nil
 	}
 
-	err = w.WriteMany(ctx, frameSource,
-		seekable.WithConcurrency(concurrency),
+	writeOpts := []seekable.WriteManyOption{
 		seekable.WithWriteCallback(func(entry seekable.FrameOffsetEntry) {
 			_ = bar.Add(int(entry.DecompressedSize))
 		}),
-	)
+	}
+	if threadsFlag > 0 {
+		writeOpts = append(writeOpts, seekable.WithConcurrency(threadsFlag))
+	}
+	err = w.WriteMany(ctx, frameSource, writeOpts...)
 	if err != nil {
 		fatal("failed to write data", slog.Any("error", err))
 	}
