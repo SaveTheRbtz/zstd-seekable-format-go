@@ -142,8 +142,8 @@ zstdseek input.dat > input.dat.zst
 zstdseek < input.dat > input.dat.zst
 ```
 
-The main tuning flags are `-q` for Zstandard compression quality and `-c` for
-content-defined chunk sizes in `min:avg:max` KiB form.
+The main tuning flags are `-q` for Zstandard compression quality and
+`-chunk-size` for the target average content-defined chunk size in KiB.
 
 [format]: https://github.com/facebook/zstd/blob/dev/contrib/seekable_format/zstd_seekable_compression_format.md
 [klauspost-zstd]: https://pkg.go.dev/github.com/klauspost/compress/zstd

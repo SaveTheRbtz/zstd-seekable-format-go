@@ -12,8 +12,6 @@ import (
 	"log/slog"
 	"os"
 	"runtime"
-	"strconv"
-	"strings"
 
 	"github.com/SaveTheRbtz/fastcdc-go"
 	"github.com/klauspost/compress/zstd"
@@ -46,42 +44,6 @@ func compressionConcurrency(threads, defaultConcurrency int) (int, bool) {
 	return threads, true
 }
 
-func parseChunkSizes(s string) (minSize, avgSize, maxSize int, err error) {
-	parse := func(s string) (int, error) {
-		n, err := strconv.Atoi(s)
-		if err != nil {
-			return 0, err
-		}
-		return n, nil
-	}
-
-	chunkParams := strings.Split(s, ":")
-	switch len(chunkParams) {
-	case 1:
-		avg, err := parse(chunkParams[0])
-		if err != nil {
-			return 0, 0, 0, err
-		}
-		return avg / 4 * 1024, avg * 1024, avg * 4 * 1024, nil
-	case 3:
-		min, err := parse(chunkParams[0])
-		if err != nil {
-			return 0, 0, 0, err
-		}
-		avg, err := parse(chunkParams[1])
-		if err != nil {
-			return 0, 0, 0, err
-		}
-		max, err := parse(chunkParams[2])
-		if err != nil {
-			return 0, 0, 0, err
-		}
-		return min * 1024, avg * 1024, max * 1024, nil
-	default:
-		return 0, 0, 0, errors.New("expected N or min:avg:max")
-	}
-}
-
 func resolveInputOutput(args []string, outputFlag string, verify, stdoutIsTerminal bool) (inputName, outputName string, err error) {
 	switch len(args) {
 	case 0:
@@ -110,13 +72,14 @@ func main() {
 	defaultConcurrency := runtime.GOMAXPROCS(0)
 
 	var (
-		chunkingFlag, outputFlag string
+		outputFlag               string
+		chunkSizeFlag            int
 		qualityFlag, threadsFlag int
 		verifyFlag, verboseFlag  bool
 	)
 
 	flag.StringVar(&outputFlag, "o", "", "output filename (default: stdout)")
-	flag.StringVar(&chunkingFlag, "c", "128:1024:8192", "avg or min:avg:max chunking block size (in kb)")
+	flag.IntVar(&chunkSizeFlag, "chunk-size", 1024, "average chunk size in KiB (power of two, 1-4096)")
 	flag.BoolVar(&verifyFlag, "t", false, "test reading after the write")
 	flag.IntVar(&qualityFlag, "q", 1, "compression quality (lower == faster)")
 	flag.IntVar(&threadsFlag, "threads", defaultConcurrency, "number of concurrent compression workers (0 = runtime CPU count)")
@@ -196,11 +159,6 @@ func main() {
 		defer output.Close()
 	}
 
-	minChunkSize, avgChunkSize, maxChunkSize, err := parseChunkSizes(chunkingFlag)
-	if err != nil {
-		fatal("failed to parse chunker params", slog.String("params", chunkingFlag), slog.Any("error", err))
-	}
-
 	var zstdOpts []zstd.EOption = []zstd.EOption{
 		zstd.WithEncoderLevel(zstd.EncoderLevelFromZstd(qualityFlag)),
 	}
@@ -215,15 +173,10 @@ func main() {
 	}
 	defer w.Close()
 
-	logger.Debug("setting chunker params",
-		slog.Int("min", minChunkSize),
-		slog.Int("average", avgChunkSize),
-		slog.Int("max", maxChunkSize),
-	)
+	avgChunkSize := chunkSizeFlag * 1024
+	logger.Debug("setting chunker params", slog.Int("average", avgChunkSize))
 	chunker, err := fastcdc.New(fastcdc.Config{
-		MinSize:     minChunkSize,
 		AverageSize: avgChunkSize,
-		MaxSize:     maxChunkSize,
 	})
 	if err != nil {
 		fatal("failed to create chunker", slog.Any("error", err))
