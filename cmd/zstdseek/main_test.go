@@ -2,47 +2,6 @@ package main
 
 import "testing"
 
-func TestCompressionConcurrency(t *testing.T) {
-	tests := []struct {
-		name               string
-		threads            int
-		defaultConcurrency int
-		want               int
-		wantOK             bool
-	}{
-		{
-			name:               "default",
-			threads:            0,
-			defaultConcurrency: 8,
-			want:               8,
-			wantOK:             true,
-		},
-		{
-			name:               "explicit",
-			threads:            2,
-			defaultConcurrency: 8,
-			want:               2,
-			wantOK:             true,
-		},
-		{
-			name:               "negative",
-			threads:            -1,
-			defaultConcurrency: 8,
-			wantOK:             false,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got, ok := compressionConcurrency(tt.threads, tt.defaultConcurrency)
-			if got != tt.want || ok != tt.wantOK {
-				t.Fatalf("compressionConcurrency(%d, %d) = (%d, %t), want (%d, %t)",
-					tt.threads, tt.defaultConcurrency, got, ok, tt.want, tt.wantOK)
-			}
-		})
-	}
-}
-
 func TestParseChunkSizes(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -113,6 +72,7 @@ func TestParseChunkSizes(t *testing.T) {
 func TestResolveInputOutput(t *testing.T) {
 	tests := []struct {
 		name             string
+		args             []string
 		inputFlag        string
 		outputFlag       string
 		verify           bool
@@ -139,11 +99,24 @@ func TestResolveInputOutput(t *testing.T) {
 			wantOutput:       "out.zst",
 		},
 		{
-			name:       "preserves explicit input and output",
+			name:       "accepts positional input",
+			args:       []string{"in.dat"},
+			outputFlag: "out.zst",
+			wantInput:  "in.dat",
+			wantOutput: "out.zst",
+		},
+		{
+			name:       "accepts input flag",
 			inputFlag:  "in.dat",
 			outputFlag: "out.zst",
 			wantInput:  "in.dat",
 			wantOutput: "out.zst",
+		},
+		{
+			name:      "rejects input flag with positional input",
+			args:      []string{"positional.dat"},
+			inputFlag: "flag.dat",
+			wantErr:   true,
 		},
 		{
 			name:       "verify requires file output",
@@ -153,15 +126,21 @@ func TestResolveInputOutput(t *testing.T) {
 		},
 		{
 			name:             "refuses explicit terminal stdout",
+			args:             []string{"-"},
 			outputFlag:       "-",
 			stdoutIsTerminal: true,
 			wantErr:          true,
+		},
+		{
+			name:    "rejects multiple inputs",
+			args:    []string{"one.dat", "two.dat"},
+			wantErr: true,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			gotInput, gotOutput, err := resolveInputOutput(tt.inputFlag, tt.outputFlag, tt.verify, tt.stdoutIsTerminal)
+			gotInput, gotOutput, err := resolveInputOutput(tt.args, tt.inputFlag, tt.outputFlag, tt.verify, tt.stdoutIsTerminal)
 			if tt.wantErr {
 				if err == nil {
 					t.Fatal("resolveInputOutput returned nil error")

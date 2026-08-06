@@ -131,18 +131,20 @@ zstdseek -f input.dat -o input.dat.zst -t
 ```
 
 Use `-` for stdin or stdout. Verification requires a named output file.
-When `-f` or `-o` is omitted, `zstdseek` uses stdin or stdout respectively.
+Input may also be supplied as one positional argument. With neither `-f` nor a
+positional input, `zstdseek` reads stdin. Without `-o`, it writes stdout.
 To avoid dumping compressed bytes to a terminal, stdout output is rejected when
 stdout is a terminal.
 
 ```sh
 zstdseek -f - -o input.dat.zst < input.dat
 zstdseek -f input.dat -o - > input.dat.zst
+zstdseek input.dat > input.dat.zst
 zstdseek < input.dat > input.dat.zst
 ```
 
 The main tuning flags are `-q` for Zstandard compression quality and `-c` for
-content-defined chunk sizes in `min:avg:max` KiB form.
+the average or `min:avg:max` content-defined chunk size in KiB.
 
 [format]: https://github.com/facebook/zstd/blob/dev/contrib/seekable_format/zstd_seekable_compression_format.md
 [klauspost-zstd]: https://pkg.go.dev/github.com/klauspost/compress/zstd

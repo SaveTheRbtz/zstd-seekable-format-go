@@ -7,10 +7,10 @@ import (
 	"encoding/hex"
 	"errors"
 	"flag"
+	"fmt"
 	"io"
 	"log/slog"
 	"os"
-	"runtime"
 	"strconv"
 	"strings"
 
@@ -22,27 +22,12 @@ import (
 	seekable "github.com/SaveTheRbtz/zstd-seekable-format-go/pkg"
 )
 
-type readCloser struct {
-	io.Reader
-	io.Closer
-}
-
 func newLogger(verbose bool) *slog.Logger {
 	level := slog.LevelInfo
 	if verbose {
 		level = slog.LevelDebug
 	}
 	return slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: level}))
-}
-
-func compressionConcurrency(threads, defaultConcurrency int) (int, bool) {
-	if threads < 0 {
-		return 0, false
-	}
-	if threads == 0 {
-		return defaultConcurrency, true
-	}
-	return threads, true
 }
 
 func parseChunkSizes(s string) (minSize, avgSize, maxSize int, err error) {
@@ -81,9 +66,20 @@ func parseChunkSizes(s string) (minSize, avgSize, maxSize int, err error) {
 	}
 }
 
-func resolveInputOutput(inputFlag, outputFlag string, verify, stdoutIsTerminal bool) (inputName, outputName string, err error) {
-	if inputFlag == "" {
-		inputFlag = "-"
+func resolveInputOutput(args []string, inputFlag, outputFlag string, verify, stdoutIsTerminal bool) (inputName, outputName string, err error) {
+	switch len(args) {
+	case 0:
+		inputName = inputFlag
+	case 1:
+		if inputFlag != "" {
+			return "", "", errors.New("-f can't be combined with a positional input")
+		}
+		inputName = args[0]
+	default:
+		return "", "", errors.New("expected at most one input file")
+	}
+	if inputName == "" {
+		inputName = "-"
 	}
 	if outputFlag == "" {
 		outputFlag = "-"
@@ -96,27 +92,31 @@ func resolveInputOutput(inputFlag, outputFlag string, verify, stdoutIsTerminal b
 			return "", "", errors.New("refusing to write compressed data to terminal; use -o or redirect stdout")
 		}
 	}
-	return inputFlag, outputFlag, nil
+	return inputName, outputFlag, nil
 }
 
 func main() {
 	ctx := context.Background()
-	defaultConcurrency := runtime.GOMAXPROCS(0)
 
 	var (
-		inputFlag, chunkingFlag, outputFlag string
-		qualityFlag, threadsFlag            int
+		inputFlag, outputFlag, chunkingFlag string
+		qualityFlag                         int
+		threadsFlag                         int
 		verifyFlag, verboseFlag             bool
 	)
 
-	flag.StringVar(&inputFlag, "f", "", "input filename (default: stdin)")
+	flag.StringVar(&inputFlag, "f", "", "input filename (default: stdin; alternatively use positional input)")
 	flag.StringVar(&outputFlag, "o", "", "output filename (default: stdout)")
-	flag.StringVar(&chunkingFlag, "c", "128:1024:8192", "avg or min:avg:max chunking block size (in kb)")
-	flag.BoolVar(&verifyFlag, "t", false, "test reading after the write")
-	flag.IntVar(&qualityFlag, "q", 1, "compression quality (lower == faster)")
-	flag.IntVar(&threadsFlag, "threads", defaultConcurrency, "number of concurrent compression workers (0 = runtime CPU count)")
+	flag.StringVar(&chunkingFlag, "c", "1024", "average or min:avg:max chunk size in KiB")
+	flag.BoolVar(&verifyFlag, "t", false, "test reading after the write (requires -o)")
+	flag.IntVar(&qualityFlag, "q", 1, "Zstandard level (<3 fastest, 3-5 default, 6-9 better, >=10 best)")
+	flag.IntVar(&threadsFlag, "threads", 0, "number of compression workers (0 = automatic)")
 	flag.BoolVar(&verboseFlag, "v", false, "be verbose")
 
+	flag.Usage = func() {
+		_, _ = fmt.Fprintf(flag.CommandLine.Output(), "Usage: %s [options] [input]\n\nCompress input (or stdin) to a seekable Zstandard stream.\n\nOptions:\n", os.Args[0])
+		flag.PrintDefaults()
+	}
 	flag.Parse()
 
 	var err error
@@ -127,13 +127,29 @@ func main() {
 	}
 	seekableLogger := logger.WithGroup("seekable")
 
-	inputName, outputName, err := resolveInputOutput(inputFlag, outputFlag, verifyFlag, term.IsTerminal(int(os.Stdout.Fd())))
+	inputName, outputName, err := resolveInputOutput(flag.Args(), inputFlag, outputFlag, verifyFlag, term.IsTerminal(int(os.Stdout.Fd())))
 	if err != nil {
 		fatal("invalid input/output options", slog.Any("error", err))
 	}
-	concurrency, ok := compressionConcurrency(threadsFlag, defaultConcurrency)
-	if !ok {
+	if threadsFlag < 0 {
 		fatal("compression workers must be non-negative", slog.Int("threads", threadsFlag))
+	}
+	minChunkSize, avgChunkSize, maxChunkSize, err := parseChunkSizes(chunkingFlag)
+	if err != nil {
+		fatal("failed to parse chunker params", slog.String("params", chunkingFlag), slog.Any("error", err))
+	}
+	logger.Debug("setting chunker params",
+		slog.Int("min", minChunkSize),
+		slog.Int("average", avgChunkSize),
+		slog.Int("max", maxChunkSize),
+	)
+	chunker, err := fastcdc.New(fastcdc.Config{
+		MinSize:     minChunkSize,
+		AverageSize: avgChunkSize,
+		MaxSize:     maxChunkSize,
+	})
+	if err != nil {
+		fatal("failed to create chunker", slog.Any("error", err))
 	}
 
 	bar := progressbar.DefaultSilent(0, "")
@@ -158,24 +174,11 @@ func main() {
 		}
 	}
 
-	var input io.ReadCloser = inputFile
+	var input io.Reader = inputFile
 
 	expected := sha512.New512_256()
-	origDone := make(chan struct{})
 	if verifyFlag {
-		pr, pw := io.Pipe()
-
-		tee := io.TeeReader(inputFile, pw)
-		input = readCloser{tee, pw}
-
-		go func() {
-			defer close(origDone)
-
-			m, err := io.CopyBuffer(expected, pr, make([]byte, 128<<10))
-			if err != nil {
-				fatal("failed to compute expected csum", slog.Int64("processed", m), slog.Any("error", err))
-			}
-		}()
+		input = io.TeeReader(inputFile, expected)
 	}
 
 	output := os.Stdout
@@ -184,18 +187,9 @@ func main() {
 		if err != nil {
 			fatal("failed to open output", slog.Any("error", err))
 		}
-		defer output.Close()
 	}
 
-	minChunkSize, avgChunkSize, maxChunkSize, err := parseChunkSizes(chunkingFlag)
-	if err != nil {
-		fatal("failed to parse chunker params", slog.String("params", chunkingFlag), slog.Any("error", err))
-	}
-
-	var zstdOpts []zstd.EOption = []zstd.EOption{
-		zstd.WithEncoderLevel(zstd.EncoderLevelFromZstd(qualityFlag)),
-	}
-	enc, err := zstd.NewWriter(nil, zstdOpts...)
+	enc, err := zstd.NewWriter(nil, zstd.WithEncoderLevel(zstd.EncoderLevelFromZstd(qualityFlag)))
 	if err != nil {
 		fatal("failed to create zstd encoder", slog.Any("error", err))
 	}
@@ -204,21 +198,7 @@ func main() {
 	if err != nil {
 		fatal("failed to create compressed writer", slog.Any("error", err))
 	}
-	defer w.Close()
 
-	logger.Debug("setting chunker params",
-		slog.Int("min", minChunkSize),
-		slog.Int("average", avgChunkSize),
-		slog.Int("max", maxChunkSize),
-	)
-	chunker, err := fastcdc.New(fastcdc.Config{
-		MinSize:     minChunkSize,
-		AverageSize: avgChunkSize,
-		MaxSize:     maxChunkSize,
-	})
-	if err != nil {
-		fatal("failed to create chunker", slog.Any("error", err))
-	}
 	chunkReader := chunker.NewReader(input)
 
 	frameSource := func() ([]byte, error) {
@@ -233,19 +213,36 @@ func main() {
 		return bytes.Clone(chunk), nil
 	}
 
-	err = w.WriteMany(ctx, frameSource,
-		seekable.WithConcurrency(concurrency),
+	writeOpts := []seekable.WriteManyOption{
 		seekable.WithWriteCallback(func(entry seekable.FrameOffsetEntry) {
 			_ = bar.Add(int(entry.DecompressedSize))
 		}),
-	)
+	}
+	if threadsFlag > 0 {
+		writeOpts = append(writeOpts, seekable.WithConcurrency(threadsFlag))
+	}
+	err = w.WriteMany(ctx, frameSource, writeOpts...)
 	if err != nil {
 		fatal("failed to write data", slog.Any("error", err))
 	}
 
 	_ = bar.Finish()
-	input.Close()
-	w.Close()
+	if err := w.Close(); err != nil {
+		fatal("failed to finalize compressed output", slog.Any("error", err))
+	}
+	if err := enc.Close(); err != nil {
+		fatal("failed to close zstd encoder", slog.Any("error", err))
+	}
+	if outputName != "-" {
+		if err := output.Close(); err != nil {
+			fatal("failed to close output", slog.Any("error", err))
+		}
+	}
+	if inputName != "-" {
+		if err := inputFile.Close(); err != nil {
+			fatal("failed to close input", slog.Any("error", err))
+		}
+	}
 
 	if verifyFlag {
 		logger.Info("verifying checksum")
@@ -272,8 +269,6 @@ func main() {
 		if err != nil {
 			fatal("failed to compute actual csum", slog.Int64("processed", m), slog.Any("error", err))
 		}
-		<-origDone
-
 		actualSum := actual.Sum(nil)
 		expectedSum := expected.Sum(nil)
 		if !bytes.Equal(actualSum, expectedSum) {
