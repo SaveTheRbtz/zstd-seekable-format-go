@@ -72,16 +72,16 @@ func main() {
 	defaultConcurrency := runtime.GOMAXPROCS(0)
 
 	var (
-		outputFlag               string
-		chunkSizeFlag            int
-		qualityFlag, threadsFlag int
-		verifyFlag, verboseFlag  bool
+		outputFlag, levelFlag   string
+		chunkSizeFlag           int
+		threadsFlag             int
+		verifyFlag, verboseFlag bool
 	)
 
 	flag.StringVar(&outputFlag, "o", "", "output filename (default: stdout)")
 	flag.IntVar(&chunkSizeFlag, "chunk-size", 1024, "average chunk size in KiB (power of two, 1-4096)")
 	flag.BoolVar(&verifyFlag, "t", false, "test reading after the write")
-	flag.IntVar(&qualityFlag, "q", 1, "compression quality (lower == faster)")
+	flag.StringVar(&levelFlag, "level", "fastest", "compression level: fastest, default, better, or best")
 	flag.IntVar(&threadsFlag, "threads", defaultConcurrency, "number of concurrent compression workers (0 = runtime CPU count)")
 	flag.BoolVar(&verboseFlag, "v", false, "be verbose")
 
@@ -159,10 +159,11 @@ func main() {
 		defer output.Close()
 	}
 
-	var zstdOpts []zstd.EOption = []zstd.EOption{
-		zstd.WithEncoderLevel(zstd.EncoderLevelFromZstd(qualityFlag)),
+	levelOK, level := zstd.EncoderLevelFromString(levelFlag)
+	if !levelOK {
+		fatal("invalid compression level", slog.String("level", levelFlag))
 	}
-	enc, err := zstd.NewWriter(nil, zstdOpts...)
+	enc, err := zstd.NewWriter(nil, zstd.WithEncoderLevel(level))
 	if err != nil {
 		fatal("failed to create zstd encoder", slog.Any("error", err))
 	}
