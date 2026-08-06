@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"flag"
+	"fmt"
 	"io"
 	"log/slog"
 	"os"
@@ -81,9 +82,14 @@ func parseChunkSizes(s string) (minSize, avgSize, maxSize int, err error) {
 	}
 }
 
-func resolveInputOutput(inputFlag, outputFlag string, verify, stdoutIsTerminal bool) (inputName, outputName string, err error) {
-	if inputFlag == "" {
-		inputFlag = "-"
+func resolveInputOutput(args []string, outputFlag string, verify, stdoutIsTerminal bool) (inputName, outputName string, err error) {
+	switch len(args) {
+	case 0:
+		inputName = "-"
+	case 1:
+		inputName = args[0]
+	default:
+		return "", "", errors.New("expected at most one input file")
 	}
 	if outputFlag == "" {
 		outputFlag = "-"
@@ -96,7 +102,7 @@ func resolveInputOutput(inputFlag, outputFlag string, verify, stdoutIsTerminal b
 			return "", "", errors.New("refusing to write compressed data to terminal; use -o or redirect stdout")
 		}
 	}
-	return inputFlag, outputFlag, nil
+	return inputName, outputFlag, nil
 }
 
 func main() {
@@ -104,12 +110,11 @@ func main() {
 	defaultConcurrency := runtime.GOMAXPROCS(0)
 
 	var (
-		inputFlag, chunkingFlag, outputFlag string
-		qualityFlag, threadsFlag            int
-		verifyFlag, verboseFlag             bool
+		chunkingFlag, outputFlag string
+		qualityFlag, threadsFlag int
+		verifyFlag, verboseFlag  bool
 	)
 
-	flag.StringVar(&inputFlag, "f", "", "input filename (default: stdin)")
 	flag.StringVar(&outputFlag, "o", "", "output filename (default: stdout)")
 	flag.StringVar(&chunkingFlag, "c", "128:1024:8192", "avg or min:avg:max chunking block size (in kb)")
 	flag.BoolVar(&verifyFlag, "t", false, "test reading after the write")
@@ -117,6 +122,10 @@ func main() {
 	flag.IntVar(&threadsFlag, "threads", defaultConcurrency, "number of concurrent compression workers (0 = runtime CPU count)")
 	flag.BoolVar(&verboseFlag, "v", false, "be verbose")
 
+	flag.Usage = func() {
+		_, _ = fmt.Fprintf(flag.CommandLine.Output(), "Usage: %s [options] [input]\n\nCompress input (or stdin) to a seekable Zstandard stream.\n\nOptions:\n", os.Args[0])
+		flag.PrintDefaults()
+	}
 	flag.Parse()
 
 	var err error
@@ -127,7 +136,7 @@ func main() {
 	}
 	seekableLogger := logger.WithGroup("seekable")
 
-	inputName, outputName, err := resolveInputOutput(inputFlag, outputFlag, verifyFlag, term.IsTerminal(int(os.Stdout.Fd())))
+	inputName, outputName, err := resolveInputOutput(flag.Args(), outputFlag, verifyFlag, term.IsTerminal(int(os.Stdout.Fd())))
 	if err != nil {
 		fatal("invalid input/output options", slog.Any("error", err))
 	}

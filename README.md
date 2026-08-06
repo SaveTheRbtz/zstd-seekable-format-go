@@ -121,23 +121,24 @@ go install github.com/SaveTheRbtz/zstd-seekable-format-go/cmd/zstdseek@latest
 Compress a file into a seekable Zstandard stream:
 
 ```sh
-zstdseek -f input.dat -o input.dat.zst
+zstdseek -o input.dat.zst input.dat
 ```
 
 Add `-t` to verify the compressed output after writing:
 
 ```sh
-zstdseek -f input.dat -o input.dat.zst -t
+zstdseek -t -o input.dat.zst input.dat
 ```
 
 Use `-` for stdin or stdout. Verification requires a named output file.
-When `-f` or `-o` is omitted, `zstdseek` uses stdin or stdout respectively.
+When the input argument or `-o` is omitted, `zstdseek` uses stdin or stdout
+respectively.
 To avoid dumping compressed bytes to a terminal, stdout output is rejected when
 stdout is a terminal.
 
 ```sh
-zstdseek -f - -o input.dat.zst < input.dat
-zstdseek -f input.dat -o - > input.dat.zst
+zstdseek -o input.dat.zst - < input.dat
+zstdseek input.dat > input.dat.zst
 zstdseek < input.dat > input.dat.zst
 ```
 

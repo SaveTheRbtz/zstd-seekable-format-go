@@ -113,7 +113,7 @@ func TestParseChunkSizes(t *testing.T) {
 func TestResolveInputOutput(t *testing.T) {
 	tests := []struct {
 		name             string
-		inputFlag        string
+		args             []string
 		outputFlag       string
 		verify           bool
 		stdoutIsTerminal bool
@@ -140,7 +140,7 @@ func TestResolveInputOutput(t *testing.T) {
 		},
 		{
 			name:       "preserves explicit input and output",
-			inputFlag:  "in.dat",
+			args:       []string{"in.dat"},
 			outputFlag: "out.zst",
 			wantInput:  "in.dat",
 			wantOutput: "out.zst",
@@ -153,15 +153,21 @@ func TestResolveInputOutput(t *testing.T) {
 		},
 		{
 			name:             "refuses explicit terminal stdout",
+			args:             []string{"-"},
 			outputFlag:       "-",
 			stdoutIsTerminal: true,
 			wantErr:          true,
+		},
+		{
+			name:    "rejects multiple inputs",
+			args:    []string{"one.dat", "two.dat"},
+			wantErr: true,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			gotInput, gotOutput, err := resolveInputOutput(tt.inputFlag, tt.outputFlag, tt.verify, tt.stdoutIsTerminal)
+			gotInput, gotOutput, err := resolveInputOutput(tt.args, tt.outputFlag, tt.verify, tt.stdoutIsTerminal)
 			if tt.wantErr {
 				if err == nil {
 					t.Fatal("resolveInputOutput returned nil error")
