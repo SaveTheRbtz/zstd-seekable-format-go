@@ -140,7 +140,6 @@ func main() {
 		if err != nil {
 			fatal("failed to open output", slog.Any("error", err))
 		}
-		defer output.Close()
 	}
 
 	enc, err := zstd.NewWriter(nil, zstd.WithEncoderLevel(level))
@@ -152,7 +151,6 @@ func main() {
 	if err != nil {
 		fatal("failed to create compressed writer", slog.Any("error", err))
 	}
-	defer w.Close()
 
 	chunkReader := chunker.NewReader(input)
 
@@ -182,8 +180,22 @@ func main() {
 	}
 
 	_ = bar.Finish()
-	inputFile.Close()
-	w.Close()
+	if err := w.Close(); err != nil {
+		fatal("failed to finalize compressed output", slog.Any("error", err))
+	}
+	if err := enc.Close(); err != nil {
+		fatal("failed to close zstd encoder", slog.Any("error", err))
+	}
+	if outputName != "-" {
+		if err := output.Close(); err != nil {
+			fatal("failed to close output", slog.Any("error", err))
+		}
+	}
+	if inputName != "-" {
+		if err := inputFile.Close(); err != nil {
+			fatal("failed to close input", slog.Any("error", err))
+		}
+	}
 
 	if verifyFlag {
 		logger.Info("verifying checksum")
