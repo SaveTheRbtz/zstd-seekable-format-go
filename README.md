@@ -121,30 +121,30 @@ go install github.com/SaveTheRbtz/zstd-seekable-format-go/cmd/zstdseek@latest
 Compress a file into a seekable Zstandard stream:
 
 ```sh
-zstdseek -o input.dat.zst input.dat
+zstdseek -f input.dat -o input.dat.zst
 ```
 
-Add `-verify` to verify the compressed output after writing:
+Add `-t` to verify the compressed output after writing:
 
 ```sh
-zstdseek -verify -o input.dat.zst input.dat
+zstdseek -f input.dat -o input.dat.zst -t
 ```
 
 Use `-` for stdin or stdout. Verification requires a named output file.
-When the input argument or `-o` is omitted, `zstdseek` uses stdin or stdout
-respectively.
+Input may also be supplied as one positional argument. With neither `-f` nor a
+positional input, `zstdseek` reads stdin. Without `-o`, it writes stdout.
 To avoid dumping compressed bytes to a terminal, stdout output is rejected when
 stdout is a terminal.
 
 ```sh
-zstdseek -o input.dat.zst - < input.dat
+zstdseek -f - -o input.dat.zst < input.dat
+zstdseek -f input.dat -o - > input.dat.zst
 zstdseek input.dat > input.dat.zst
 zstdseek < input.dat > input.dat.zst
 ```
 
-The main tuning flags are `-level` for the `fastest`, `default`, `better`, or
-`best` Zstandard compression mode and `-chunk-size` for the target average
-content-defined chunk size in KiB.
+The main tuning flags are `-q` for Zstandard compression quality and `-c` for
+the average or `min:avg:max` content-defined chunk size in KiB.
 
 [format]: https://github.com/facebook/zstd/blob/dev/contrib/seekable_format/zstd_seekable_compression_format.md
 [klauspost-zstd]: https://pkg.go.dev/github.com/klauspost/compress/zstd

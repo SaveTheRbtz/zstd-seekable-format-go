@@ -11,6 +11,8 @@ import (
 	"io"
 	"log/slog"
 	"os"
+	"strconv"
+	"strings"
 
 	"github.com/SaveTheRbtz/fastcdc-go"
 	"github.com/klauspost/compress/zstd"
@@ -28,14 +30,56 @@ func newLogger(verbose bool) *slog.Logger {
 	return slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: level}))
 }
 
-func resolveInputOutput(args []string, outputFlag string, verify, stdoutIsTerminal bool) (inputName, outputName string, err error) {
+func parseChunkSizes(s string) (minSize, avgSize, maxSize int, err error) {
+	parse := func(s string) (int, error) {
+		n, err := strconv.Atoi(s)
+		if err != nil {
+			return 0, err
+		}
+		return n, nil
+	}
+
+	chunkParams := strings.Split(s, ":")
+	switch len(chunkParams) {
+	case 1:
+		avg, err := parse(chunkParams[0])
+		if err != nil {
+			return 0, 0, 0, err
+		}
+		return avg / 4 * 1024, avg * 1024, avg * 4 * 1024, nil
+	case 3:
+		min, err := parse(chunkParams[0])
+		if err != nil {
+			return 0, 0, 0, err
+		}
+		avg, err := parse(chunkParams[1])
+		if err != nil {
+			return 0, 0, 0, err
+		}
+		max, err := parse(chunkParams[2])
+		if err != nil {
+			return 0, 0, 0, err
+		}
+		return min * 1024, avg * 1024, max * 1024, nil
+	default:
+		return 0, 0, 0, errors.New("expected N or min:avg:max")
+	}
+}
+
+func resolveInputOutput(args []string, inputFlag, outputFlag string, verify, stdoutIsTerminal bool) (inputName, outputName string, err error) {
 	switch len(args) {
 	case 0:
-		inputName = "-"
+		inputName = inputFlag
 	case 1:
+		if inputFlag != "" {
+			return "", "", errors.New("-f can't be combined with a positional input")
+		}
 		inputName = args[0]
 	default:
 		return "", "", errors.New("expected at most one input file")
+	}
+	if inputName == "" {
+		inputName = "-"
 	}
 	if outputFlag == "" {
 		outputFlag = "-"
@@ -55,16 +99,17 @@ func main() {
 	ctx := context.Background()
 
 	var (
-		outputFlag, levelFlag   string
-		chunkSizeFlag           int
-		threadsFlag             int
-		verifyFlag, verboseFlag bool
+		inputFlag, outputFlag, chunkingFlag string
+		qualityFlag                         int
+		threadsFlag                         int
+		verifyFlag, verboseFlag             bool
 	)
 
+	flag.StringVar(&inputFlag, "f", "", "input filename (default: stdin; alternatively use positional input)")
 	flag.StringVar(&outputFlag, "o", "", "output filename (default: stdout)")
-	flag.IntVar(&chunkSizeFlag, "chunk-size", 1024, "average chunk size in KiB (power of two, 1-4096)")
-	flag.BoolVar(&verifyFlag, "verify", false, "verify output after writing (requires -o)")
-	flag.StringVar(&levelFlag, "level", "fastest", "compression level: fastest, default, better, or best")
+	flag.StringVar(&chunkingFlag, "c", "1024", "average or min:avg:max chunk size in KiB")
+	flag.BoolVar(&verifyFlag, "t", false, "test reading after the write (requires -o)")
+	flag.IntVar(&qualityFlag, "q", 1, "Zstandard level (<3 fastest, 3-5 default, 6-9 better, >=10 best)")
 	flag.IntVar(&threadsFlag, "threads", 0, "number of compression workers (0 = automatic)")
 	flag.BoolVar(&verboseFlag, "v", false, "be verbose")
 
@@ -82,25 +127,27 @@ func main() {
 	}
 	seekableLogger := logger.WithGroup("seekable")
 
-	inputName, outputName, err := resolveInputOutput(flag.Args(), outputFlag, verifyFlag, term.IsTerminal(int(os.Stdout.Fd())))
+	inputName, outputName, err := resolveInputOutput(flag.Args(), inputFlag, outputFlag, verifyFlag, term.IsTerminal(int(os.Stdout.Fd())))
 	if err != nil {
 		fatal("invalid input/output options", slog.Any("error", err))
 	}
 	if threadsFlag < 0 {
 		fatal("compression workers must be non-negative", slog.Int("threads", threadsFlag))
 	}
-	levelOK, level := zstd.EncoderLevelFromString(levelFlag)
-	if !levelOK {
-		fatal("invalid compression level", slog.String("level", levelFlag))
+	minChunkSize, avgChunkSize, maxChunkSize, err := parseChunkSizes(chunkingFlag)
+	if err != nil {
+		fatal("failed to parse chunker params", slog.String("params", chunkingFlag), slog.Any("error", err))
 	}
-	if chunkSizeFlag < 1 || chunkSizeFlag > 4096 || chunkSizeFlag&(chunkSizeFlag-1) != 0 {
-		fatal("invalid average chunk size",
-			slog.Int("chunk_size_kib", chunkSizeFlag),
-			slog.String("expected", "power of two from 1 through 4096"))
-	}
-	avgChunkSize := chunkSizeFlag * 1024
-	logger.Debug("setting chunker params", slog.Int("average", avgChunkSize))
-	chunker, err := fastcdc.New(fastcdc.Config{AverageSize: avgChunkSize})
+	logger.Debug("setting chunker params",
+		slog.Int("min", minChunkSize),
+		slog.Int("average", avgChunkSize),
+		slog.Int("max", maxChunkSize),
+	)
+	chunker, err := fastcdc.New(fastcdc.Config{
+		MinSize:     minChunkSize,
+		AverageSize: avgChunkSize,
+		MaxSize:     maxChunkSize,
+	})
 	if err != nil {
 		fatal("failed to create chunker", slog.Any("error", err))
 	}
@@ -142,7 +189,7 @@ func main() {
 		}
 	}
 
-	enc, err := zstd.NewWriter(nil, zstd.WithEncoderLevel(level))
+	enc, err := zstd.NewWriter(nil, zstd.WithEncoderLevel(zstd.EncoderLevelFromZstd(qualityFlag)))
 	if err != nil {
 		fatal("failed to create zstd encoder", slog.Any("error", err))
 	}
