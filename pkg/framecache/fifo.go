@@ -5,8 +5,9 @@ import "container/list"
 // FIFO is a decoded-frame cache using first-in, first-out replacement.
 //
 // Calls to Get do not affect eviction order.
-// The zero value stores no frames. Do not copy a FIFO.
+// The zero value stores no frames.
 type FIFO struct {
+	_      noCopy
 	limits Limits
 	items  map[int64]*list.Element
 	order  list.List
