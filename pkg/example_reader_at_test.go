@@ -28,7 +28,11 @@ func ExampleNewReader_readerAt() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	defer r.Close()
+	defer func() {
+		if err := r.Close(); err != nil {
+			log.Fatal(err)
+		}
+	}()
 
 	p := make([]byte, 5)
 	if _, err := r.ReadAt(p, 6); err != nil {
