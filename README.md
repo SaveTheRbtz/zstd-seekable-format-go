@@ -75,6 +75,16 @@ func readAt(src io.ReadSeeker, off int64, p []byte) error {
 Offsets are decompressed byte offsets. `Reader` implements `io.Reader`,
 `io.ReaderAt`, `io.Seeker`, and `io.Closer`.
 
+For an `io.ReaderAt`, use `io.NewSectionReader` with the compressed stream's
+size in bytes. This works with sources that fetch byte ranges from remote
+storage:
+
+```go
+r, err := seekable.NewReader(
+	io.NewSectionReader(src, 0, compressedSize), dec,
+)
+```
+
 ## Metadata
 
 ```go
