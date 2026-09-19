@@ -51,6 +51,13 @@ func writeSeekable(dst io.Writer, chunks [][]byte) error {
 `Writer.Close` writes the final seek table. Without it, `Reader` and
 `NewSeekTable` cannot find the random-access metadata.
 
+Each non-empty `Write` call creates one frame. With `io.Copy`, frame sizes
+depend on the source: a `bytes.Reader` can write all remaining data in one call.
+`io.CopyBuffer` also skips its buffer when the source implements `io.WriterTo`.
+To cap the decompressed frame size, use `io.ReadFull` to read chunks, then write
+each chunk, including the final short chunk. See the
+[frame size example](pkg/example_frame_sizes_test.go).
+
 ## Read
 
 ```go

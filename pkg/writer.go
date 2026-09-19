@@ -123,9 +123,12 @@ func (s *Writer) appendFrameEntry(entry seekTableEntry) FrameOffsetEntry {
 
 // Write writes a chunk of data as a separate frame into the data stream.
 //
-// Note that Write does not do any coalescing nor splitting of data, so each
-// non-empty write will map to a separate Zstandard frame. Empty writes do not
-// add seek-table entries.
+// Write does not combine or split data. Each non-empty call creates one frame.
+// Empty writes do not add seek-table entries.
+//
+// With io.Copy, frame sizes depend on the source. A bytes.Reader can write all
+// remaining data as one frame. To cap the decompressed frame size, use
+// io.ReadFull to read chunks and write each chunk, including the final short one.
 //
 // If the underlying frame write fails or writes only part of the frame, the
 // writer stops accepting more frames. Close may still be called to write the
