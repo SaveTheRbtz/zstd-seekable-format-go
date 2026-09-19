@@ -5,6 +5,7 @@ import "container/list"
 // LRU is a decoded-frame cache that evicts the least recently used frame.
 //
 // Put and successful Get calls mark frames most recently used.
+// The zero value stores no frames. Do not copy an LRU.
 type LRU struct {
 	limits Limits
 	items  map[int64]*list.Element

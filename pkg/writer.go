@@ -31,6 +31,8 @@ func (w *writerEnvImpl) WriteSeekTable(p []byte) (n int, err error) {
 
 // Writer writes a seekable Zstandard stream.
 //
+// The zero value is closed; call NewWriter to create a writer. Do not copy a Writer.
+//
 // Each non-empty Write call becomes one Zstandard frame in the output stream.
 // Close must be called to write the final seek-table skippable frame; without
 // it, Reader and NewSeekTable cannot find the random-access metadata.

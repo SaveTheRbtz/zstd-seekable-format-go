@@ -4,6 +4,8 @@ import "sort"
 
 // SeekTable is parsed random-access metadata from a Zstandard seek-table skippable frame.
 //
+// The zero value is an empty table. SeekTable values are immutable and safe to copy.
+//
 // Use NewSeekTable to construct a SeekTable from bytes written through
 // WriterEnvironment.WriteSeekTable or returned by Encoder.EndStream. Lookup methods
 // can be used concurrently.

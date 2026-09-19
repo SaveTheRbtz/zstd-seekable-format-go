@@ -81,6 +81,8 @@ func (rs *readSeekerEnvImpl) ReadSkipFrame(skippableFrameOffset int64) ([]byte, 
 // Reader provides sequential and random access to a seekable Zstandard stream
 // and exposes its parsed seek-table metadata.
 //
+// The zero value is not ready for use; call NewReader. Do not copy a Reader.
+//
 // Offsets are expressed in the decompressed stream. Read and Seek use an
 // internal current offset; ReadAt does not.
 //

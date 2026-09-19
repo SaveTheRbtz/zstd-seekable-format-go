@@ -10,6 +10,9 @@ import (
 
 // Encoder is a byte-oriented API that is useful where wrapping io.Writer is not desirable.
 //
+// The zero value is not ready for use; call NewEncoder. Copies of an Encoder
+// share the same stream state.
+//
 // Each non-empty Encode call returns one compressed Zstandard frame and appends
 // one entry to the in-memory seek table. EndStream returns the final seek-table
 // skippable frame, which must be appended after all encoded frames to form a

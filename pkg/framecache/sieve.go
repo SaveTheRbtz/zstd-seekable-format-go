@@ -7,6 +7,7 @@ import "container/list"
 // Hits and updates increment a per-entry counter, capped at 16. During
 // eviction, entries with positive counters are decremented and kept; the first
 // entry with a zero counter is evicted.
+// The zero value stores no frames. Do not copy a Sieve.
 type Sieve struct {
 	limits Limits
 	items  map[int64]*list.Element
