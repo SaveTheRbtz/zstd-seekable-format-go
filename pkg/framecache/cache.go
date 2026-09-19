@@ -19,6 +19,9 @@ type Cache interface {
 }
 
 // Limits configures cache capacity.
+//
+// MaxFrames must be positive to store frames. For example,
+// Limits{MaxBytes: 1 << 20} disables storage because MaxFrames is zero.
 type Limits struct {
 	// MaxFrames caps the number of stored frames. Values <= 0 disable storage.
 	MaxFrames int

@@ -31,10 +31,15 @@ func (w *writerEnvImpl) WriteSeekTable(p []byte) (n int, err error) {
 
 // Writer writes a seekable Zstandard stream.
 //
+// The zero value is closed; call NewWriter to create a writer. Do not copy a Writer.
+//
 // Each non-empty Write call becomes one Zstandard frame in the output stream.
 // Close must be called to write the final seek-table skippable frame; without
 // it, Reader and NewSeekTable cannot find the random-access metadata.
 // Close is idempotent. Write and WriteMany return ErrClosed after Close.
+//
+// Writer methods support concurrent calls. Write, WriteMany, and Close run
+// one at a time. Concurrent calls have no defined order.
 type Writer struct {
 	enc          ZSTDEncoder
 	frameEntries []seekTableEntry
@@ -293,6 +298,8 @@ func (s *Writer) writeManyConsumer(ctx context.Context, callback func(FrameOffse
 // order returned by frameSource. Close must still be called after a successful
 // WriteMany call to write the final seek table. Frame write failures have the
 // same no-more-frames behavior as Writer.Write.
+//
+// frameSource and the write callback must not call methods on this Writer.
 func (s *Writer) WriteMany(ctx context.Context, frameSource FrameSource, options ...WriteManyOption) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
