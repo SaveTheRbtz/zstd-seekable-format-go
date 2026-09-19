@@ -18,6 +18,10 @@ import (
 // skippable frame, which must be appended after all encoded frames to form a
 // complete seekable stream. EndStream finalizes the encoder. After EndStream,
 // Encode and EndStream return ErrClosed.
+//
+// Encoder methods support concurrent calls. Concurrent Encode calls have no
+// defined order. To keep output in seek-table order, serialize Encode calls and
+// writes of their results.
 type Encoder struct {
 	writer *Writer
 }
