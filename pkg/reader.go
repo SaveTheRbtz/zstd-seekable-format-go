@@ -129,6 +129,9 @@ type ZSTDDecoder interface {
 // NewReader uses rs directly and rs also implements io.ReaderAt, frame reads do
 // not move rs's current offset.
 //
+// To read from an [io.ReaderAt], pass an [io.SectionReader] created with
+// [io.NewSectionReader] and the compressed stream's size in bytes.
+//
 // The decoder must be non-nil. NewReader reads and validates the seek table
 // during construction. Reader caches one decoded frame by default; use
 // WithReaderFrameCache to change or disable caching.
