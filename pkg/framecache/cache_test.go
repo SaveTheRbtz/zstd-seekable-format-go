@@ -2,7 +2,6 @@ package framecache
 
 import (
 	"bytes"
-	"container/list"
 	"testing"
 )
 
@@ -205,7 +204,7 @@ func TestSieveReplacementPreservesPositionAndHand(t *testing.T) {
 	if c.hand != hand {
 		t.Fatal("replacement moved hand")
 	}
-	entry := elem.Value.(*sieveEntry)
+	entry := elem
 	if entry.count != 1 {
 		t.Fatalf("replacement counter = %d, want 1", entry.count)
 	}
@@ -259,86 +258,104 @@ func assertCacheInvariants(t *testing.T, c Cache, context string) {
 		t.Fatalf(format, args...)
 	}
 
-	var (
-		order  *list.List
-		items  map[int64]*list.Element
-		bytes  uint64
-		hand   *list.Element
-		limits Limits
-	)
+	var count int
+	var sum uint64
+	var bytes uint64
+	var limits Limits
 
 	switch v := c.(type) {
 	case *FIFO:
-		order = &v.order
-		items = v.items
+		count, sum = walkCacheEntries(fail, v.items, &v.order, nil, fifoEntryInfo)
 		bytes = v.bytes
 		limits = v.limits
 	case *LRU:
-		order = &v.order
-		items = v.items
+		count, sum = walkCacheEntries(fail, v.items, &v.order, nil, lruEntryInfo)
 		bytes = v.bytes
 		limits = v.limits
 	case *Sieve:
-		order = &v.order
-		items = v.items
+		count, sum = walkCacheEntries(fail, v.items, &v.order, v.hand, sieveEntryInfo)
 		bytes = v.bytes
-		hand = v.hand
 		limits = v.limits
 	default:
 		fail("unsupported cache type %T", c)
 	}
 
-	if len(items) != order.Len() {
-		fail("map length = %d, list length = %d", len(items), order.Len())
+	if limits.MaxFrames <= 0 && count != 0 {
+		fail("disabled cache holds %d frames", count)
 	}
-	if limits.MaxFrames <= 0 && order.Len() != 0 {
-		fail("disabled cache holds %d frames", order.Len())
-	}
-	if limits.MaxFrames > 0 && order.Len() > limits.MaxFrames {
-		fail("cache holds %d frames, limit is %d", order.Len(), limits.MaxFrames)
+	if limits.MaxFrames > 0 && count > limits.MaxFrames {
+		fail("cache holds %d frames, limit is %d", count, limits.MaxFrames)
 	}
 	if limits.MaxBytes > 0 && bytes > limits.MaxBytes {
 		fail("cache holds %d bytes, limit is %d", bytes, limits.MaxBytes)
-	}
-	if order.Len() == 0 && hand != nil {
-		fail("empty Sieve cache has non-nil hand")
-	}
-
-	var sum uint64
-	seen := make(map[int64]bool, order.Len())
-	for elem := order.Front(); elem != nil; elem = elem.Next() {
-		frameID, data := cacheElement(t, elem, context)
-		if seen[frameID] {
-			fail("duplicate frame ID %d", frameID)
-		}
-		seen[frameID] = true
-		if items[frameID] != elem {
-			fail("map element mismatch for frame ID %d", frameID)
-		}
-		sum += uint64(len(data))
 	}
 	if sum != bytes {
 		fail("byte accounting = %d, want %d", bytes, sum)
 	}
 }
 
-func cacheElement(t *testing.T, elem *list.Element, context string) (int64, []byte) {
-	t.Helper()
+type cacheEntryInfo struct {
+	frameID int64
+	data    []byte
+}
 
-	switch entry := elem.Value.(type) {
-	case *fifoEntry:
-		return entry.frameID, entry.data
-	case *lruEntry:
-		return entry.frameID, entry.data
-	case *sieveEntry:
-		return entry.frameID, entry.data
-	default:
-		if context != "" {
-			t.Fatalf("list entry has type %T (%s)", elem.Value, context)
+func fifoEntryInfo(entry *fifoEntry) cacheEntryInfo {
+	return cacheEntryInfo{frameID: entry.frameID, data: entry.data}
+}
+
+func lruEntryInfo(entry *lruEntry) cacheEntryInfo {
+	return cacheEntryInfo{frameID: entry.frameID, data: entry.data}
+}
+
+func sieveEntryInfo(entry *sieveEntry) cacheEntryInfo {
+	return cacheEntryInfo{frameID: entry.frameID, data: entry.data}
+}
+
+func walkCacheEntries[T intrusiveListEntry[T]](
+	fail func(string, ...any),
+	items map[int64]T,
+	order *intrusiveList[T],
+	hand T,
+	info func(T) cacheEntryInfo,
+) (int, uint64) {
+	seen := make(map[int64]bool, len(items))
+	var zero T
+	handSeen := hand == zero
+	var count int
+	var sum uint64
+	var prev T
+	for entry := order.Front(); entry != zero; entry = entry.links().next {
+		entryInfo := info(entry)
+		if entry.links().prev != prev {
+			fail("broken prev link for frame ID %d", entryInfo.frameID)
 		}
-		t.Fatalf("list entry has type %T", elem.Value)
-		return 0, nil
+		if seen[entryInfo.frameID] {
+			fail("duplicate frame ID %d", entryInfo.frameID)
+		}
+		seen[entryInfo.frameID] = true
+		if items[entryInfo.frameID] != entry {
+			fail("map element mismatch for frame ID %d", entryInfo.frameID)
+		}
+		if entry == hand {
+			handSeen = true
+		}
+		count++
+		sum += uint64(len(entryInfo.data))
+		prev = entry
 	}
+	if count != len(items) {
+		fail("map length = %d, list length = %d", len(items), count)
+	}
+	if count != order.Len() {
+		fail("list length field = %d, walked %d", order.Len(), count)
+	}
+	if prev != order.Back() {
+		fail("tail mismatch")
+	}
+	if !handSeen {
+		fail("Sieve hand is not in cache")
+	}
+	return count, sum
 }
 
 func cacheByStrategy(strategy uint8, limits Limits) (string, Cache) {
