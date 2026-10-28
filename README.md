@@ -1,4 +1,4 @@
-[![GoDoc][doc-img]][doc] [![License][license-img]][license] [![OpenSSF Scorecard][scorecard-img]][scorecard] [![Build Status][ci-img]][ci] [![Go Report][report-img]][report]
+[![GoDoc][doc-img]][doc] [![License][license-img]][license] [![OpenSSF Scorecard][scorecard-img]][scorecard] [![Build Status][ci-img]][ci]
 
 # zstd-seekable-format-go
 
@@ -163,8 +163,6 @@ the average or `min:avg:max` content-defined chunk size in KiB.
 [doc]: https://pkg.go.dev/github.com/SaveTheRbtz/zstd-seekable-format-go/pkg
 [ci-img]: https://github.com/SaveTheRbtz/zstd-seekable-format-go/actions/workflows/go.yml/badge.svg
 [ci]: https://github.com/SaveTheRbtz/zstd-seekable-format-go/actions/workflows/go.yml
-[report-img]: https://goreportcard.com/badge/github.com/SaveTheRbtz/zstd-seekable-format-go/pkg
-[report]: https://goreportcard.com/report/github.com/SaveTheRbtz/zstd-seekable-format-go/pkg
 [license-img]: https://img.shields.io/badge/License-MIT-blue.svg
 [license]: https://opensource.org/licenses/MIT
 [scorecard-img]: https://api.scorecard.dev/projects/github.com/SaveTheRbtz/zstd-seekable-format-go/badge
