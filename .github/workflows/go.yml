@@ -23,7 +23,7 @@ jobs:
       - uses: dcarbone/install-jq-action@4fcb5062d7ce9bc4382d1a352d19ba3ba2c317c1 # v4.0.1
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Setup Go ${{ matrix.go-version }}
-        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v6
+        uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v6
         with:
           go-version: ${{ matrix.go-version == 'tip' && 'stable' || matrix.go-version }}
           cache-dependency-path: ${{ matrix.dir }}/go.sum
